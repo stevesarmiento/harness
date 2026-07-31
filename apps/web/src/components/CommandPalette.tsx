@@ -1,6 +1,9 @@
 "use client";
 
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
+import { connectionStatusText } from "@t3tools/client-runtime/connection";
+import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import {
   canPreloadBrowsePath,
   createBrowseNavigationCoordinator,
@@ -24,10 +27,9 @@ import {
 } from "@t3tools/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
+import { FileSearchIcon, TextSearchIcon } from "lucide-react";
 import {
-  IconArrowDown as ArrowDownIcon,
   IconArrowLeft as ArrowLeftIcon,
-  IconArrowUp as ArrowUpIcon,
   IconArrowshapeTurnUpBackward as CornerLeftUpIcon,
   IconBubbleLeftAndTextBubbleRight as ThreadIcon,
   IconCube as CubeIcon,
@@ -62,6 +64,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
+import { useThreadSearch } from "../state/queries";
 import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import {
   appendBrowsePathSegment,
@@ -75,7 +78,9 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
+import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -94,6 +99,7 @@ import {
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   type CommandPaletteActionItem,
+  type CommandPaletteOpenIntent,
   type CommandPaletteSubmenuItem,
   type CommandPaletteView,
   filterCommandPaletteGroups,
@@ -101,9 +107,12 @@ import {
   getCommandPaletteMode,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
+  reduceCommandPaletteUiState,
+  type SearchOverlayMode,
 } from "./CommandPalette.logic";
 import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sidebar.logic";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
+import { CommandPaletteContent } from "./CommandPaletteContent";
 import { CommandPaletteResults } from "./CommandPaletteResults";
 import { AzureDevOpsIcon, BitbucketIcon, GitLabIcon } from "./Icons";
 import {
@@ -115,18 +124,13 @@ import {
   SettingsHexIcon,
 } from "./icons/custom";
 import { ProjectFavicon } from "./ProjectFavicon";
+import { ProjectFilePicker } from "./files/ProjectFilePicker";
+import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { ThreadRowLeadingStatus, ThreadRowTrailingStatus } from "./ThreadStatusIndicators";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../state/server";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
-import {
-  Command,
-  CommandDialog,
-  CommandDialogPopup,
-  CommandFooter,
-  CommandInput,
-  CommandPanel,
-} from "./ui/command";
+import { CommandDialog, CommandDialogPopup } from "./ui/command";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -169,6 +173,8 @@ interface AddProjectEnvironmentOption {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly isPrimary: boolean;
+  readonly isConnected: boolean;
+  readonly status: string;
 }
 
 type AddProjectRemoteProviderKind = Extract<
@@ -346,53 +352,30 @@ function errorMessage(error: unknown): string {
   return "An error occurred.";
 }
 
-interface CommandPaletteOpenIntent {
-  readonly kind: "add-project" | "new-thread-in" | "switch-project";
-}
+const OVERLAY_MODE_BY_COMMAND = {
+  "commandPalette.toggle": "command",
+  "filePicker.toggle": "files",
+  "projectSearch.toggle": "content",
+} as const satisfies Partial<Record<string, SearchOverlayMode>>;
 
-interface CommandPaletteUiState {
-  readonly open: boolean;
-  readonly openIntent: CommandPaletteOpenIntent | null;
-}
-
-type CommandPaletteUiAction =
-  | { readonly _tag: "SetOpen"; readonly open: boolean }
-  | { readonly _tag: "Toggle" }
-  | { readonly _tag: "OpenAddProject" }
-  | { readonly _tag: "OpenNewThreadIn" }
-  | { readonly _tag: "OpenProjectSwitcher" }
-  | { readonly _tag: "ClearOpenIntent" };
-
-function reduceCommandPaletteUiState(
-  state: CommandPaletteUiState,
-  action: CommandPaletteUiAction,
-): CommandPaletteUiState {
-  switch (action._tag) {
-    case "SetOpen":
-      return {
-        open: action.open,
-        openIntent: action.open ? state.openIntent : null,
-      };
-    case "Toggle":
-      return { open: !state.open, openIntent: null };
-    case "OpenAddProject":
-      return { open: true, openIntent: { kind: "add-project" } };
-    case "OpenNewThreadIn":
-      return { open: true, openIntent: { kind: "new-thread-in" } };
-    case "OpenProjectSwitcher":
-      return { open: true, openIntent: { kind: "switch-project" } };
-    case "ClearOpenIntent":
-      return state.openIntent ? { ...state, openIntent: null } : state;
-  }
+function overlayModeForCommand(command: string | null): SearchOverlayMode | null {
+  if (command === null) return null;
+  return command in OVERLAY_MODE_BY_COMMAND
+    ? OVERLAY_MODE_BY_COMMAND[command as keyof typeof OVERLAY_MODE_BY_COMMAND]
+    : null;
 }
 
 export function CommandPalette({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {
     open: false,
+    mode: "command",
     openIntent: null,
   });
   const setOpen = useCallback((open: boolean) => dispatch({ _tag: "SetOpen", open }), []);
-  const toggleOpen = useCallback(() => dispatch({ _tag: "Toggle" }), []);
+  const toggleMode = useCallback(
+    (mode: SearchOverlayMode) => dispatch({ _tag: "ToggleMode", mode }),
+    [],
+  );
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
   const openProjectSwitcher = useCallback(() => dispatch({ _tag: "OpenProjectSwitcher" }), []);
@@ -409,26 +392,48 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
+  const previewOpen = useRightPanelStore((state) =>
+    routeThreadRef
+      ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
+      : false,
+  );
+
+  useEffect(() => {
+    if (!state.open || state.mode === "command") return;
+    const onEscapeKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.isComposing || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMode("command");
+    };
+    window.addEventListener("keydown", onEscapeKeyDown, true);
+    return () => window.removeEventListener("keydown", onEscapeKeyDown, true);
+  }, [state.mode, state.open, toggleMode]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented) return;
+      // Resolve with the complete shortcut context so customized bindings
+      // using any documented `when` condition (e.g. previewFocus) work.
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
           terminalFocus: isTerminalFocused(),
           terminalOpen,
+          previewFocus: isPreviewFocused(),
+          previewOpen,
         },
       });
-      if (command !== "commandPalette.toggle") {
+      const mode = overlayModeForCommand(command);
+      if (mode === null) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      toggleOpen();
+      toggleMode(mode);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, terminalOpen, toggleOpen]);
+  }, [keybindings, previewOpen, terminalOpen, toggleMode]);
 
   useEffect(
     () =>
@@ -448,12 +453,24 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
   return (
     <ComposerHandleContext value={composerHandleRef}>
-      <CommandDialog open={state.open} onOpenChange={setOpen}>
+      <CommandDialog
+        open={state.open}
+        onOpenChange={(open, eventDetails) => {
+          if (!open && eventDetails.reason === "escape-key" && state.mode !== "command") {
+            eventDetails.cancel();
+            toggleMode("command");
+            return;
+          }
+          setOpen(open);
+        }}
+      >
         {children}
         <CommandPaletteDialog
           open={state.open}
+          mode={state.mode}
           openIntent={state.openIntent}
           setOpen={setOpen}
+          openOverlayMode={toggleMode}
           clearOpenIntent={clearOpenIntent}
         />
       </CommandDialog>
@@ -463,31 +480,63 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
 function CommandPaletteDialog(props: {
   readonly open: boolean;
+  readonly mode: SearchOverlayMode;
   readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
+  readonly openOverlayMode: (mode: SearchOverlayMode) => void;
   readonly clearOpenIntent: () => void;
 }) {
+  const composerHandleRef = useComposerHandleContext();
+
   if (!props.open) {
     return null;
   }
 
   return (
-    <OpenCommandPaletteDialog
-      openIntent={props.openIntent}
-      setOpen={props.setOpen}
-      clearOpenIntent={props.clearOpenIntent}
-    />
+    <CommandDialogPopup
+      aria-label={
+        props.mode === "files"
+          ? "File picker"
+          : props.mode === "content"
+            ? "Search project contents"
+            : "Command palette"
+      }
+      className={cn("overflow-hidden p-0", props.mode === "content" && "h-105")}
+      data-command-palette="true"
+      data-palette-mode={props.mode}
+      data-testid="command-palette"
+      finalFocus={() => {
+        composerHandleRef?.current?.focusAtEnd();
+        return false;
+      }}
+      onBackdropPointerDown={() => {
+        props.setOpen(false);
+      }}
+    >
+      {props.mode === "files" ? (
+        <ProjectFilePicker setOpen={props.setOpen} />
+      ) : props.mode === "content" ? (
+        <ProjectContentSearchDialog onOpenChange={props.setOpen} />
+      ) : (
+        <OpenCommandPaletteDialog
+          openIntent={props.openIntent}
+          setOpen={props.setOpen}
+          openOverlayMode={props.openOverlayMode}
+          clearOpenIntent={props.clearOpenIntent}
+        />
+      )}
+    </CommandDialogPopup>
   );
 }
 
 function OpenCommandPaletteDialog(props: {
   readonly openIntent: CommandPaletteOpenIntent | null;
   readonly setOpen: (open: boolean) => void;
+  readonly openOverlayMode: (mode: SearchOverlayMode) => void;
   readonly clearOpenIntent: () => void;
 }) {
   const navigate = useNavigate();
-  const { clearOpenIntent, openIntent, setOpen } = props;
-  const composerHandleRef = useComposerHandleContext();
+  const { clearOpenIntent, openIntent, openOverlayMode, setOpen } = props;
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
@@ -518,6 +567,26 @@ function OpenCommandPaletteDialog(props: {
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
+  const environmentIds = useMemo(
+    () =>
+      environments
+        .filter((environment) => environment.connection.phase === "connected")
+        .map((environment) => environment.environmentId),
+    [environments],
+  );
+  const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
+  const threadSearch = useThreadSearch(environmentIds, threadSearchQuery);
+  const threadContentMatchByKey = useMemo(
+    () =>
+      new Map(
+        threadSearch.matches.flatMap((match) =>
+          match.source === "user" || match.source === "assistant"
+            ? [[threadSearchMatchKey(match), match] as const]
+            : [],
+        ),
+      ),
+    [threadSearch.matches],
+  );
   const [browseGeneration, setBrowseGeneration] = useState(0);
   const browseNavigationRef = useRef<ReturnType<typeof createBrowseNavigationCoordinator> | null>(
     null,
@@ -632,6 +701,8 @@ function OpenCommandPaletteDialog(props: {
           runtimeLabel: environment.label,
         }),
         isPrimary,
+        isConnected: canCreateProjectInEnvironment(environment.connection.phase),
+        status: connectionStatusText(environment.connection),
       };
     });
 
@@ -644,10 +715,14 @@ function OpenCommandPaletteDialog(props: {
 
     return options;
   }, [environments]);
-  const defaultAddProjectEnvironmentId = addProjectEnvironmentOptions[0]?.environmentId ?? null;
+  const defaultAddProjectEnvironmentId =
+    addProjectEnvironmentOptions.find((option) => option.isConnected)?.environmentId ?? null;
   const wslAddProjectEnvironmentOption = useMemo(
     () =>
       addProjectEnvironmentOptions.find((option) => {
+        if (!option.isConnected) {
+          return false;
+        }
         const environment = environments.find(
           (candidate) => candidate.environmentId === option.environmentId,
         );
@@ -918,6 +993,21 @@ function OpenCommandPaletteDialog(props: {
         icon: <ThreadIcon className={ITEM_ICON_CLASS} />,
         renderLeadingContent: (thread) => <ThreadRowLeadingStatus thread={thread} />,
         renderTrailingContent: (thread) => <ThreadRowTrailingStatus thread={thread} />,
+        getContentMatch: (thread) => {
+          const match = threadContentMatchByKey.get(
+            threadSearchMatchKey({
+              environmentId: thread.environmentId,
+              threadId: thread.id,
+            }),
+          );
+          return match && (match.source === "user" || match.source === "assistant")
+            ? {
+                source: match.source,
+                snippet: match.snippet,
+                query: threadSearchQuery,
+              }
+            : undefined;
+        },
         runThread: async (thread) => {
           await navigate({
             to: "/$environmentId/$threadId",
@@ -925,7 +1015,15 @@ function OpenCommandPaletteDialog(props: {
           });
         },
       }),
-    [activeThreadId, clientSettings.sidebarThreadSortOrder, navigate, projectTitleById, threads],
+    [
+      activeThreadId,
+      clientSettings.sidebarThreadSortOrder,
+      navigate,
+      projectTitleById,
+      threadContentMatchByKey,
+      threadSearchQuery,
+      threads,
+    ],
   );
   const recentThreadItems = allThreadItems.slice(0, RECENT_THREAD_LIMIT);
 
@@ -1120,6 +1218,19 @@ function OpenCommandPaletteDialog(props: {
 
   const startAddProjectSourceSelection = useCallback(
     (environmentId: EnvironmentId): void => {
+      const environment = environments.find(
+        (candidate) => candidate.environmentId === environmentId,
+      );
+      if (!canCreateProjectInEnvironment(environment?.connection.phase)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Environment unavailable",
+            description: `${environment?.label ?? "The selected environment"} is not connected.`,
+          }),
+        );
+        return;
+      }
       setAddProjectEnvironmentId(environmentId);
       setAddProjectCloneFlow(null);
       pushPaletteView({
@@ -1135,6 +1246,7 @@ function OpenCommandPaletteDialog(props: {
     [
       browseEnvironmentId,
       buildAddProjectSourceGroups,
+      environments,
       pushPaletteView,
       sourceControlDiscovery.data,
     ],
@@ -1146,7 +1258,12 @@ function OpenCommandPaletteDialog(props: {
       value: `action:add-project:environment:${option.environmentId}`,
       searchTerms: [option.label, option.environmentId, option.isPrimary ? "this device" : ""],
       title: option.label,
-      description: option.isPrimary ? "This device" : option.environmentId,
+      description: option.isConnected
+        ? option.isPrimary
+          ? "This device"
+          : option.environmentId
+        : option.status,
+      disabled: !option.isConnected,
       icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
       keepOpen: true,
       run: async () => {
@@ -1167,7 +1284,7 @@ function OpenCommandPaletteDialog(props: {
   );
 
   const openAddProjectFlow = useCallback(() => {
-    if (addProjectEnvironmentOptions.length > 1) {
+    if (addProjectEnvironmentOptions.length > 1 || defaultAddProjectEnvironmentId === null) {
       pushPaletteView({
         addonIcon: <AddProjectIcon className="size-5 fill-current" />,
         groups: addProjectEnvironmentGroups,
@@ -1307,6 +1424,32 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:open-file-picker",
+    searchTerms: ["go to file", "open file", "file picker", "find file", "quick open"],
+    title: "Go to file",
+    icon: <FileSearchIcon className={ITEM_ICON_CLASS} />,
+    keepOpen: true,
+    shortcutCommand: "filePicker.toggle",
+    run: async () => {
+      openOverlayMode("files");
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:search-project-contents",
+    searchTerms: ["search project", "find in files", "grep", "content search", "text search"],
+    title: "Search project contents",
+    icon: <TextSearchIcon className={ITEM_ICON_CLASS} />,
+    keepOpen: true,
+    shortcutCommand: "projectSearch.toggle",
+    run: async () => {
+      openOverlayMode("content");
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:add-project",
     searchTerms: [
       "add project",
@@ -1327,6 +1470,7 @@ function OpenCommandPaletteDialog(props: {
       "environment",
     ],
     title: "Add project",
+    disabled: defaultAddProjectEnvironmentId === null,
     icon: <AddProjectIcon className="size-4 fill-muted-foreground/80" />,
     keepOpen: true,
     run: async () => {
@@ -1388,6 +1532,19 @@ function OpenCommandPaletteDialog(props: {
       readonly platform: string;
       readonly currentProjectCwd: string | null;
     }) => {
+      const environment = environments.find(
+        (candidate) => candidate.environmentId === input.environmentId,
+      );
+      if (!canCreateProjectInEnvironment(environment?.connection.phase)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Environment unavailable",
+            description: `${environment?.label ?? "The selected environment"} is not connected.`,
+          }),
+        );
+        return;
+      }
       const rawCwd = input.rawCwd;
 
       if (isUnsupportedWindowsProjectPath(rawCwd.trim(), input.platform)) {
@@ -1538,6 +1695,16 @@ function OpenCommandPaletteDialog(props: {
 
   async function submitAddProjectCloneFlow(destinationPathInput?: string): Promise<void> {
     if (!addProjectCloneFlow) {
+      return;
+    }
+    if (!canCreateProjectInEnvironment(browseEnvironment?.connection.phase)) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Environment unavailable",
+          description: `${browseEnvironment?.label ?? "The selected environment"} is not connected.`,
+        }),
+      );
       return;
     }
 
@@ -1744,7 +1911,10 @@ function OpenCommandPaletteDialog(props: {
     getCommandPaletteInputPlaceholder(paletteMode);
   const isSubmenu = paletteMode === "submenu" || paletteMode === "submenu-browse";
   const hasHighlightedBrowseItem = highlightedItemValue?.startsWith("browse:") ?? false;
-  const canSubmitBrowsePath = isBrowsing && !relativePathNeedsActiveProject;
+  const canSubmitBrowsePath =
+    isBrowsing &&
+    !relativePathNeedsActiveProject &&
+    canCreateProjectInEnvironment(browseEnvironment?.connection.phase);
   const willCreateProjectPath =
     canSubmitBrowsePath &&
     !isBrowsePending &&
@@ -1771,6 +1941,7 @@ function OpenCommandPaletteDialog(props: {
   const canSubmitRemoteProjectFlow =
     addProjectCloneFlow?.step === "repository" &&
     query.trim().length > 0 &&
+    canCreateProjectInEnvironment(browseEnvironment?.connection.phase) &&
     !isRemoteProjectPending;
   const fileManagerName = getLocalFileManagerName(navigator.platform);
   const canOpenProjectFromFileManager =
@@ -1993,233 +2164,189 @@ function OpenCommandPaletteDialog(props: {
     primaryEnvironmentId,
   ]);
 
-  return (
-    <CommandDialogPopup
-      aria-label="Command palette"
-      className="overflow-hidden p-0"
-      data-command-palette="true"
-      data-testid="command-palette"
-      finalFocus={() => {
-        composerHandleRef?.current?.focusAtEnd();
-        return false;
-      }}
-      onBackdropPointerDown={() => {
-        setOpen(false);
+  const inputAccessory =
+    addProjectCloneFlow?.step === "repository" ? (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="xs"
+              tabIndex={-1}
+              className="absolute inset-e-2.5 top-1/2 gap-1.5 pe-1 ps-2 -translate-y-1/2"
+              aria-label={`${remoteProjectButtonLabel ?? "Continue"} (Enter)`}
+              disabled={!canSubmitRemoteProjectFlow}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={() => {
+                void submitAddProjectCloneFlow();
+              }}
+            />
+          }
+        >
+          <span>{isRemoteProjectPending ? "Working" : remoteProjectButtonLabel}</span>
+          <KbdGroup className="pointer-events-none -me-0.5 items-center gap-1">
+            <Kbd>Enter</Kbd>
+          </KbdGroup>
+        </TooltipTrigger>
+        <TooltipPopup side="top">{remoteProjectButtonLabel ?? "Continue"} (Enter)</TooltipPopup>
+      </Tooltip>
+    ) : isBrowsing ? (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="xs"
+              tabIndex={-1}
+              className={cn(
+                "absolute inset-e-2.5 top-1/2 pe-1 ps-2 -translate-y-1/2",
+                hasHighlightedBrowseItem ? "gap-1" : "gap-1.5",
+              )}
+              aria-label={`${submitActionLabel} (${addShortcutLabel})`}
+              disabled={
+                !canCreateProjectInEnvironment(browseEnvironment?.connection.phase) ||
+                relativePathNeedsActiveProject ||
+                (isCloneDestinationStep && isRemoteProjectPending)
+              }
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={() => {
+                if (relativePathNeedsActiveProject) {
+                  return;
+                }
+                if (isCloneDestinationStep) {
+                  void submitAddProjectCloneFlow(resolvedAddProjectPath);
+                } else {
+                  void handleAddProject(resolvedAddProjectPath);
+                }
+              }}
+            />
+          }
+        >
+          <span>
+            {isCloneDestinationStep && isRemoteProjectPending ? "Cloning" : submitActionLabel}
+          </span>
+          <KbdGroup className="pointer-events-none -me-0.5 items-center gap-1">
+            <Kbd>{hasHighlightedBrowseItem ? `${submitModifierLabel} Enter` : "Enter"}</Kbd>
+          </KbdGroup>
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {submitActionLabel} ({addShortcutLabel})
+        </TooltipPopup>
+      </Tooltip>
+    ) : null;
+
+  const footerActionLabel =
+    addProjectCloneFlow?.step === "repository"
+      ? (remoteProjectButtonLabel ?? "Continue")
+      : !canSubmitBrowsePath || hasHighlightedBrowseItem
+        ? "Select"
+        : undefined;
+
+  const footerTrailing = canOpenProjectFromFileManager ? (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="h-auto px-2 text-muted-foreground text-xs hover:bg-transparent hover:text-foreground"
+      disabled={isPickingProjectFolder}
+      onClick={() => {
+        void handleOpenProjectFromFileManager();
       }}
     >
-      <Command
-        key={`${viewStack.length}-${browseGeneration}-${isBrowsing}-${addProjectCloneFlow?.step ?? "none"}`}
-        aria-label="Command palette"
-        autoHighlight={isBrowsing || isRemoteProjectCloneFlow ? false : "always"}
-        mode="none"
-        onItemHighlighted={(value) => {
-          setHighlightedItemValue(typeof value === "string" ? value : null);
-        }}
-        onValueChange={handleQueryChange}
-        value={query}
-      >
-        <div className="relative">
-          <CommandInput
-            className={
-              addProjectCloneFlow?.step === "repository"
-                ? "pe-32"
-                : isBrowsing
-                  ? willCreateProjectPath
-                    ? "pe-36"
-                    : "pe-16"
-                  : undefined
+      {`Open in ${fileManagerName}`}
+    </Button>
+  ) : null;
+
+  return (
+    <CommandPaletteContent
+      key={`${viewStack.length}-${browseGeneration}-${isBrowsing}-${addProjectCloneFlow?.step ?? "none"}`}
+      aria-label="Command palette"
+      autoHighlight={isBrowsing || isRemoteProjectCloneFlow ? false : "always"}
+      footerActionLabel={footerActionLabel}
+      footerTrailing={footerTrailing}
+      inputAccessory={inputAccessory}
+      inputProps={{
+        className:
+          addProjectCloneFlow?.step === "repository"
+            ? "pe-32"
+            : isBrowsing
+              ? willCreateProjectPath
+                ? "pe-36"
+                : "pe-16"
+              : undefined,
+        placeholder: inputPlaceholder,
+        wrapperClassName: isSubmenu
+          ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto"
+          : undefined,
+        ...(isSubmenu
+          ? {
+              startAddon: (
+                <button
+                  type="button"
+                  className="flex cursor-pointer items-center"
+                  aria-label="Back"
+                  onClick={popView}
+                >
+                  <ArrowLeftIcon className="fill-current" />
+                </button>
+              ),
             }
-            placeholder={inputPlaceholder}
-            wrapperClassName={
-              isSubmenu ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto" : undefined
-            }
-            {...(isSubmenu
-              ? {
-                  startAddon: (
-                    <button
-                      type="button"
-                      className="flex cursor-pointer items-center"
-                      aria-label="Back"
-                      onClick={popView}
-                    >
-                      <ArrowLeftIcon className="fill-current" />
-                    </button>
-                  ),
-                }
-              : isBrowsing && !isSubmenu
-                ? {
-                    startAddon: <FolderPlusIcon className="fill-current" />,
-                  }
-                : {})}
-            onKeyDown={handleKeyDown}
-          />
-          {addProjectCloneFlow?.step === "repository" ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    tabIndex={-1}
-                    className="absolute inset-e-2.5 top-1/2 gap-1.5 pe-1 ps-2 -translate-y-1/2"
-                    aria-label={`${remoteProjectButtonLabel ?? "Continue"} (Enter)`}
-                    disabled={!canSubmitRemoteProjectFlow}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                    }}
-                    onClick={() => {
-                      void submitAddProjectCloneFlow();
-                    }}
-                  />
-                }
-              >
-                <span>{isRemoteProjectPending ? "Working" : remoteProjectButtonLabel}</span>
-                <KbdGroup className="pointer-events-none -me-0.5 items-center gap-1">
-                  <Kbd>Enter</Kbd>
-                </KbdGroup>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                {remoteProjectButtonLabel ?? "Continue"} (Enter)
-              </TooltipPopup>
-            </Tooltip>
-          ) : isBrowsing ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    tabIndex={-1}
-                    className={cn(
-                      "absolute inset-e-2.5 top-1/2 pe-1 ps-2 -translate-y-1/2",
-                      hasHighlightedBrowseItem ? "gap-1" : "gap-1.5",
-                    )}
-                    aria-label={`${submitActionLabel} (${addShortcutLabel})`}
-                    disabled={
-                      relativePathNeedsActiveProject ||
-                      (isCloneDestinationStep && isRemoteProjectPending)
-                    }
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                    }}
-                    onClick={() => {
-                      if (relativePathNeedsActiveProject) {
-                        return;
-                      }
-                      if (isCloneDestinationStep) {
-                        void submitAddProjectCloneFlow(resolvedAddProjectPath);
-                      } else {
-                        void handleAddProject(resolvedAddProjectPath);
-                      }
-                    }}
-                  />
-                }
-              >
-                <span>
-                  {isCloneDestinationStep && isRemoteProjectPending ? "Cloning" : submitActionLabel}
-                </span>
-                <KbdGroup className="pointer-events-none -me-0.5 items-center gap-1">
-                  <Kbd>{hasHighlightedBrowseItem ? `${submitModifierLabel} Enter` : "Enter"}</Kbd>
-                </KbdGroup>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                {submitActionLabel} ({addShortcutLabel})
-              </TooltipPopup>
-            </Tooltip>
-          ) : null}
-        </div>
-        <CommandPanel className="max-h-[min(28rem,70vh)]">
-          {remoteProjectContext ? (
-            <div className="p-2 pb-0">
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-                Repository
-              </div>
-              <div className="flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5">
-                {remoteProjectContext.icon}
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-foreground text-sm">
-                    {remoteProjectContext.title}
-                  </span>
-                  <span className="truncate text-muted-foreground/85 text-xs">
-                    {remoteProjectContext.description}
-                  </span>
-                </span>
-              </div>
-            </div>
-          ) : null}
-          <CommandPaletteResults
-            groups={displayedGroups}
-            highlightedItemValue={highlightedItemValue}
-            isActionsOnly={isActionsOnly}
-            keybindings={keybindings}
-            onExecuteItem={executeItem}
-            {...(addProjectCloneFlow?.step === "repository"
-              ? {
-                  emptyStateMessage:
-                    addProjectCloneFlow.source === "url"
-                      ? "Enter a Git clone URL and press Enter to continue."
-                      : "Enter a repository path and press Enter to look it up.",
-                }
-              : addProjectCloneFlow?.step === "confirm"
-                ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }
-                : relativePathNeedsActiveProject
-                  ? { emptyStateMessage: "Relative paths require an active project." }
-                  : willCreateProjectPath
-                    ? {
-                        emptyStateMessage:
-                          "Press Enter to create this folder and add it as a project.",
-                      }
-                    : {})}
-          />
-        </CommandPanel>
-        <CommandFooter className="gap-3 max-sm:flex-col max-sm:items-start">
-          <div className="flex items-center gap-3">
-            <KbdGroup className="items-center gap-1.5">
-              <Kbd>
-                <ArrowUpIcon className="fill-current" />
-              </Kbd>
-              <Kbd>
-                <ArrowDownIcon className="fill-current" />
-              </Kbd>
-              <span>Navigate</span>
-            </KbdGroup>
-            {addProjectCloneFlow?.step === "repository" ? (
-              <KbdGroup className="items-center gap-1.5">
-                <Kbd>Enter</Kbd>
-                <span>{remoteProjectButtonLabel ?? "Continue"}</span>
-              </KbdGroup>
-            ) : !canSubmitBrowsePath || hasHighlightedBrowseItem ? (
-              <KbdGroup className="items-center gap-1.5">
-                <Kbd>Enter</Kbd>
-                <span>Select</span>
-              </KbdGroup>
-            ) : null}
-            {isSubmenu ? (
-              <KbdGroup className="items-center gap-1.5">
-                <Kbd>Backspace</Kbd>
-                <span>Back</span>
-              </KbdGroup>
-            ) : null}
-            <KbdGroup className="items-center gap-1.5">
-              <Kbd>Esc</Kbd>
-              <span>Close</span>
-            </KbdGroup>
+          : isBrowsing
+            ? { startAddon: <FolderPlusIcon className="fill-current" /> }
+            : {}),
+        onKeyDown: handleKeyDown,
+      }}
+      mode="none"
+      onItemHighlighted={(value) => {
+        setHighlightedItemValue(typeof value === "string" ? value : null);
+      }}
+      onValueChange={handleQueryChange}
+      panelClassName="max-h-[min(28rem,70vh)]"
+      showBackHint={isSubmenu}
+      value={query}
+    >
+      {remoteProjectContext ? (
+        <div className="p-2 pb-0">
+          <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Repository</div>
+          <div className="flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5">
+            {remoteProjectContext.icon}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-foreground text-sm">{remoteProjectContext.title}</span>
+              <span className="truncate text-muted-foreground/85 text-xs">
+                {remoteProjectContext.description}
+              </span>
+            </span>
           </div>
-          {canOpenProjectFromFileManager ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-auto px-2 text-muted-foreground text-xs hover:bg-transparent hover:text-foreground"
-              disabled={isPickingProjectFolder}
-              onClick={() => {
-                void handleOpenProjectFromFileManager();
-              }}
-            >
-              {`Open in ${fileManagerName}`}
-            </Button>
-          ) : null}
-        </CommandFooter>
-      </Command>
-    </CommandDialogPopup>
+        </div>
+      ) : null}
+      <CommandPaletteResults
+        groups={displayedGroups}
+        highlightedItemValue={highlightedItemValue}
+        isActionsOnly={isActionsOnly}
+        keybindings={keybindings}
+        onExecuteItem={executeItem}
+        {...(addProjectCloneFlow?.step === "repository"
+          ? {
+              emptyStateMessage:
+                addProjectCloneFlow.source === "url"
+                  ? "Enter a Git clone URL and press Enter to continue."
+                  : "Enter a repository path and press Enter to look it up.",
+            }
+          : addProjectCloneFlow?.step === "confirm"
+            ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }
+            : relativePathNeedsActiveProject
+              ? { emptyStateMessage: "Relative paths require an active project." }
+              : willCreateProjectPath
+                ? {
+                    emptyStateMessage: "Press Enter to create this folder and add it as a project.",
+                  }
+                : threadSearch.isPending
+                  ? { emptyStateMessage: "Searching thread messages…" }
+                  : {})}
+      />
+    </CommandPaletteContent>
   );
 }

@@ -9,6 +9,7 @@
  */
 
 import * as Migrator from "effect/unstable/sql/Migrator";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 
@@ -47,6 +48,7 @@ import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
 import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+import Migration0035 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
 // Fork: fork-only migrations live in the reserved 9xx id block (935+) so
 // upstream can keep shipping 035, 036, ... without ever colliding with us.
 import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
@@ -102,6 +104,7 @@ export const migrationEntries = [
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
   [33, "ProjectionThreadsSettled", Migration0033],
   [34, "ProjectionThreadsSnoozed", Migration0034],
+  [35, "ProjectionThreadTitleRegeneration", Migration0035],
   // Fork: ids 935-940 are the reserved fork block; ids 35+ stay free for
   // upstream. These migrations briefly shipped locally as ids 35-40, but no
   // real database ever recorded those ids (the only live fork database was
@@ -138,10 +141,57 @@ export interface RunMigrationsOptions {
 }
 
 /**
+ * Fork: the standard Migrator only applies ids greater than the highest
+ * recorded id. Because fork migrations live in the reserved 9xx block, a fork
+ * database's latest id is always >= 935, which would silently skip every new
+ * upstream migration (035, 036, ...) that arrives via merges. After the
+ * standard run, this pass applies any registered migration whose id is absent
+ * from the tracking table, in ascending id order. Consequence: fork 9xx
+ * migrations may run before pending upstream ones on an existing database, so
+ * fork migrations must never depend on upstream migrations newer than the
+ * merge they shipped with.
+ */
+const backfillSkippedMigrations = Effect.fn("backfillSkippedMigrations")(function* (
+  throughId?: number,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = (yield* sql`SELECT migration_id FROM effect_sql_migrations`
+    .withoutTransform) as ReadonlyArray<{ migration_id: number }>;
+  const applied = new Set(rows.map((row) => Number(row.migration_id)));
+  const executed: Array<readonly [id: number, name: string]> = [];
+  for (const [id, name, migration] of migrationEntries) {
+    if ((throughId !== undefined && id > throughId) || applied.has(id)) {
+      continue;
+    }
+    yield* sql
+      .withTransaction(
+        Effect.gen(function* () {
+          yield* sql`INSERT INTO effect_sql_migrations ${sql.insert([{ migration_id: id, name }])}`
+            .withoutTransform;
+          yield* Effect.catch(migration, (error) =>
+            Effect.die(
+              new Migrator.MigrationError({
+                cause: error,
+                kind: "Failed",
+                message: `Backfilled migration "${id}_${name}" failed`,
+              }),
+            ),
+          );
+        }),
+      )
+      .pipe(Effect.withSpan(`Migrator backfill ${id}_${name}`));
+    executed.push([id, name] as const);
+  }
+  return executed;
+});
+
+/**
  * Run all pending migrations.
  *
  * Creates the migrations tracking table (effect_sql_migrations) if it doesn't exist,
- * then runs any migrations with ID greater than the latest recorded migration.
+ * then runs any migrations with ID greater than the latest recorded migration,
+ * followed by a fork-aware backfill pass for upstream migrations whose ids sort
+ * below the fork's reserved 9xx block (see backfillSkippedMigrations).
  *
  * Returns array of [id, name] tuples for migrations that were run.
  *
@@ -150,7 +200,10 @@ export interface RunMigrationsOptions {
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
-  const executedMigrations = yield* run({ loader: makeMigrationLoader(toMigrationInclusive) });
+  const executedMigrations = [
+    ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
+    ...(yield* backfillSkippedMigrations(toMigrationInclusive)),
+  ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")

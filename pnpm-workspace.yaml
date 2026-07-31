@@ -26,13 +26,13 @@ allowBuilds:
   workerd: false
 
 catalog:
-  "@clerk/backend": 3.13.0
-  "@clerk/clerk-js": 6.25.7
-  "@clerk/electron": 0.0.18
+  "@clerk/backend": 3.14.0
+  "@clerk/clerk-js": 6.25.12
+  "@clerk/electron": 0.0.24
   "@clerk/electron-passkeys": 0.0.3
-  "@clerk/expo": 4.0.2
-  "@clerk/react": 6.12.7
-  "@clerk/shared": 4.25.7
+  "@clerk/expo": 4.1.2
+  "@clerk/react": 6.12.9
+  "@clerk/shared": 4.25.9
   "@effect/atom-react": 4.0.0-beta.102
   "@effect/openapi-generator": 4.0.0-beta.102
   "@effect/platform-bun": 4.0.0-beta.102
@@ -55,12 +55,12 @@ catalog:
   yaml: ^2.9.0
 
 minimumReleaseAgeExclude:
-  - "@clerk/backend@3.13.0"
-  - "@clerk/clerk-js@6.25.7"
-  - "@clerk/electron@0.0.18"
-  - "@clerk/expo@4.0.2"
-  - "@clerk/react@6.12.7"
-  - "@clerk/shared@4.25.7"
+  - "@clerk/backend@3.14.0"
+  - "@clerk/clerk-js@6.25.12"
+  - "@clerk/electron@0.0.24"
+  - "@clerk/expo@4.1.2"
+  - "@clerk/react@6.12.9"
+  - "@clerk/shared@4.25.9"
   - "@distilled.cloud/aws@0.30.2"
   - "@distilled.cloud/axiom@0.30.2"
   - "@distilled.cloud/cloudflare@0.30.2"
@@ -130,7 +130,9 @@ patchedDependencies:
   "@effect/vitest@4.0.0-beta.102": patches/@effect__vitest@4.0.0-beta.102.patch
   "@expo/metro-config@56.0.14": patches/@expo%2Fmetro-config@56.0.14.patch
   "@ff-labs/fff-node@0.9.4": patches/@ff-labs__fff-node@0.9.4.patch
-  "@legendapp/list@3.2.0": patches/@legendapp__list@3.2.0.patch
+  # Fork: the @legendapp/list@3.3.3 patch entry is omitted — it only touches
+  # mobile keyboard APIs and apps/mobile is excluded from this workspace, so
+  # pnpm would reject it as unused. The patch file stays for upstream parity.
   "@pierre/diffs@1.3.0-beta.10": patches/@pierre%2Fdiffs@1.3.0-beta.10.patch
   effect@4.0.0-beta.102: patches/effect@4.0.0-beta.102.patch
   expo-modules-jsi@56.0.10: patches/expo-modules-jsi@56.0.10.patch
