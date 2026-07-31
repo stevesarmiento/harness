@@ -433,6 +433,61 @@ const makeWsRpcLayer = (
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
+      // Fork: keybinding commands added after upstream v0.0.31 break clients whose
+      // decoders predate upstream #5055 (forward-compatible config unions) — the
+      // official mobile app fails the ENTIRE initial config on one unknown command
+      // literal and drops the connection in a loop. Until fixed clients are the
+      // norm, send mobile sessions only the upstream-v0.0.31 command set.
+      const LEGACY_SAFE_KEYBINDING_COMMANDS: ReadonlySet<string> = new Set([
+        "sidebar.toggle",
+        "terminal.toggle",
+        "terminal.split",
+        "terminal.splitVertical",
+        "terminal.new",
+        "terminal.close",
+        "rightPanel.toggle",
+        "diff.toggle",
+        "preview.toggle",
+        "preview.refresh",
+        "preview.focusUrl",
+        "preview.zoomIn",
+        "preview.zoomOut",
+        "preview.resetZoom",
+        "commandPalette.toggle",
+        "composer.stash",
+        "chat.new",
+        "chat.newLocal",
+        "editor.openFavorite",
+        "modelPicker.toggle",
+        "thread.previous",
+        "thread.next",
+      ]);
+      const isLegacySafeKeybindingCommand = (command: string): boolean =>
+        LEGACY_SAFE_KEYBINDING_COMMANDS.has(command) ||
+        (command.startsWith("script.") && command.endsWith(".run"));
+      const currentSessionUsesLegacyConfigDecoder = sessions.listActive().pipe(
+        Effect.map((clientSessions) =>
+          clientSessions.some(
+            (clientSession) =>
+              clientSession.sessionId === currentSessionId &&
+              clientSession.client.deviceType === "mobile",
+          ),
+        ),
+        Effect.orElseSucceed(() => false),
+      );
+      const filterKeybindingsForSession = Effect.fn("ws.filterKeybindingsForSession")(function* <
+        Payload extends {
+          readonly keybindings: ReadonlyArray<{ readonly command: string }>;
+        },
+      >(payload: Payload) {
+        if (!(yield* currentSessionUsesLegacyConfigDecoder)) return payload;
+        return {
+          ...payload,
+          keybindings: payload.keybindings.filter((rule) =>
+            isLegacySafeKeybindingCommand(rule.command),
+          ),
+        };
+      });
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
@@ -1002,7 +1057,9 @@ const makeWsRpcLayer = (
       };
 
       const loadServerConfig = Effect.gen(function* () {
-        const keybindingsConfig = yield* keybindings.loadConfigState;
+        const keybindingsConfig = yield* keybindings.loadConfigState.pipe(
+          Effect.flatMap(filterKeybindingsForSession),
+        );
         const providers = yield* providerRegistry.getProviders;
         const settings = ServerSettings.redactServerSettingsForClient(
           yield* serverSettings.getSettings,
@@ -2224,6 +2281,7 @@ const makeWsRpcLayer = (
             WS_METHODS.subscribeServerConfig,
             Effect.gen(function* () {
               const keybindingsUpdates = keybindings.streamChanges.pipe(
+                Stream.mapEffect(filterKeybindingsForSession),
                 Stream.map((event) => ({
                   version: 1 as const,
                   type: "keybindingsUpdated" as const,
