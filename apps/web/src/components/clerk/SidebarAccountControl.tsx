@@ -6,6 +6,8 @@ import { useCallback, useRef } from "react";
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
 import { cn } from "../../lib/utils";
+import { IconEllipsis as EllipsisIcon } from "symbols-react";
+
 import { SettingsHexIcon } from "../icons/custom";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarMenuButton, useSidebar } from "../ui/sidebar";
@@ -228,7 +230,7 @@ function SidebarAccountRow({
             />
           }
         >
-          <SettingsHexIcon className="size-4" />
+          <EllipsisIcon className="size-4 rotate-90 fill-current" />
         </MenuTrigger>
         <MenuPopup align="end" className="w-56" side="top" sideOffset={6}>
           <MenuItem

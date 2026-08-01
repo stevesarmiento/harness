@@ -149,7 +149,7 @@ export function DraftHeroHeadline({
     <div className="flex w-full flex-col items-center">
       <LogomarkFormaAnimated
         aria-hidden
-        className="pointer-events-none h-56 w-auto text-foreground/10 [mask-image:linear-gradient(to_bottom,black_30%,transparent_75%)] sm:h-72"
+        className="pointer-events-none h-40 w-auto text-foreground/20 [mask-image:linear-gradient(to_bottom,black_45%,transparent_95%)] sm:h-52"
       />
       {hasResolvedProject ? null : (
         <h1 className="mx-auto mt-5 w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
