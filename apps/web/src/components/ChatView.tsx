@@ -6232,6 +6232,7 @@ function ChatViewContent(props: ChatViewProps) {
                           isLocalDraftThread={isLocalDraftThread}
                           forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
                           projectSelectionRequired={isLocalDraftThread && activeProject === null}
+                          projectTitle={activeProject?.title ?? null}
                           phase={phase}
                           isConnecting={isConnecting}
                           isSendBusy={isSendBusy}

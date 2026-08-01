@@ -144,14 +144,23 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, [navigate, pathname]);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+    <SidebarProvider
+      className="h-dvh! min-h-0!"
+      // data-shell-theme (not data-sidebar-version) scopes only the chrome
+      // token; the sidebar-version blocks repaint --background/--card and
+      // would blacken the whole content area if placed on the wrapper.
+      data-shell-theme={useSidebarV2Theme ? "v2" : "v1"}
+      defaultOpen
+      style={sidebarProviderStyle}
+    >
       <Sidebar
         side="left"
         collapsible="offcanvas"
         data-app-sidebar=""
         data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+        variant="inset"
         className={cn(
-          "border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+          "bg-sidebar text-sidebar-foreground",
           !useSidebarV2Theme && "forma-sidebar-v1",
         )}
         resizable={{

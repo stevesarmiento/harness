@@ -251,7 +251,7 @@ export function generateTheme(
   const cssVariables = isDark
     ? {
         "--background": hsl(hue, neutralSaturation, isHighContrast ? 5 : 8),
-        "--app-chrome-background": hsl(hue, neutralSaturation, isHighContrast ? 5 : 8),
+        "--app-chrome-background": hsl(hue, neutralSaturation, isHighContrast ? 3 : 5),
         "--foreground": hsl(hue, foregroundSaturation, 93),
         "--card": hsl(hue, softSaturation, isHighContrast ? 8 : 11),
         "--card-foreground": hsl(hue, foregroundSaturation, 93),
@@ -369,7 +369,7 @@ export function generateTheme(
       }
     : {
         "--background": hsl(hue, neutralSaturation, 97),
-        "--app-chrome-background": hsl(hue, neutralSaturation, 97),
+        "--app-chrome-background": hsl(hue, neutralSaturation, 94),
         "--foreground": hsl(hue, foregroundSaturation, 18),
         "--card": hsl(hue, softSaturation, 99),
         "--card-foreground": hsl(hue, foregroundSaturation, 18),
