@@ -1,10 +1,9 @@
-import { memo, useCallback } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { memo } from "react";
+import { Link } from "@tanstack/react-router";
 
 import { APP_BASE_NAME, APP_VERSION } from "../../branding";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { SettingsHexIcon } from "../icons/custom";
 import { LogomarkForma } from "../LogomarkForma";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -14,16 +13,8 @@ import {
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { T3ConnectSidebarControl } from "../clerk/T3ConnectSidebarSignIn";
-import {
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarTrigger,
-  useSidebar,
-} from "../ui/sidebar";
+import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
+import { SidebarFooter, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 
@@ -145,35 +136,11 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter({
 }: {
   variant: "v1" | "v2";
 }) {
-  const navigate = useNavigate();
-  const { isMobile, setOpenMobile } = useSidebar();
-  const handleSettingsClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/settings" });
-  }, [isMobile, navigate, setOpenMobile]);
-
   return (
     <SidebarFooter className="p-2">
       <SidebarProviderUpdatePill />
       <SidebarUpdatePill />
-      <T3ConnectSidebarControl density={variant === "v1" ? "compact" : "default"} />
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            className={cn(
-              "gap-2 px-2 py-1.5",
-              variant === "v1" && "text-muted-foreground/70 hover:bg-accent hover:text-foreground",
-            )}
-            onClick={handleSettingsClick}
-            size={variant === "v1" ? "sm" : "default"}
-          >
-            <SettingsHexIcon className="size-3.5" />
-            <span className="text-xs">Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
+      <SidebarAccountControl variant={variant} />
     </SidebarFooter>
   );
 });
