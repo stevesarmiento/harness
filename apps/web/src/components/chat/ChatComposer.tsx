@@ -374,6 +374,7 @@ export interface ChatComposerProps {
   isLocalDraftThread: boolean;
   forceExpandedOnMobile: boolean;
   projectSelectionRequired: boolean;
+  projectTitle: string | null;
 
   // Session phase
   phase: SessionPhase;
@@ -489,6 +490,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
     projectSelectionRequired,
+    projectTitle,
     phase,
     isConnecting,
     isSendBusy,
@@ -2674,7 +2676,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             ref={composerSurfaceRef}
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "chat-composer-surface rounded-[20px] border backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-(--motion-duration-fast) ease-(--motion-ease-standard) motion-reduce:transition-none",
+              "chat-composer-surface rounded-[20px] [corner-shape:squircle] border backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-(--motion-duration-fast) ease-(--motion-ease-standard) motion-reduce:transition-none",
               isDragOverComposer ? "border-primary/70! bg-accent/30!" : null,
               projectSelectionRequired ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
@@ -3054,7 +3056,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             : noProviderAvailable
                               ? "Enable a provider in Settings to send a message"
                               : phase === "disconnected"
-                                ? "Ask for follow-up changes or attach images"
+                                ? `What do you want to do in ${projectTitle ?? "this project"}`
                                 : "Ask anything, @tag files/folders, $use skills, or / for commands"
                   }
                   disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
