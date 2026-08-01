@@ -149,17 +149,13 @@ export function DraftHeroHeadline({
     <div className="flex w-full flex-col items-center">
       <LogomarkFormaAnimated
         aria-hidden
-        className="pointer-events-none mb-5 h-28 w-auto text-foreground/80 [mask-image:linear-gradient(to_bottom,black_45%,transparent_95%)] sm:h-36"
+        className="pointer-events-none h-40 w-auto text-foreground/20 [mask-image:linear-gradient(to_bottom,black_45%,transparent_95%)] sm:h-52"
       />
-      <h1 className="mx-auto w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
-        {hasResolvedProject ? (
-          <>What should we build in {projectSelector}?</>
-        ) : canChooseProject ? (
-          <>{projectSelector} to start</>
-        ) : (
-          <>Add a project to start</>
-        )}
-      </h1>
+      {hasResolvedProject ? null : (
+        <h1 className="mx-auto mt-5 w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
+          {canChooseProject ? <>{projectSelector} to start</> : <>Add a project to start</>}
+        </h1>
+      )}
     </div>
   );
 }
