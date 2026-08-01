@@ -1728,24 +1728,44 @@ export const make = Effect.gen(function* () {
   const listOpenPullRequests: GitManager["Service"]["listOpenPullRequests"] = Effect.fn(
     "listOpenPullRequests",
   )(function* (input) {
-    const pullRequests = yield* gitHubCli
-      .listOpenPullRequests({
+    // Only surface the current user's PRs in the overview; without this,
+    // upstream repos with many fork contributors drown the list.
+    const listAuthoredByMe = (repo?: string) =>
+      gitHubCli.listOpenPullRequests({
         cwd: input.cwd,
+        author: "@me",
         limit: 20,
-      })
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new GitManagerError({
-              operation: "listOpenPullRequests",
-              cwd: input.cwd,
-              detail: cause.detail,
-              cause,
-            }),
-        ),
-      );
+        ...(repo ? { repo } : {}),
+      });
+
+    const pullRequests = yield* listAuthoredByMe().pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: "listOpenPullRequests",
+            cwd: input.cwd,
+            detail: cause.detail,
+            cause,
+          }),
+      ),
+    );
+
+    // On forks, gh resolves the default repo to the upstream, so the query
+    // above misses PRs opened on the fork itself. Probe origin as well and
+    // dedupe; when origin IS the default repo the extra query is a no-op.
+    const originRepository = parseGitHubRepositoryNameWithOwnerFromRemoteUrl(
+      yield* readConfigValueNullable(input.cwd, "remote.origin.url"),
+    );
+    const originPullRequests = originRepository
+      ? yield* listAuthoredByMe(originRepository).pipe(Effect.orElseSucceed(() => []))
+      : [];
+
+    const pullRequestsByUrl = new Map(
+      [...pullRequests, ...originPullRequests].map((pullRequest) => [pullRequest.url, pullRequest]),
+    );
+
     return {
-      pullRequests: pullRequests.map((pullRequest) => ({
+      pullRequests: Array.from(pullRequestsByUrl.values(), (pullRequest) => ({
         number: pullRequest.number,
         title: pullRequest.title,
         url: pullRequest.url,

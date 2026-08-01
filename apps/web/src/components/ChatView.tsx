@@ -6187,7 +6187,6 @@ function ChatViewContent(props: ChatViewProps) {
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full z-0">
                       <div
-                        className="pb-8"
                         style={
                           forceExpandedMobileComposer
                             ? {

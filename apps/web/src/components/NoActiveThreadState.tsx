@@ -12,7 +12,6 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
-  type ReactNode,
 } from "react";
 import { openCommandPalette } from "../commandPaletteBus";
 import { isElectron } from "../env";
@@ -33,6 +32,7 @@ import {
   getNoActiveThreadRecentThreadItems,
   resolveNoActiveThreadStateVariant,
 } from "./NoActiveThreadState.logic";
+import { ActionCard } from "./ActionCard";
 import { LogomarkForma } from "./LogomarkForma";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { DesktopSidebarReopenButton } from "./sidebar/DesktopSidebarReopenButton";
@@ -52,8 +52,6 @@ import { Card } from "./ui/card";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
 
-const ACTION_CARD_CLASS_NAME =
-  "relative isolate h-auto min-h-[11.5rem] w-full overflow-hidden rounded-[20px] border-border/60 bg-background px-5 py-5 text-left whitespace-normal shadow-sm shadow-black/5 transition-all duration-150 ease-out before:rounded-[19px] hover:-translate-y-0.5 hover:border-border/85 hover:bg-accent/16 hover:shadow-md hover:ring-4 hover:ring-foreground/5 hover:ring-offset-4 hover:ring-offset-background active:translate-y-0 active:scale-[0.985] active:shadow-sm";
 const SECTION_HEADING_CLASS_NAME =
   "text-ui-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/64";
 const LIST_TABLE_SHELL_CLASS_NAME = "rounded-[1.3rem] bg-foreground/5 p-1";
@@ -67,45 +65,6 @@ const PULL_REQUEST_TABLE_GRID_CLASS_NAME = "md:grid-cols-[minmax(0,1fr)_5rem]";
 const PROJECT_TABLE_GRID_CLASS_NAME = "md:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_auto]";
 
 type OpenPullRequest = GitListOpenPullRequestsResult["pullRequests"][number];
-
-interface ActionCardProps {
-  title: string;
-  description: string;
-  icon: ReactNode;
-  testId: string;
-  onClick: () => void;
-}
-
-function ActionCard({ title, description, icon, testId, onClick }: ActionCardProps) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="xl"
-      data-testid={testId}
-      className={ACTION_CARD_CLASS_NAME}
-      onClick={onClick}
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 text-foreground/[0.06] opacity-70"
-        style={{
-          backgroundImage: "radial-gradient(currentColor 0.8px, transparent 0.8px)",
-          backgroundSize: "12px 12px",
-        }}
-      />
-      <span className="relative z-10 flex h-full w-full flex-col justify-between gap-2">
-        <span className="inline-flex size-12 shrink-0">{icon}</span>
-        <span className="flex min-h-[4.75rem] flex-col items-start gap-1.5">
-          <span className="text-base font-semibold leading-6 text-foreground">{title}</span>
-          <span className="max-w-[28ch] text-sm leading-6 text-muted-foreground/88">
-            {description}
-          </span>
-        </span>
-      </span>
-    </Button>
-  );
-}
 
 function getThreadTimestamp(
   thread: Pick<SidebarThreadSummary, "latestUserMessageAt" | "updatedAt" | "createdAt">,

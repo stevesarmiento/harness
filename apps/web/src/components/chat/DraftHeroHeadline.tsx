@@ -4,6 +4,7 @@ import { FolderPlusIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
+import { cn } from "~/lib/utils";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useClientSettings } from "~/hooks/useSettings";
 import { selectProjectGroupingSettings } from "~/logicalProject";
@@ -146,10 +147,18 @@ export function DraftHeroHeadline({
   );
 
   return (
-    <div className="flex w-full flex-col items-center">
+    <div
+      className={cn(
+        "flex w-full flex-col items-center",
+        // With no headline the logo slides down to tuck slightly behind the
+        // composer (the hero block is z-0, the composer z-10); with the
+        // headline it keeps the classic gap above the composer.
+        hasResolvedProject ? "-mb-14" : "pb-8",
+      )}
+    >
       <LogomarkFormaAnimated
         aria-hidden
-        className="pointer-events-none h-40 w-auto text-foreground/20 [mask-image:linear-gradient(to_bottom,black_45%,transparent_95%)] sm:h-52"
+        className="pointer-events-none h-80 w-auto text-foreground/5 [mask-image:linear-gradient(to_bottom,black_30%,transparent_80%)] sm:h-80"
       />
       {hasResolvedProject ? null : (
         <h1 className="mx-auto mt-5 w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">

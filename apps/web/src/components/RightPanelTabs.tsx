@@ -1,6 +1,6 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { FileDiff, Files, Globe2, Layers, Plus, TerminalSquare, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -22,8 +22,17 @@ import { faviconUrlForOrigin } from "~/lib/favicon";
 import { useTheme } from "~/hooks/useTheme";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./preview/PreviewPanelShell";
+import { ActionCard } from "./ActionCard";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
-import { EditorSurfaceIcon, SidebarPlanReadyIcon, TerminalSurfaceIcon } from "./icons/custom";
+import { LogomarkFormaAnimated } from "./LogomarkFormaAnimated";
+import {
+  BrowserSurfaceIcon,
+  ComponentPreviewSurfaceIcon,
+  DiffSurfaceIcon,
+  FilesSurfaceIcon,
+  SidebarPlanReadyIcon,
+  TerminalSurfaceIcon,
+} from "./icons/custom";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -104,7 +113,7 @@ function RightPanelEmptyState(props: {
     {
       label: "Browser",
       description: "Open a local app or URL.",
-      icon: Globe2,
+      icon: BrowserSurfaceIcon,
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
       onClick: props.onAddBrowser,
@@ -112,7 +121,7 @@ function RightPanelEmptyState(props: {
     {
       label: "Terminal",
       description: "Start a shell in this workspace.",
-      icon: TerminalSquare,
+      icon: TerminalSurfaceIcon,
       available: true,
       disabledReason: null,
       onClick: props.onAddTerminal,
@@ -120,7 +129,7 @@ function RightPanelEmptyState(props: {
     {
       label: "Files",
       description: "Browse and read workspace files.",
-      icon: Files,
+      icon: FilesSurfaceIcon,
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
@@ -128,7 +137,7 @@ function RightPanelEmptyState(props: {
     {
       label: "Diff",
       description: "Review changes in this thread.",
-      icon: FileDiff,
+      icon: DiffSurfaceIcon,
       available: props.diffAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
@@ -136,7 +145,7 @@ function RightPanelEmptyState(props: {
     {
       label: "Component preview",
       description: "Render project components live.",
-      icon: Layers,
+      icon: ComponentPreviewSurfaceIcon,
       available: props.componentPreviewAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.componentPreview,
       onClick: props.onAddComponentPreview,
@@ -147,49 +156,36 @@ function RightPanelEmptyState(props: {
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
       <div className="w-full max-w-xl">
         <div className="mb-5 text-center">
-          <h3 className="text-sm font-medium text-foreground">Open a surface</h3>
+          <LogomarkFormaAnimated
+            aria-hidden
+            className="pointer-events-none mx-auto h-40 w-auto text-foreground/5 [mask-image:linear-gradient(to_bottom,black_30%,transparent_80%)]"
+          />
+          <h3 className="text-base font-medium text-foreground">Open a surface</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             Choose what to show in the right panel.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-4">
           {actions.map((action) => {
             const Icon = action.icon;
-            const content = (
-              <>
-                <Icon className="mb-3 size-5" />
-                <span className="text-sm font-medium">{action.label}</span>
-                <span className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {action.description}
-                </span>
-              </>
+            const card = (
+              <ActionCard
+                title={action.label}
+                description={action.description}
+                icon={<Icon className="size-6" />}
+                disabled={!action.available}
+                className="min-h-40 px-4 py-4"
+                onClick={action.onClick}
+              />
             );
             if (action.available) {
-              return (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={action.onClick}
-                  className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
-                >
-                  {content}
-                </button>
-              );
+              return <div key={action.label}>{card}</div>;
             }
-            const disabledCard = (
-              <button
-                type="button"
-                className="flex min-h-28 w-full cursor-not-allowed flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left opacity-40 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
-                aria-disabled="true"
-              >
-                {content}
-              </button>
-            );
             return (
               <DisabledReasonTooltip
                 key={action.label}
                 reason={action.disabledReason}
-                trigger={disabledCard}
+                trigger={card}
               />
             );
           })}
@@ -236,7 +232,8 @@ function surfaceTitle(
 function PreviewFavicon({ url }: { url: string | null }) {
   const faviconUrl = faviconUrlForOrigin(url, 32);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  if (!faviconUrl || failedUrl === faviconUrl) return <Globe2 className="size-3.5 shrink-0" />;
+  if (!faviconUrl || failedUrl === faviconUrl)
+    return <BrowserSurfaceIcon className="size-3.5 shrink-0" />;
   return (
     <img
       src={faviconUrl}
@@ -265,9 +262,9 @@ function SurfaceIcon({
       return <PreviewFavicon url={url} />;
     }
     case "diff":
-      return <FileDiff className="size-3.5 shrink-0" />;
+      return <DiffSurfaceIcon className="size-3.5 shrink-0" />;
     case "files":
-      return <EditorSurfaceIcon className="size-3.5 shrink-0" />;
+      return <FilesSurfaceIcon className="size-3.5 shrink-0" />;
     case "file":
       return (
         <PierreEntryIcon
@@ -282,7 +279,7 @@ function SurfaceIcon({
     case "plan":
       return <SidebarPlanReadyIcon className="size-3.5 shrink-0 text-violet-500" />;
     case "componentPreview":
-      return <Layers className="size-3.5 shrink-0" />;
+      return <ComponentPreviewSurfaceIcon className="size-3.5 shrink-0" />;
   }
 }
 
@@ -464,11 +461,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     disabledReason={SURFACE_DISABLED_REASONS.browser}
                     onClick={props.onAddBrowser}
                   >
-                    <Globe2 />
+                    <BrowserSurfaceIcon />
                     Browser
                   </SurfaceMenuItem>
                   <SurfaceMenuItem available onClick={props.onAddTerminal}>
-                    <TerminalSquare />
+                    <TerminalSurfaceIcon />
                     Terminal
                   </SurfaceMenuItem>
                   <SurfaceMenuItem
@@ -476,7 +473,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     disabledReason={SURFACE_DISABLED_REASONS.files}
                     onClick={props.onAddFiles}
                   >
-                    <Files />
+                    <FilesSurfaceIcon />
                     Files
                   </SurfaceMenuItem>
                   <SurfaceMenuItem
@@ -484,7 +481,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     disabledReason={SURFACE_DISABLED_REASONS.diff}
                     onClick={props.onAddDiff}
                   >
-                    <FileDiff />
+                    <DiffSurfaceIcon />
                     Diff
                   </SurfaceMenuItem>
                   <SurfaceMenuItem
@@ -492,7 +489,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     disabledReason={SURFACE_DISABLED_REASONS.componentPreview}
                     onClick={props.onAddComponentPreview}
                   >
-                    <Layers />
+                    <ComponentPreviewSurfaceIcon />
                     Component preview
                   </SurfaceMenuItem>
                 </MenuPopup>

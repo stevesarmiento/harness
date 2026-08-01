@@ -230,7 +230,7 @@ function SidebarAccountRow({
             />
           }
         >
-          <EllipsisIcon className="size-4 rotate-90 fill-current" />
+          <EllipsisIcon className="size-3 rotate-90 fill-current" />
         </MenuTrigger>
         <MenuPopup align="end" className="w-56" side="top" sideOffset={6}>
           <MenuItem
