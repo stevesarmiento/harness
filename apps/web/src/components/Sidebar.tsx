@@ -3824,7 +3824,6 @@ export default function Sidebar() {
             projectsLength={projects.length}
           />
 
-          <SidebarSeparator />
           <SidebarChromeFooter variant="v1" />
         </>
       )}
