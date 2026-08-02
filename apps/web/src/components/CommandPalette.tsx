@@ -120,6 +120,7 @@ import {
   AddProjectIcon,
   GitHubRepoIcon,
   GitUrlIcon,
+  HouseIcon,
   NewThreadIcon,
   SettingsHexIcon,
 } from "./icons/custom";
@@ -1492,6 +1493,17 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:home",
+    searchTerms: ["home", "overview", "start", "dashboard"],
+    title: "Go to Home",
+    icon: <HouseIcon className="size-4 text-muted-foreground/80" />,
+    run: async () => {
+      await navigate({ to: "/" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

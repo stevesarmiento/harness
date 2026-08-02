@@ -258,24 +258,24 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 }
 
 @layer components {
+  /* Desktop keeps the logomark at every sidebar width; only the wordmark
+     text collapses away when the header container gets narrow. */
   .sidebar-brand {
     display: none;
   }
 
-  .sidebar-brand-stage {
+  .sidebar-brand-name {
     display: none;
   }
 
   @media (min-width: 48rem) {
-    @container sidebar-header (min-width: 13.5rem) {
-      .sidebar-brand {
-        display: flex;
-      }
+    .sidebar-brand {
+      display: flex;
     }
 
-    @container sidebar-header (min-width: 15.75rem) {
-      .sidebar-brand-stage {
-        display: inline-flex;
+    @container sidebar-header (min-width: 13.5rem) {
+      .sidebar-brand-name {
+        display: inline;
       }
     }
   }

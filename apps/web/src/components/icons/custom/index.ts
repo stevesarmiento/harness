@@ -13,6 +13,7 @@ export * from "./GitUrlIcon";
 export * from "./MessageCopyIcon";
 export * from "./NewThreadIcon";
 export * from "./NotificationsSettingsIcon";
+export * from "./HouseIcon";
 export * from "./PanelCollapseIcon";
 export * from "./PanelExpandIcon";
 export * from "./PreviewTriggerIcon";

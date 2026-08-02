@@ -2,7 +2,6 @@ import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environ
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconChevronRight as ChevronRightIcon,
-  IconHouse,
   IconMagnifyingglass as SearchIcon,
 } from "symbols-react";
 import type { GitListOpenPullRequestsResult } from "@t3tools/contracts";
@@ -47,7 +46,7 @@ import {
   prStatusIndicator,
   ThreadRowLeadingStatus,
 } from "./ThreadStatusIndicators";
-import { AddProjectIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
+import { AddProjectIcon, HouseIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -600,7 +599,10 @@ export function NoActiveThreadState() {
           <SidebarTrigger className="size-7 shrink-0 md:hidden" />
           <DesktopSidebarReopenButton className="md:ml-0" />
           <WorkspaceHeaderTitle
-            icon={<IconHouse className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />}
+            icon={<HouseIcon className="size-3.5 shrink-0 opacity-50" aria-hidden />}
+            aria-label="Open command palette"
+            aria-haspopup="dialog"
+            onClick={() => openCommandPalette()}
           >
             Home
           </WorkspaceHeaderTitle>

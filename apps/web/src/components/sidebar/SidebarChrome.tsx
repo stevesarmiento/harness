@@ -6,12 +6,10 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { LogomarkForma } from "../LogomarkForma";
 import {
-  resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
 import { SidebarFooter, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
@@ -31,11 +29,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
     stageLabel,
     variant === "v2" && environmentIdentificationMode === "artwork",
   );
-  const identificationPillLabel =
-    environmentIdentificationMode === "pill"
-      ? resolveEnvironmentIdentificationPillLabel(stageLabel)
-      : null;
-  const stageBadgeLabel = identificationPillLabel ?? stageLabel;
 
   return (
     <SidebarHeader
@@ -43,7 +36,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         "@container/sidebar-header relative isolate shrink-0 flex-row items-center justify-between overflow-hidden",
         variant === "v1"
           ? isElectron
-            ? "h-[52px] gap-2 px-4 py-0 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]"
+            ? "h-[42px] gap-2 px-3 py-0 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]"
             : "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3"
           : "h-[var(--workspace-topbar-height)] gap-2 px-3 py-0 sm:px-4",
         isElectron &&
@@ -67,22 +60,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             Version {APP_VERSION}
           </TooltipPopup>
         </Tooltip>
-        {stageBadgeLabel ? (
-          <Badge
-            className={cn(
-              "sidebar-brand-stage rounded-full px-1.5",
-              backdropVariant ? "bg-white/15 text-white" : "text-muted-foreground",
-            )}
-            data-build-stage=""
-            {...(identificationPillLabel
-              ? { "data-environment-identification": "pill" as const }
-              : {})}
-            size="sm"
-            variant="secondary"
-          >
-            {stageBadgeLabel}
-          </Badge>
-        ) : null}
       </div>
       <Tooltip>
         <TooltipTrigger
@@ -126,7 +103,7 @@ function FormaWordmark() {
       className="inline-flex shrink-0 items-center gap-2 font-semibold text-lg lowercase tracking-tight"
     >
       <LogomarkForma aria-hidden="true" className="h-5 w-auto shrink-0" />
-      <span className="truncate">{APP_BASE_NAME}</span>
+      <span className="sidebar-brand-name truncate">{APP_BASE_NAME}</span>
     </span>
   );
 }
