@@ -149,6 +149,9 @@ function normalizeThemeColor(value: string | null | undefined): string | null {
 
 function resolveBrowserChromeSurface(): HTMLElement {
   return (
+    // The inset card carries the opaque content background; the sidebar-inset
+    // column behind it is transparent on desktop widths.
+    document.querySelector<HTMLElement>("[data-slot='sidebar-inset-card']") ??
     document.querySelector<HTMLElement>("main[data-slot='sidebar-inset']") ??
     document.querySelector<HTMLElement>("[data-slot='sidebar-inner']") ??
     document.body

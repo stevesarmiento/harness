@@ -2,6 +2,7 @@ import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environ
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconChevronRight as ChevronRightIcon,
+  IconHouse,
   IconMagnifyingglass as SearchIcon,
 } from "symbols-react";
 import type { GitListOpenPullRequestsResult } from "@t3tools/contracts";
@@ -50,7 +51,8 @@ import { AddProjectIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "~/components/ui/sidebar";
+import { WorkspaceHeaderTitle } from "~/components/WorkspaceHeaderTitle";
 
 const SECTION_HEADING_CLASS_NAME =
   "text-ui-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/64";
@@ -588,19 +590,24 @@ export function NoActiveThreadState() {
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground md:h-auto">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <header
-          className={cn(
-            "px-3 sm:px-5",
-            isElectron ? "workspace-topbar drag-region" : "workspace-topbar",
-          )}
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-2 wco:pr-[var(--workspace-native-controls-inset)]">
-            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-            <DesktopSidebarReopenButton />
-          </div>
-        </header>
+      <header
+        className={cn(
+          "workspace-topbar bg-background px-3 sm:px-5 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]",
+          isElectron && "drag-region [--workspace-topbar-height:39px]",
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2 wco:pr-[var(--workspace-native-controls-inset)]">
+          <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+          <DesktopSidebarReopenButton className="md:ml-0" />
+          <WorkspaceHeaderTitle
+            icon={<IconHouse className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />}
+          >
+            Home
+          </WorkspaceHeaderTitle>
+        </div>
+      </header>
 
+      <SidebarInsetCard className="overflow-x-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto" data-testid="no-active-thread-state">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-14">
             <section className="flex items-start">
@@ -712,7 +719,7 @@ export function NoActiveThreadState() {
             ) : null}
           </div>
         </div>
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }

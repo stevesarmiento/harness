@@ -10,8 +10,9 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { useNavigate } from "@tanstack/react-router";
-import { memo, type RefObject } from "react";
+import { memo, type ReactNode, type RefObject } from "react";
 import {
+  IconBubbleLeftAndTextBubbleRight as ThreadIcon,
   IconCheckmark as CheckIcon,
   IconChevronDown as ChevronDownIcon,
   IconChevronRight as ChevronRightIcon,
@@ -33,12 +34,7 @@ import { HeaderIconActionButton } from "../HeaderIconActionButton";
 import { SidebarPanelIcon } from "../icons/custom";
 import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
 import type { NewProjectScriptInput, ProjectScriptActionResult } from "../ProjectScriptsControl";
-import {
-  ThreadBreadcrumbProjectChipContent,
-  THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME,
-  THREAD_BREADCRUMB_PROJECT_CHIP_INTERACTIVE_CLASS_NAME,
-  THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME,
-} from "../ThreadBreadcrumb";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
 import { Badge } from "../ui/badge";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { SidebarTrigger } from "../ui/sidebar";
@@ -65,6 +61,10 @@ interface ChatHeaderProps {
   gitCwd: string | null;
   workspaceRoot: string | null;
   gitActionsRef?: RefObject<GitActionsControlHandle | null> | undefined;
+  /** Rendered inside the breadcrumb nav after the thread title (e.g. right-panel surface pills). */
+  breadcrumbTrailing?: ReactNode;
+  /** Rendered in the right action cluster before the actions menu (e.g. the panel maximize control). */
+  actionsLeading?: ReactNode;
   onNewThreadInProject: () => void;
   onToggleRightPanel: () => void;
   onRunProjectScript: (script: ProjectScript) => void;
@@ -112,10 +112,6 @@ export function selectHeaderThreads(
   );
 }
 
-export function shouldShowHeaderPanelToggle(rightPanelOpen: boolean): boolean {
-  return !rightPanelOpen;
-}
-
 export const ChatHeader = memo(function ChatHeader({
   routeKind,
   activeThreadEnvironmentId,
@@ -136,6 +132,8 @@ export const ChatHeader = memo(function ChatHeader({
   gitCwd,
   workspaceRoot,
   gitActionsRef,
+  breadcrumbTrailing,
+  actionsLeading,
   onNewThreadInProject,
   onToggleRightPanel,
   onRunProjectScript,
@@ -163,22 +161,18 @@ export const ChatHeader = memo(function ChatHeader({
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <DesktopSidebarReopenButton className="md:ml-0" />
         {activeProjectName && activeProjectId ? (
-          <nav
-            aria-label="Thread breadcrumb"
-            className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
-          >
+          <nav aria-label="Thread breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
             <button
               type="button"
               aria-label="Switch project"
               aria-haspopup="dialog"
               onClick={() => openCommandPalette({ open: "switch-project" })}
-              className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} ${THREAD_BREADCRUMB_PROJECT_CHIP_INTERACTIVE_CLASS_NAME} h-6 shrink-0 text-sm`}
+              // Flat pill matching the right-panel surface tabs (no border/divider).
+              className="flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               title={activeProjectName}
             >
-              <ThreadBreadcrumbProjectChipContent
-                icon={<CubeIcon className="size-3 shrink-0 fill-current opacity-70" aria-hidden />}
-                label={activeProjectName}
-              />
+              <CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              <span className="min-w-0 truncate">{activeProjectName}</span>
             </button>
             <ChevronRightIcon className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME} aria-hidden />
             <ThreadTitleMenu
@@ -188,6 +182,7 @@ export const ChatHeader = memo(function ChatHeader({
               activeProjectId={activeProjectId}
               onNewThreadInProject={onNewThreadInProject}
             />
+            {breadcrumbTrailing}
           </nav>
         ) : (
           <h2
@@ -205,6 +200,7 @@ export const ChatHeader = memo(function ChatHeader({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 [-webkit-app-region:no-drag]">
+        {actionsLeading}
         <ChatHeaderActionsMenu
           routeKind={routeKind}
           activeThreadEnvironmentId={activeThreadEnvironmentId}
@@ -232,26 +228,26 @@ export const ChatHeader = memo(function ChatHeader({
           onArchiveThread={onArchiveThread}
           onDeleteThread={onDeleteThread}
         />
-        {shouldShowHeaderPanelToggle(rightPanelOpen) ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <HeaderIconActionButton
-                  aria-label="Open right panel"
-                  disabled={!rightPanelAvailable}
-                  onClick={onToggleRightPanel}
-                />
-              }
-            >
-              <SidebarPanelIcon className="size-4 rotate-180" aria-hidden />
-            </TooltipTrigger>
-            <TooltipPopup side="bottom">
-              {rightPanelAvailable
-                ? "Open right panel"
-                : "Right panel is unavailable until a project is open"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <HeaderIconActionButton
+                aria-label={rightPanelOpen ? "Close right panel" : "Open right panel"}
+                disabled={!rightPanelAvailable}
+                onClick={onToggleRightPanel}
+              />
+            }
+          >
+            <SidebarPanelIcon filled={rightPanelOpen} className="size-4 rotate-180" aria-hidden />
+          </TooltipTrigger>
+          <TooltipPopup side="bottom">
+            {rightPanelAvailable
+              ? rightPanelOpen
+                ? "Close right panel"
+                : "Open right panel"
+              : "Right panel is unavailable until a project is open"}
+          </TooltipPopup>
+        </Tooltip>
       </div>
     </div>
   );
@@ -287,11 +283,15 @@ function ThreadTitleMenu({
           <button
             type="button"
             aria-label="Switch thread"
-            className="group flex min-w-0 shrink cursor-pointer items-center gap-2 rounded-md px-2 py-0.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+            // Flat pill: rounded fill with no border/shadow so it reads as an
+            // object at rest, keeping the original hover treatment. Text and
+            // icon sizing match the right-panel surface pills.
+            className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             title={activeThreadTitle}
           />
         }
       >
+        <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
         <span className="min-w-0 truncate">{activeThreadTitle}</span>
         <ChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
       </MenuTrigger>

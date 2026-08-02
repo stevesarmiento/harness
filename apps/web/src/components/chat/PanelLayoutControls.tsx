@@ -1,9 +1,10 @@
-import { Maximize2Icon, Minimize2Icon, PanelBottomIcon } from "lucide-react";
+import { PanelBottomIcon } from "lucide-react";
 import { memo } from "react";
 
+import { HeaderIconActionButton } from "../HeaderIconActionButton";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { SidebarPanelIcon } from "../icons/custom";
+import { PanelCollapseIcon, PanelExpandIcon, SidebarPanelIcon } from "../icons/custom";
 
 interface PanelLayoutControlsProps {
   terminalAvailable: boolean;
@@ -108,7 +109,7 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
             size="sm"
             disabled={!available}
           >
-            <SidebarPanelIcon className="size-4 rotate-180" />
+            <SidebarPanelIcon filled={open} className="size-4 rotate-180" />
           </Toggle>
         }
       />
@@ -133,22 +134,22 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
     <Tooltip>
       <TooltipTrigger
         render={
-          <Toggle
-            className="shrink-0 [-webkit-app-region:no-drag]"
-            pressed={maximized}
-            onPressedChange={onToggle}
+          // HeaderIconActionButton (not Toggle): matches the size and hover
+          // treatment of the sibling header controls it sits inline with.
+          <HeaderIconActionButton
             aria-label={label}
-            variant="ghost"
-            size="sm"
-          >
-            {maximized ? (
-              <Minimize2Icon className="size-3.5" />
-            ) : (
-              <Maximize2Icon className="size-3.5" />
-            )}
-          </Toggle>
+            pressed={maximized}
+            className="[-webkit-app-region:no-drag]"
+            onClick={onToggle}
+          />
         }
-      />
+      >
+        {maximized ? (
+          <PanelCollapseIcon className="size-4" aria-hidden />
+        ) : (
+          <PanelExpandIcon className="size-4" aria-hidden />
+        )}
+      </TooltipTrigger>
       <TooltipPopup side="bottom">{label}</TooltipPopup>
     </Tooltip>
   );

@@ -6,10 +6,29 @@ import { useCallback, useRef } from "react";
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
 import { cn } from "../../lib/utils";
-import { IconEllipsis as EllipsisIcon } from "symbols-react";
+import {
+  IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
+  IconDisplay as DisplayIcon,
+  IconEllipsis as EllipsisIcon,
+  IconMoonFill as MoonIcon,
+  IconSunMaxFill as SunIcon,
+} from "symbols-react";
 
+import { useTheme } from "../../hooks/useTheme";
+import type { ThemeMode } from "../../theme";
 import { SettingsHexIcon } from "../icons/custom";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "../ui/menu";
 import { SidebarMenuButton, useSidebar } from "../ui/sidebar";
 import { MobileClientsUserProfilePage } from "./MobileClientsUserProfilePage";
 import {
@@ -19,6 +38,26 @@ import {
 } from "./T3ConnectSidebarControl.logic";
 import { useT3ConnectAuthPrompt } from "./useT3ConnectAuthPrompt";
 import { useT3ConnectClerkAvailability } from "./useT3ConnectClerkAvailability";
+
+const THEME_MODE_LABELS: Record<ThemeMode, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+  highContrast: "High Contrast",
+};
+
+const THEME_MODE_ICONS = {
+  system: DisplayIcon,
+  light: SunIcon,
+  dark: MoonIcon,
+  highContrast: ContrastIcon,
+} as const satisfies Record<ThemeMode, typeof DisplayIcon>;
+
+const THEME_MODES: readonly ThemeMode[] = ["system", "light", "dark", "highContrast"];
+
+function isThemeMode(value: unknown): value is ThemeMode {
+  return value === "system" || value === "light" || value === "dark" || value === "highContrast";
+}
 
 const STATUS_DOT_CLASSNAME: Record<T3ConnectSidebarStatusTone, string> = {
   error: "bg-destructive",
@@ -110,6 +149,45 @@ function SidebarAccountStatusDot({ tone }: { readonly tone: T3ConnectSidebarStat
       )}
       data-testid="sidebar-account-status-dot"
     />
+  );
+}
+
+function SidebarThemeSubmenu() {
+  const { themeSettings, setThemeMode } = useTheme();
+  const ActiveThemeIcon = THEME_MODE_ICONS[themeSettings.mode];
+
+  return (
+    <MenuSub>
+      <MenuSubTrigger data-testid="sidebar-theme-submenu-trigger">
+        <ActiveThemeIcon className="size-3.5 shrink-0 fill-current opacity-60" />
+        Theme
+        <span className="ms-auto truncate text-muted-foreground text-xs">
+          {THEME_MODE_LABELS[themeSettings.mode]}
+        </span>
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-44">
+        <MenuRadioGroup
+          value={themeSettings.mode}
+          onValueChange={(value) => {
+            if (isThemeMode(value)) {
+              setThemeMode(value);
+            }
+          }}
+        >
+          {THEME_MODES.map((mode) => {
+            const Icon = THEME_MODE_ICONS[mode];
+            return (
+              <MenuRadioItem key={mode} value={mode} closeOnClick>
+                <span className="flex items-center gap-2">
+                  <Icon className="size-3.5 shrink-0 fill-current opacity-60" />
+                  {THEME_MODE_LABELS[mode]}
+                </span>
+              </MenuRadioItem>
+            );
+          })}
+        </MenuRadioGroup>
+      </MenuSubPopup>
+    </MenuSub>
   );
 }
 
@@ -249,6 +327,7 @@ function SidebarAccountRow({
               {connect.label}
             </span>
           </MenuItem>
+          <SidebarThemeSubmenu />
           <MenuItem onClick={() => navigateTo("/settings")}>
             <SettingsHexIcon />
             Settings

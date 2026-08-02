@@ -6,7 +6,9 @@ import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
 import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "../threadRoutes";
 import { resolveThreadSyncPhase } from "../threadSync";
-import { SidebarInset } from "~/components/ui/sidebar";
+import { isElectron } from "~/env";
+import { cn } from "~/lib/utils";
+import { SidebarInset, SidebarInsetCard } from "~/components/ui/sidebar";
 import {
   useEnvironmentThreadRefs,
   useThreadDetail,
@@ -87,7 +89,19 @@ function ChatThreadRouteView() {
           routeKind="server"
           threadSyncPhase={threadSyncPhase}
         />
-      ) : null}
+      ) : (
+        // Geometry-matching placeholder: a header-height band on the chrome
+        // plus an empty card, so loading doesn't flash a chrome-colored void.
+        <>
+          <div
+            className={cn(
+              "workspace-topbar [--workspace-topbar-height:40px]",
+              isElectron && "drag-region [--workspace-topbar-height:39px]",
+            )}
+          />
+          <SidebarInsetCard />
+        </>
+      )}
     </SidebarInset>
   );
 }

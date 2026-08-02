@@ -638,16 +638,33 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
   return (
     <main
       className={cn(
-        "relative flex min-w-0 w-full flex-1 flex-col bg-background surface-grain",
-        // corner-shape draws Apple-style continuous (squircle) corners so the
-        // card tracks the macOS window shape; unsupported engines fall back
-        // to the plain rounded-xl radius.
-        // mt-1.5 vs m-2: the short top edge plus the corner rounding makes a
-        // symmetric 8px gap read deeper on top, so it gets 6px.
-        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:mt-[7px] md:peer-data-[variant=inset]:overflow-hidden md:peer-data-[variant=inset]:rounded-2xl md:peer-data-[variant=inset]:[corner-shape:squircle] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:border-border md:peer-data-[variant=inset]:shadow-sm/5",
+        // Transparent positioning column. The route header renders directly on
+        // the window chrome; SidebarInsetCard below it carries the card chrome.
+        // bg-background remains for <md where the layout is full-bleed.
+        "relative flex min-w-0 w-full flex-1 flex-col bg-background",
+        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:bg-transparent",
         className,
       )}
       data-slot="sidebar-inset"
+      {...props}
+    />
+  );
+}
+
+function SidebarInsetCard({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background surface-grain",
+        // Full-bleed and chromeless below md; rounded inset card on desktop.
+        // Plain md: (not peer-scoped): this is a child of SidebarInset and the
+        // app only uses the inset sidebar variant. corner-shape draws
+        // Apple-style continuous (squircle) corners; unsupported engines fall
+        // back to the plain radius.
+        "md:rounded-2xl md:[corner-shape:squircle] md:border md:border-border md:shadow-sm/5",
+        className,
+      )}
+      data-slot="sidebar-inset-card"
       {...props}
     />
   );
@@ -1032,6 +1049,7 @@ export {
   SidebarHeader,
   SidebarInput,
   SidebarInset,
+  SidebarInsetCard,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuBadge,

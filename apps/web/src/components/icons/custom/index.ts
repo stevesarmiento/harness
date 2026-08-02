@@ -13,6 +13,8 @@ export * from "./GitUrlIcon";
 export * from "./MessageCopyIcon";
 export * from "./NewThreadIcon";
 export * from "./NotificationsSettingsIcon";
+export * from "./PanelCollapseIcon";
+export * from "./PanelExpandIcon";
 export * from "./PreviewTriggerIcon";
 export * from "./ProvidersSettingsIcon";
 export * from "./SettingsHexIcon";

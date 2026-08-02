@@ -1,4 +1,4 @@
-import { IconArrowCounterclockwise as RotateCcwIcon } from "symbols-react";
+import { IconArrowCounterclockwise as RotateCcwIcon, IconGearshape } from "symbols-react";
 import {
   Outlet,
   createFileRoute,
@@ -13,7 +13,8 @@ import { useSettingsRestore } from "../components/settings/SettingsPanels";
 import { SETTINGS_DEFAULT_PATH } from "../components/settings/settingsNavigation";
 import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
 import { Button } from "../components/ui/button";
-import { SidebarInset, SidebarTrigger } from "../components/ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
+import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
 import { isElectron } from "../env";
 
 function RestoreDefaultsButton({ onRestored }: { onRestored: () => void }) {
@@ -70,42 +71,52 @@ function SettingsContentLayout() {
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground isolate md:h-auto">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        {!isElectron && (
-          <header className="border-b border-border px-3 py-2 sm:px-5">
-            <div className="flex min-h-7 w-full items-center gap-2 sm:min-h-6">
-              <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-              <DesktopSidebarReopenButton />
-              <span className="text-sm font-medium text-foreground">Settings</span>
-              {showRestoreDefaults ? (
-                <div className="ms-auto flex items-center gap-2">
-                  <RestoreDefaultsButton onRestored={handleRestored} />
-                </div>
-              ) : null}
-            </div>
-          </header>
-        )}
-
-        {isElectron && (
-          <div className="drag-region flex h-[52px] shrink-0 items-center border-b border-border px-5 wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
-            <div className="flex min-w-0 items-center gap-2">
-              <DesktopSidebarReopenButton />
-              <span className="text-xs font-medium tracking-wide text-muted-foreground/70">
-                Settings
-              </span>
-            </div>
+      {!isElectron && (
+        <header className="workspace-topbar border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]">
+          <div className="flex min-w-0 w-full items-center gap-2">
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <DesktopSidebarReopenButton className="md:ml-0" />
+            <WorkspaceHeaderTitle
+              icon={
+                <IconGearshape className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              }
+            >
+              Settings
+            </WorkspaceHeaderTitle>
             {showRestoreDefaults ? (
               <div className="ms-auto flex items-center gap-2">
                 <RestoreDefaultsButton onRestored={handleRestored} />
               </div>
             ) : null}
           </div>
-        )}
+        </header>
+      )}
 
+      {isElectron && (
+        <div className="workspace-topbar drag-region border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:39px] wco:pr-[var(--workspace-native-controls-inset)]">
+          <div className="flex min-w-0 items-center gap-2">
+            <DesktopSidebarReopenButton className="md:ml-0" />
+            <WorkspaceHeaderTitle
+              icon={
+                <IconGearshape className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              }
+            >
+              Settings
+            </WorkspaceHeaderTitle>
+          </div>
+          {showRestoreDefaults ? (
+            <div className="ms-auto flex items-center gap-2 [-webkit-app-region:no-drag]">
+              <RestoreDefaultsButton onRestored={handleRestored} />
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <SidebarInsetCard>
         <div key={restoreSignal} className="min-h-0 flex flex-1 flex-col">
           <Outlet />
         </div>
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }

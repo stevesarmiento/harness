@@ -1,6 +1,16 @@
 import type { SVGProps } from "react";
 
-export function SidebarPanelIcon(props: SVGProps<SVGSVGElement>) {
+export function SidebarPanelIcon({
+  filled = false,
+  ...props
+}: SVGProps<SVGSVGElement> & {
+  /**
+   * Widens the inner bar into a filled panel half (open-state affordance).
+   * Coordinates are authored for the rotate-180 right-panel usage; the rect
+   * animates between the two states via the x/width transition.
+   */
+  filled?: boolean;
+}) {
   return (
     <svg {...props} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -10,13 +20,13 @@ export function SidebarPanelIcon(props: SVGProps<SVGSVGElement>) {
         fillRule="evenodd"
       />
       <rect
-        x="4"
+        x={filled ? 4.5 : 4}
         y="5"
-        width="1.5"
+        width={filled ? 4.5 : 1.5}
         height="6"
         rx="0.75"
         fill="currentColor"
-        style={{ transitionDuration: "250ms", transitionProperty: "width" }}
+        style={{ transitionDuration: "250ms", transitionProperty: "x, width" }}
       />
     </svg>
   );

@@ -2,11 +2,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  selectHeaderThreads,
-  shouldShowHeaderPanelToggle,
-  shouldShowOpenInPicker,
-} from "./ChatHeader";
+import { selectHeaderThreads, shouldShowOpenInPicker } from "./ChatHeader";
 
 describe("shouldShowOpenInPicker", () => {
   const primaryEnvironmentId = EnvironmentId.make("environment-primary");
@@ -108,12 +104,5 @@ describe("selectHeaderThreads", () => {
       ThreadId.make("newer"),
       ThreadId.make("older"),
     ]);
-  });
-});
-
-describe("shouldShowHeaderPanelToggle", () => {
-  it("shows the open control only while the panel is closed", () => {
-    expect(shouldShowHeaderPanelToggle(false)).toBe(true);
-    expect(shouldShowHeaderPanelToggle(true)).toBe(false);
   });
 });
