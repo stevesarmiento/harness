@@ -114,7 +114,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter({
   variant: "v1" | "v2";
 }) {
   return (
-    <SidebarFooter className="p-2">
+    <SidebarFooter className="p-[var(--sidebar-content-inset)]">
       <SidebarProviderUpdatePill />
       <SidebarUpdatePill />
       <SidebarAccountControl variant={variant} />
