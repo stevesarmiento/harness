@@ -55,7 +55,8 @@ function AutoSettleDaysInput({
   );
 }
 
-export function BetaSettingsPanel() {
+// Fork: exported so the Advanced settings page can embed the Beta section.
+export function BetaSettingsSection() {
   const sidebarV2Enabled = useSidebarV2Enabled();
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
@@ -63,7 +64,7 @@ export function BetaSettingsPanel() {
   const updateSettings = useUpdateClientSettings();
 
   return (
-    <SettingsPageContainer>
+    <>
       <SettingsSection title="Beta features">
         <SettingsRow
           {...searchableSetting("sidebar-v2")}
@@ -115,6 +116,14 @@ export function BetaSettingsPanel() {
           </>
         ) : null}
       </SettingsSection>
+    </>
+  );
+}
+
+export function BetaSettingsPanel() {
+  return (
+    <SettingsPageContainer>
+      <BetaSettingsSection />
     </SettingsPageContainer>
   );
 }

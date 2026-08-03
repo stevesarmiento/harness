@@ -71,7 +71,8 @@ describe("sidebar interactive cursors", () => {
     expect(html).toContain("cursor-pointer");
     expect(html).toContain("gap-[var(--sidebar-control-gap)]");
     expect(html).toContain("text-[var(--sidebar-icon-color)]");
-    expect(html).not.toContain("[&amp;&gt;svg]:opacity-60");
+    // Fork: Forma keeps the sidebar icon opacity ramp.
+    expect(html).toContain("[&amp;&gt;svg]:opacity-60");
   });
 
   it("applies the shared default treatment to icon-only menu buttons", () => {

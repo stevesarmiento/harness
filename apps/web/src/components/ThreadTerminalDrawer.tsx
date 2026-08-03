@@ -310,9 +310,7 @@ export function TerminalViewport({
     if (!terminal) {
       return;
     }
-    terminal.options.fontSize = terminalFontSize;
-    fitAddonRef.current?.fit();
-    terminal.refresh(0, terminal.rows - 1);
+    void terminal.setFont({ size: terminalFontSize });
   }, [terminalFontSize]);
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
@@ -413,6 +411,8 @@ export function TerminalViewport({
     const setup = async (): Promise<(() => void) | null> => {
       const terminalOptions: GhosttyTerminalSurfaceOptions = {
         theme: terminalThemeFromApp(mount),
+        // Fork: terminal follows the Interface code-font size setting.
+        font: { size: terminalFontSizeRef.current },
         onData: (data) => handleData(data),
         onResize: (cols, rows) => void resizeTerminal(cols, rows),
         onSelectionChange: () => handleSelectionChange(),

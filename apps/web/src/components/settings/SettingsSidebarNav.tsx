@@ -284,7 +284,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                         isActive={isActive}
                         onClick={() => handleSectionClick(item.to)}
                       >
-                        <Icon className={item.iconUsesFill ? "fill-current" : undefined} />
+                        {item.iconUsesFill ? <Icon className="fill-current" /> : <Icon />}
                         <span className="truncate">{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
