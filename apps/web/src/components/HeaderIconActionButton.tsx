@@ -19,7 +19,7 @@ export function HeaderIconActionButton({
       variant="ghost"
       aria-pressed={pressed}
       data-pressed={pressed ? "" : undefined}
-      className={cn("shrink-0 [&_svg]:fill-current", className)}
+      className={cn("shrink-0 [&_svg:not(.lucide)]:fill-current", className)}
       {...props}
     />
   );

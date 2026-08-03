@@ -228,9 +228,9 @@ const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> =
   separate: "Keep separate",
 };
 const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
-  "pointer-events-auto inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&_svg]:fill-current";
+  "pointer-events-auto inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&_svg:not(.lucide)]:fill-current";
 const SIDEBAR_THREAD_ARCHIVE_BUTTON_CLASS =
-  "inline-flex size-5 cursor-pointer items-center justify-center text-muted-foreground transition-colors [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&_svg]:fill-current";
+  "inline-flex size-5 cursor-pointer items-center justify-center text-muted-foreground transition-colors [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&_svg:not(.lucide)]:fill-current";
 
 function SidebarThreadDetailPrewarmer({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
   useEnvironmentThread(threadRef.environmentId, threadRef.threadId);
@@ -2384,7 +2384,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                       ? "Local sandbox project"
                       : "Remote project"
                   }
-                  className="pointer-events-none absolute top-1 right-1.5 inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 [&_svg]:fill-current"
+                  className="pointer-events-none absolute top-1 right-1.5 inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 [&_svg:not(.lucide)]:fill-current"
                 />
               }
             >
@@ -2792,7 +2792,7 @@ function ProjectSortMenu({
       <Tooltip>
         <TooltipTrigger
           render={
-            <MenuTrigger className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground [&_svg]:fill-current" />
+            <MenuTrigger className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground [&_svg:not(.lucide)]:fill-current" />
           }
         >
           <SidebarFilterIcon className="size-3.5" />
@@ -3087,7 +3087,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                     type="button"
                     aria-label="Add project"
                     data-testid="sidebar-add-project-trigger"
-                    className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground [&_svg]:fill-current"
+                    className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground [&_svg:not(.lucide)]:fill-current"
                     onClick={openAddProject}
                   />
                 }
