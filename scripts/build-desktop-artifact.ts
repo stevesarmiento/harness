@@ -636,6 +636,9 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
+  // Selectable app icons ship as real files via extraResources — the dock and
+  // window icon APIs need real paths — so keep the staged copy out of the asar.
+  "!apps/desktop/resources/app-icons/**",
 ] as const;
 // The WSL backend launches the server with plain `wsl.exe -- node`, which
 // cannot read inside an asar archive — and the server bundle externalizes its
@@ -648,6 +651,13 @@ export const DESKTOP_EXTRA_RESOURCES = [
   {
     from: "apps/desktop/prod-resources/resource-monitor",
     to: "resource-monitor",
+  },
+  // Selectable app icons (Settings → App icon). DesktopAssets.resolveAppIconPath
+  // probes <resourcesPath>/app-icons/<id>.png in packaged builds; in dev it
+  // reads apps/web/public/app-icons from the repo instead.
+  {
+    from: "apps/desktop/resources/app-icons",
+    to: "app-icons",
   },
 ] as const;
 
@@ -1870,6 +1880,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
+
+  // Staged after the prod-resources copy so the icons ship exactly once, as
+  // the app-icons extraResources entry (excluded from the asar via
+  // DESKTOP_FILE_EXCLUSIONS).
+  yield* fs.copy(
+    path.join(repoRoot, "apps/web/public/app-icons"),
+    path.join(stageResourcesDir, "app-icons"),
+  );
 
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed

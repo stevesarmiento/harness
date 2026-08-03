@@ -118,6 +118,35 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   box-shadow: var(--composer-banner-shadow);
 }
 
+/* Solid dock under the composer + meta bar; soft fade into the timeline so
+   scrolled messages do not collide with the lower chrome controls. */
+.chat-composer-dock-fade {
+  --chat-composer-dock-fade-height: 1.75rem;
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 0;
+  height: calc(100% + var(--chat-composer-dock-fade-height));
+  margin-inline-end: var(--app-scrollbar-width);
+  background-color: var(--background);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  -webkit-mask-image: linear-gradient(
+    to top,
+    black 0%,
+    black calc(100% - var(--chat-composer-dock-fade-height)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    black 0%,
+    black calc(100% - var(--chat-composer-dock-fade-height)),
+    transparent 100%
+  );
+}
+
 .wco {
   --workspace-topbar-height: env(titlebar-area-height, 52px);
   --workspace-controls-top: env(titlebar-area-y, 0px);

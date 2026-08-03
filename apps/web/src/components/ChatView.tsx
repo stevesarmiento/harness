@@ -6210,9 +6210,10 @@ function ChatViewContent(props: ChatViewProps) {
                     : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
                 }
               >
+                {!isDraftHeroState ? <div aria-hidden className="chat-composer-dock-fade" /> : null}
                 <div
                   ref={attachDraftHeroTransitionGroupRef}
-                  className="chat-composer-horizontal-inset w-full"
+                  className="chat-composer-horizontal-inset relative z-10 w-full"
                 >
                   <div className="pointer-events-auto relative z-10">
                     {isDraftHeroState ? (
