@@ -118,6 +118,8 @@ interface GitActionsControlProps {
 
 export interface GitActionsControlHandle {
   readonly runKeybindingCommand: (command: GitKeybindingCommand) => boolean;
+  /** Request a fresh working-tree status (e.g. when a host menu opens). */
+  readonly refreshStatus: () => void;
 }
 
 interface PendingDefaultBranchAction {
@@ -1677,7 +1679,12 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
       return true;
     };
 
-    useImperativeHandle(ref, () => ({ runKeybindingCommand }));
+    useImperativeHandle(ref, () => ({
+      runKeybindingCommand,
+      refreshStatus: () => {
+        requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+      },
+    }));
 
     const runDialogAction = () => {
       if (!isCommitDialogOpen) return;

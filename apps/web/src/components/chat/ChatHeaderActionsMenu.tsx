@@ -136,7 +136,14 @@ export function ChatHeaderActionsMenu({
   const hasThreadActions = hasDurableThreadActions || Boolean(workspaceRoot && onCopyWorkspacePath);
 
   return (
-    <Menu>
+    <Menu
+      onOpenChange={(open) => {
+        // Refresh working-tree status when the actions menu opens so the git
+        // commit/push/PR items reflect current changes instead of a stale
+        // snapshot (the item disables itself when status shows no changes).
+        if (open) gitActionsRef?.current?.refreshStatus();
+      }}
+    >
       <MenuTrigger
         render={<HeaderIconActionButton aria-label="More actions" title="More actions" />}
       >
