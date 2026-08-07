@@ -1385,7 +1385,7 @@ const ADVANCED_TYPOGRAPHY_TARGET_IDS: ReadonlySet<string> = new Set([
  * and a settings-search jump to an override row flips Advanced on so the
  * target exists to scroll to.
  */
-function TypographySection() {
+export function TypographySection() {
   const [advanced, setAdvanced] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
     false,

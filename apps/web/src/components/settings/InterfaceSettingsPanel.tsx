@@ -40,6 +40,7 @@ import {
 import { cn, isMacPlatform } from "../../lib/utils";
 import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
 import { Button } from "../ui/button";
+import { TypographySection } from "./SettingsPanels";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
@@ -307,83 +308,7 @@ export function InterfaceSettingsPanel() {
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="Typography">
-        <SettingsRow
-          title="UI font size"
-          description="Applies to the app interface root size and syncs across devices."
-          resetAction={
-            fontSizeInterface !== DEFAULT_INTERFACE_FONT_SIZE ? (
-              <SettingResetButton
-                label="UI font size"
-                onClick={() => updateSettings({ fontSizeInterface: DEFAULT_INTERFACE_FONT_SIZE })}
-              />
-            ) : null
-          }
-          control={
-            <PixelSettingInput
-              ariaLabel="UI font size"
-              onCommit={(value) =>
-                updateSettings({ fontSizeInterface: clampSettingsFontSize(value) })
-              }
-              value={fontSizeInterface}
-            />
-          }
-        />
-
-        <SettingsRow
-          title="Code font size"
-          description="Applies to the diff editor, terminal, and read-only code surfaces."
-          resetAction={
-            fontSizeCode !== DEFAULT_CODE_FONT_SIZE ? (
-              <SettingResetButton
-                label="code font size"
-                onClick={() => updateSettings({ fontSizeCode: DEFAULT_CODE_FONT_SIZE })}
-              />
-            ) : null
-          }
-          control={
-            <PixelSettingInput
-              ariaLabel="Code font size"
-              onCommit={(value) => updateSettings({ fontSizeCode: clampSettingsFontSize(value) })}
-              value={fontSizeCode}
-            />
-          }
-        />
-
-        <SettingsRow
-          title="Font smoothing"
-          description="Grayscale text smoothing (macOS engines only)."
-          resetAction={
-            fontSmoothing !== true ? (
-              <SettingResetButton
-                label="font smoothing"
-                onClick={() => updateSettings({ fontSmoothing: true })}
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              aria-label="Font smoothing"
-              checked={fontSmoothing}
-              onCheckedChange={(checked) => updateSettings({ fontSmoothing: Boolean(checked) })}
-            />
-          }
-        />
-
-        <SettingsRow
-          title="Font families"
-          description="Interface, code, composer, and terminal font pickers with live previews."
-          control={
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void navigate({ to: "/settings/appearance" })}
-            >
-              Open font settings
-            </Button>
-          }
-        />
-      </SettingsSection>
+      <TypographySection />
 
       <SettingsSection title="Display">
         <SettingsRow
