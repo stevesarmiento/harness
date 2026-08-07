@@ -23,6 +23,7 @@ export const RIGHT_PANEL_KINDS = [
   "terminal",
   // Fork: component preview harness surface (distinct from webview "preview").
   "componentPreview",
+  "agents",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -47,10 +48,11 @@ export type RightPanelSurface =
       revealLine: number | null;
       revealRequestId: number;
     }
-  | { id: "plan"; kind: "plan" };
+  | { id: "plan"; kind: "plan" }
+  | { id: "agents"; kind: "agents" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-const RIGHT_PANEL_STORAGE_VERSION = 7;
+const RIGHT_PANEL_STORAGE_VERSION = 8;
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -115,6 +117,8 @@ const singletonSurface = (
       return { id: "plan", kind };
     case "componentPreview":
       return { id: "componentPreview", kind };
+    case "agents":
+      return { id: "agents", kind };
   }
 };
 
