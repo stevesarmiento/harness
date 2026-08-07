@@ -354,30 +354,6 @@ export function InterfaceSettingsPanel() {
         />
 
         <SettingsRow
-          title="Word wrap"
-          description="Wrap long lines in code blocks, tables, diffs, and file previews by default."
-          resetAction={
-            settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? (
-              <SettingResetButton
-                label="word wrapping"
-                onClick={() =>
-                  updateSettings({
-                    wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.wordWrap}
-              onCheckedChange={(checked) => updateSettings({ wordWrap: Boolean(checked) })}
-              aria-label="Wrap code, tables, diffs, and file previews by default"
-            />
-          }
-        />
-
-        <SettingsRow
           title="Assistant output"
           description="Show token-by-token output while a response is in progress."
           resetAction={
