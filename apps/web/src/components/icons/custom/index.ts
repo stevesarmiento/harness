@@ -4,6 +4,7 @@ export * from "./AddProjectFolderIcon";
 export * from "./AddProjectIcon";
 export * from "./BrowserSurfaceIcon";
 export * from "./ComponentPreviewSurfaceIcon";
+export * from "./AgentsSurfaceIcon";
 export * from "./DiffSurfaceIcon";
 export * from "./EditorSurfaceIcon";
 export * from "./FilesSurfaceIcon";

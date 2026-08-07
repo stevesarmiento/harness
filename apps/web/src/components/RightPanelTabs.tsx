@@ -1,6 +1,6 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Bot, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -35,6 +35,7 @@ import {
   FilesSurfaceIcon,
   SidebarPlanReadyIcon,
   TerminalSurfaceIcon,
+  AgentsSurfaceIcon,
 } from "./icons/custom";
 
 export interface RightPanelTabStripProps {
@@ -167,7 +168,7 @@ function RightPanelEmptyState(props: {
       id: "agents" as const,
       label: "Agents",
       description: "Watch subagents and workflows run.",
-      icon: Bot,
+      icon: AgentsSurfaceIcon,
       available: true,
       disabledReason: null,
       onClick: props.onAddAgents,
@@ -305,7 +306,7 @@ function SurfaceIcon({
     case "componentPreview":
       return <ComponentPreviewSurfaceIcon className="size-3.5 shrink-0" />;
     case "agents":
-      return <Bot className="size-3.5 shrink-0" />;
+      return <AgentsSurfaceIcon className="size-3.5 shrink-0" />;
   }
 }
 
