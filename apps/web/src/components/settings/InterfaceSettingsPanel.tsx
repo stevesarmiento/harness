@@ -1,5 +1,12 @@
 import { DEFAULT_APP_ICON_ID, type AppIconId } from "@t3tools/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import {
+  DEFAULT_CODE_FONT_SIZE,
+  DEFAULT_INTERFACE_FONT_SIZE,
+  DEFAULT_UNIFIED_SETTINGS,
+  MAX_INTERFACE_FONT_SIZE,
+  MIN_INTERFACE_FONT_SIZE,
+} from "@t3tools/contracts/settings";
+import { useNavigate } from "@tanstack/react-router";
 import {
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
@@ -32,6 +39,7 @@ import {
 } from "../../interfaceAppearance";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
@@ -211,7 +219,9 @@ export function InterfaceSettingsPanel() {
   const updateClientSettings = useUpdateClientSettings();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
-  const isMacOs = typeof navigator !== "undefined" && isMacPlatform(navigator.platform);
+  const navigate = useNavigate();
+  const clampSettingsFontSize = (value: number) =>
+    Math.min(MAX_INTERFACE_FONT_SIZE, Math.max(MIN_INTERFACE_FONT_SIZE, Math.round(value)));
 
   const updateAppearance = useCallback((next: Partial<InterfaceAppearanceSettings>) => {
     setAppearance((current) => {
@@ -222,9 +232,9 @@ export function InterfaceSettingsPanel() {
     });
   }, []);
 
-  const uiFontSize = resolveUiFontSizePx(appearance.uiFontScale);
-  const codeFontSize = resolveCodeFontSizePx(appearance.codeFontScale);
-  const macOsFontSmoothing = resolveMacOsFontSmoothing(appearance.macOsFontSmoothing);
+  const fontSizeInterface = settings.fontSizeInterface;
+  const fontSizeCode = settings.fontSizeCode;
+  const fontSmoothing = settings.fontSmoothing;
 
   return (
     <SettingsPageContainer>
@@ -300,24 +310,22 @@ export function InterfaceSettingsPanel() {
       <SettingsSection title="Typography">
         <SettingsRow
           title="UI font size"
-          description="Applies directly to the app interface root size."
+          description="Applies to the app interface root size and syncs across devices."
           resetAction={
-            uiFontSize !== DEFAULT_UI_FONT_SIZE_PX ? (
+            fontSizeInterface !== DEFAULT_INTERFACE_FONT_SIZE ? (
               <SettingResetButton
                 label="UI font size"
-                onClick={() =>
-                  updateAppearance({
-                    uiFontScale: DEFAULT_UI_FONT_SIZE_PX,
-                  })
-                }
+                onClick={() => updateSettings({ fontSizeInterface: DEFAULT_INTERFACE_FONT_SIZE })}
               />
             ) : null
           }
           control={
             <PixelSettingInput
               ariaLabel="UI font size"
-              onCommit={(value) => updateAppearance({ uiFontScale: value })}
-              value={uiFontSize}
+              onCommit={(value) =>
+                updateSettings({ fontSizeInterface: clampSettingsFontSize(value) })
+              }
+              value={fontSizeInterface}
             />
           }
         />
@@ -326,53 +334,55 @@ export function InterfaceSettingsPanel() {
           title="Code font size"
           description="Applies to the diff editor, terminal, and read-only code surfaces."
           resetAction={
-            codeFontSize !== DEFAULT_CODE_FONT_SIZE_PX ? (
+            fontSizeCode !== DEFAULT_CODE_FONT_SIZE ? (
               <SettingResetButton
                 label="code font size"
-                onClick={() =>
-                  updateAppearance({
-                    codeFontScale: DEFAULT_CODE_FONT_SIZE_PX,
-                  })
-                }
+                onClick={() => updateSettings({ fontSizeCode: DEFAULT_CODE_FONT_SIZE })}
               />
             ) : null
           }
           control={
             <PixelSettingInput
               ariaLabel="Code font size"
-              onCommit={(value) => updateAppearance({ codeFontScale: value })}
-              value={codeFontSize}
+              onCommit={(value) => updateSettings({ fontSizeCode: clampSettingsFontSize(value) })}
+              value={fontSizeCode}
             />
           }
         />
 
-        {isMacOs ? (
-          <SettingsRow
-            title="Font smoothing"
-            description="macOS only. Toggle grayscale text smoothing."
-            resetAction={
-              macOsFontSmoothing !== DEFAULT_MAC_OS_FONT_SMOOTHING ? (
-                <SettingResetButton
-                  label="font smoothing"
-                  onClick={() =>
-                    updateAppearance({
-                      macOsFontSmoothing: DEFAULT_MAC_OS_FONT_SMOOTHING,
-                    })
-                  }
-                />
-              ) : null
-            }
-            control={
-              <Switch
-                aria-label="Font smoothing"
-                checked={macOsFontSmoothing === "grayscale"}
-                onCheckedChange={(checked) =>
-                  updateAppearance({ macOsFontSmoothing: checked ? "grayscale" : "auto" })
-                }
+        <SettingsRow
+          title="Font smoothing"
+          description="Grayscale text smoothing (macOS engines only)."
+          resetAction={
+            fontSmoothing !== true ? (
+              <SettingResetButton
+                label="font smoothing"
+                onClick={() => updateSettings({ fontSmoothing: true })}
               />
-            }
-          />
-        ) : null}
+            ) : null
+          }
+          control={
+            <Switch
+              aria-label="Font smoothing"
+              checked={fontSmoothing}
+              onCheckedChange={(checked) => updateSettings({ fontSmoothing: Boolean(checked) })}
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Font families"
+          description="Interface, code, composer, and terminal font pickers with live previews."
+          control={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void navigate({ to: "/settings/appearance" })}
+            >
+              Open font settings
+            </Button>
+          }
+        />
       </SettingsSection>
 
       <SettingsSection title="Display">

@@ -1281,10 +1281,6 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
 });
 
 function turnStatusFromResult(result: SDKResultMessage): ProviderRuntimeTurnStatus {
-  if (result.is_error === true) {
-    return "failed";
-  }
-
   if (result.subtype === "success") {
     return "completed";
   }

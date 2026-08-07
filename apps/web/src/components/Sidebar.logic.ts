@@ -165,6 +165,7 @@ const THREAD_STATUS_TONE_BY_LABEL: Record<ThreadStatusPill["label"], string> = {
   "Pending Approval": "text-amber-600 dark:text-amber-300/90",
   "Awaiting Input": "text-indigo-600 dark:text-indigo-300/90",
   Working: "text-sky-600 dark:text-sky-300/80",
+  Monitoring: "text-sky-600 dark:text-sky-300/80",
   Connecting: "text-sky-600 dark:text-sky-300/80",
   "Plan Ready": "text-violet-600 dark:text-violet-300/90",
   Completed: "text-emerald-600 dark:text-emerald-300/90",
@@ -691,8 +692,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.backgroundLiveness === "working") {
     return {
       label: "Working",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Working,
+      glyph: "grid",
       pulse: true,
     };
   }
@@ -700,8 +701,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.backgroundLiveness === "monitoring") {
     return {
       label: "Monitoring",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Monitoring,
+      glyph: "grid",
       pulse: false,
     };
   }

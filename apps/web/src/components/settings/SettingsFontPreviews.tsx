@@ -41,6 +41,8 @@ export function PromptFontPreview() {
         value={prompt}
         cursor={cursor}
         terminalContexts={EMPTY_TERMINAL_CONTEXTS}
+        codeContexts={EMPTY_TERMINAL_CONTEXTS as never}
+        onRemoveCodeContext={noop}
         skills={EMPTY_SKILLS}
         disabled={false}
         placeholder="Ask for follow-up changes or attach images"

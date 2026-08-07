@@ -4,6 +4,7 @@ import {
   QrCodeIcon,
   RefreshCwIcon,
   TerminalIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { type ReactNode, memo, useCallback, useId, useMemo, useState } from "react";

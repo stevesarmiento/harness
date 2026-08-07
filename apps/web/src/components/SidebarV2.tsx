@@ -1271,7 +1271,6 @@ export default function SidebarV2() {
     pinThread,
     unpinThread,
     deleteThread,
-    deleteThread,
     forkThread,
     exportThread,
   } = useThreadActions();

@@ -308,22 +308,8 @@ export function TerminalViewport({
     serverConfig?.availableEditors ?? [],
   );
   const openTerminalPath = useEffectEvent((target: string) => openInPreferredEditor(target));
-  const readTerminalFontSize = () =>
-    getCodeTerminalFontSize(readStoredInterfaceAppearanceSettings().codeFontScale);
-  const terminalFontSize = useSyncExternalStore(
-    subscribeToInterfaceAppearanceChanges,
-    readTerminalFontSize,
-    readTerminalFontSize,
-  );
-  const terminalFontSizeRef = useRef(terminalFontSize);
-  useEffect(() => {
-    terminalFontSizeRef.current = terminalFontSize;
-    const terminal = terminalRef.current;
-    if (!terminal) {
-      return;
-    }
-    void terminal.setFont({ size: terminalFontSize });
-  }, [terminalFontSize]);
+  // Fork note: terminal fonts are settings-driven now (fonts unification with
+  // upstream #5103); the old interfaceAppearance localStorage sizing is gone.
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });

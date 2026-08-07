@@ -1832,9 +1832,12 @@ label:has(> select#reasoning-effort) select {
   --app-ui-text-2xs: 10.5px;
   --app-ui-text-xs: 11.5px;
   --app-ui-text-sm: 13.5px;
-  --app-code-font-size: 12px;
-  --app-code-font-size-compact: 11px;
-  --app-code-editor-font-size: 13px;
+  /* Bridged to the settings-backed font engine (upstream #5103): the code
+     size setting drives all Forma code-surface utilities, preserving the
+     classic 12/11/13 scale at the default 13px. */
+  --app-code-font-size: calc(var(--font-size-code, 13px) - 1px);
+  --app-code-font-size-compact: calc(var(--font-size-code, 13px) - 2px);
+  --app-code-editor-font-size: var(--font-size-code, 13px);
   /* Unified motion tokens (fork commit "add unified motion tokens").
      Consumed by src/lib/motion.ts class-name constants and by inline
      [transition-*:var(...)] arbitrary utilities across the shell. */

@@ -677,6 +677,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             settledAt: null,
             snoozedUntil: null,
             snoozedAt: null,
+            pinnedAt: null,
             latestUserMessageAt: null,
             pendingApprovalCount: 0,
             pendingUserInputCount: 0,

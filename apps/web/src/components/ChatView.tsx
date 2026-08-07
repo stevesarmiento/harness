@@ -156,7 +156,6 @@ import { RightPanelTabs, RightPanelTabStrip } from "./RightPanelTabs";
 import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "./ThreadBreadcrumb";
 import { useInlinePanelWidth } from "./preview/PreviewPanelShell";
 import { SidebarInsetCard } from "./ui/sidebar";
-import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import {
   deriveAgentPanelModel,
@@ -6327,6 +6326,7 @@ function ChatViewContent(props: ChatViewProps) {
                   onAddDiff={addDiffSurface}
                   onAddFiles={addFilesSurface}
                   onAddComponentPreview={addComponentPreviewSurface}
+                  onAddAgents={addAgentsSurface}
                   browserAvailable={isPreviewSupportedInRuntime()}
                   diffAvailable={isServerThread && isGitRepo}
                   filesAvailable={activeProject !== null}
@@ -6741,6 +6741,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             onAddComponentPreview={addComponentPreviewSurface}
+            onAddAgents={addAgentsSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
