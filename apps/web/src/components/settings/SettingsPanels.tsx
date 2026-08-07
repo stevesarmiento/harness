@@ -1332,7 +1332,6 @@ function FontSettingsGroup() {
       <PromptFontRow />
       <CodeFontRow />
       <TerminalFontRow />
-      <FontSmoothingRow />
     </>
   );
 }
@@ -1417,6 +1416,9 @@ export function TypographySection() {
       }
     >
       {advanced ? <FontSettingsGroup /> : <SimpleFontRows />}
+      {/* Fork: smoothing is a first-class Forma preference — always visible,
+          not gated behind the Advanced typography toggle. */}
+      <FontSmoothingRow />
       <WordWrapRow />
     </SettingsSection>
   );
