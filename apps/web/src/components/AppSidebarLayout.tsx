@@ -15,8 +15,8 @@ import { resolveShortcutCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useSidebarV2Enabled } from "../hooks/useSettings";
-import ThreadSidebar from "./Sidebar";
-import ThreadSidebarV2 from "./SidebarV2";
+import ThreadSidebar from "./LegacySidebar";
+import ThreadSidebarV2 from "./Sidebar";
 import {
   resolveInitialThreadSidebarWidth,
   resolveThreadSidebarMaximumWidth,
