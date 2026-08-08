@@ -144,6 +144,8 @@ function RootRouteView() {
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
         {primaryEnvironmentAuthenticated ? <ThreadAttentionNotificationsBridge /> : null}
         {appShell}
+        {/* Above the router: a theme draft is judged by walking the app, so the
+            editor has to survive navigation away from settings. */}
       </AnchoredToastProvider>
     </ToastProvider>
   );

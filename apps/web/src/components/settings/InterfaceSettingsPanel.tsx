@@ -357,13 +357,13 @@ export function InterfaceSettingsPanel() {
           title="Assistant output"
           description="Show token-by-token output while a response is in progress."
           resetAction={
-            settings.enableAssistantStreaming !==
-            DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming ? (
+            settings.enableLegacyTokenStreaming !==
+            DEFAULT_UNIFIED_SETTINGS.enableLegacyTokenStreaming ? (
               <SettingResetButton
                 label="assistant output"
                 onClick={() =>
                   updateSettings({
-                    enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                    enableLegacyTokenStreaming: DEFAULT_UNIFIED_SETTINGS.enableLegacyTokenStreaming,
                   })
                 }
               />
@@ -371,9 +371,9 @@ export function InterfaceSettingsPanel() {
           }
           control={
             <Switch
-              checked={settings.enableAssistantStreaming}
+              checked={settings.enableLegacyTokenStreaming}
               onCheckedChange={(checked) =>
-                updateSettings({ enableAssistantStreaming: Boolean(checked) })
+                updateSettings({ enableLegacyTokenStreaming: Boolean(checked) })
               }
               aria-label="Stream assistant messages"
             />

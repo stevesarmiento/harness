@@ -88,36 +88,29 @@ describe("ClientSettings app icon", () => {
   );
 });
 
-describe("ClientSettings sidebar v2", () => {
-  it("defaults the beta off with a three-day auto-settle threshold", () => {
+describe("ClientSettings sidebar", () => {
+  // Fork: the Forma sidebar is the legacy implementation and stays the default.
+  it("defaults to the Forma (legacy) sidebar with a three-day auto-settle threshold", () => {
     const settings = decodeClientSettings({});
-    expect(settings.sidebarV2Enabled).toBe(false);
+    expect(settings.legacySidebarEnabled).toBe(true);
     expect(settings.sidebarAutoSettleAfterDays).toBe(3);
   });
 
-  it("treats settings written before the beta had a per-channel default as unconfigured", () => {
-    // The stored blob always carries `sidebarV2Enabled`, so only the companion
-    // flag can distinguish "user opted out" from "never touched it".
-    expect(decodeClientSettings({ sidebarV2Enabled: false }).sidebarV2ConfiguredByUser).toBe(false);
-    expect(decodeClientSettings({ sidebarV2Enabled: true }).sidebarV2ConfiguredByUser).toBe(false);
-  });
-
-  it("preserves an explicit beta choice", () => {
-    const settings = decodeClientSettings({
+  it("drops the retired sidebar v2 beta keys, resetting everyone to the Forma default", () => {
+    const decoded = decodeClientSettings({
       sidebarV2Enabled: false,
       sidebarV2ConfiguredByUser: true,
     });
-    expect(settings.sidebarV2Enabled).toBe(false);
-    expect(settings.sidebarV2ConfiguredByUser).toBe(true);
+    expect(decoded.legacySidebarEnabled).toBe(true);
+    expect(decoded).not.toHaveProperty("sidebarV2Enabled");
+    expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
   });
 
-  it("carries an explicit beta opt-out through the patch the beta toggle writes", () => {
-    const patch = decodeClientSettingsPatch({
-      sidebarV2Enabled: false,
-      sidebarV2ConfiguredByUser: true,
-    });
-    expect(patch.sidebarV2Enabled).toBe(false);
-    expect(patch.sidebarV2ConfiguredByUser).toBe(true);
+  it("preserves an explicit sidebar v2 opt-out of the legacy sidebar", () => {
+    expect(decodeClientSettings({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(
+      false,
+    );
   });
 
   it("allows auto-settle by inactivity to be disabled", () => {

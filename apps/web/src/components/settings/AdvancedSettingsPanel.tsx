@@ -18,7 +18,6 @@ import { usePrimaryEnvironment } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { AboutVersionSection } from "./SettingsPanels";
-import { BetaSettingsSection } from "./BetaSettingsPanel";
 import { formatDiagnosticsDescription } from "./SettingsPanels.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -184,8 +183,6 @@ export function AdvancedSettingsPanel() {
           }
         />
       </SettingsSection>
-
-      <BetaSettingsSection />
 
       <SettingsSection title="Updates">
         {isElectron ? (

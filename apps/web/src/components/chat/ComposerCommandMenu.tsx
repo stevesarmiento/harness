@@ -211,7 +211,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 <CommandGroupLabel className={cn(composerPopoverLabelClassName, "px-0 pt-0")}>
                   Skills
                 </CommandGroupLabel>
-                <p className="text-muted-foreground/70 text-xs">
+                <p className="text-secondary-label text-xs">
                   {props.isLoading
                     ? "Searching workspace skills..."
                     : (props.emptyStateText ??
@@ -219,7 +219,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 </p>
               </CommandGroup>
             ) : (
-              <p className="text-muted-foreground/70 text-xs">
+              <p className="text-secondary-label text-xs">
                 {props.isLoading
                   ? "Searching workspace files..."
                   : (props.emptyStateText ??
@@ -275,7 +275,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
         />
       ) : null}
       {props.item.type === "slash-command" ? (
-        <BotIcon className="size-4 shrink-0 text-muted-foreground/80" />
+        <BotIcon className="size-4 shrink-0 text-icon-muted" />
       ) : null}
       {props.item.type === "provider-slash-command" || props.item.type === "local-slash-command" ? (
         <span className="inline-flex size-4 shrink-0 items-center justify-center text-muted-foreground/80">
@@ -289,12 +289,12 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="shrink-0">{props.item.label}</span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground/70 text-xs">
+        <span className="min-w-0 flex-1 truncate text-secondary-label text-xs">
           {props.item.description}
         </span>
       </span>
       {skillSourceLabel ? (
-        <span className="shrink-0 pl-2 text-muted-foreground/70 text-xs">{skillSourceLabel}</span>
+        <span className="shrink-0 pl-2 text-secondary-label text-xs">{skillSourceLabel}</span>
       ) : null}
     </CommandItem>
   );

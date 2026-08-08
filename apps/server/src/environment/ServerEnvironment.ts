@@ -152,6 +152,7 @@ export const make = Effect.gen(function* () {
       versionedProjectFiles: true,
       projectEntryMutations: true,
       threadExtensions: true,
+      threadPinReorder: true,
       threadTitleRegeneration: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       ...(serverSelfUpdate === "boot-service" ? { serverSelfUpdateProgress: true } : {}),

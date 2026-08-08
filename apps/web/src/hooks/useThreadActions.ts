@@ -12,14 +12,13 @@ import {
   type ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
-import type { ThreadCleanupInactiveDays } from "@t3tools/contracts/settings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef } from "react";
 
-import { getFallbackThreadIdAfterDelete } from "../components/Sidebar.logic";
+import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment } from "../state/threads";
@@ -28,48 +27,31 @@ import { useNewThreadHandler } from "./useHandleNewThread";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
 import { readLocalApi } from "../localApi";
 import {
+  readEnvironmentSupportsPinReorder,
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsThreadExtensions,
   readEnvironmentThreadRefs,
   readProject,
-  readThreadShell,
   readThreadDetail,
+  readThreadShell,
+  readThreadShells,
 } from "../state/entities";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useUiStateStore } from "../uiStateStore";
-import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
-import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
-import { stackedThreadToast, toastManager } from "../components/ui/toast";
-import { useClientSettings } from "./useSettings";
-import { useAtomCommand } from "../state/use-atom-command";
 import {
   buildThreadMarkdownExport,
   downloadThreadMarkdown,
   threadMarkdownFilename,
 } from "../lib/threadMarkdownExport";
 import { bucketThreadsForCleanup } from "../lib/threadCleanup";
-
-function formatThreadCount(count: number): string {
-  return `${count} thread${count === 1 ? "" : "s"}`;
-}
-
-function formatCleanupSummaryParts(input: {
-  readonly skippedRunningCount: number;
-  readonly skippedQueuedCount: number;
-  readonly failedCount: number;
-}): string[] {
-  return [
-    ...(input.skippedRunningCount > 0
-      ? [`${formatThreadCount(input.skippedRunningCount)} running`]
-      : []),
-    ...(input.skippedQueuedCount > 0
-      ? [`${formatThreadCount(input.skippedQueuedCount)} queued`]
-      : []),
-    ...(input.failedCount > 0 ? [`${formatThreadCount(input.failedCount)} failed`] : []),
-  ];
-}
+import type { ThreadCleanupInactiveDays } from "@t3tools/contracts/settings";
+import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
+import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
+import { stackedThreadToast, toastManager } from "../components/ui/toast";
+import { useClientSettings } from "./useSettings";
+import { useAtomCommand } from "../state/use-atom-command";
 
 export class ThreadArchiveBlockedError extends Schema.TaggedErrorClass<ThreadArchiveBlockedError>()(
   "ThreadArchiveBlockedError",
@@ -131,6 +113,18 @@ export class ThreadSnoozeBlockedError extends Schema.TaggedErrorClass<ThreadSnoo
   }
 }
 
+/** Key that sorts before every arranged pinned thread, so a fresh pin lands
+    at the top of the run. Undefined (keyless, sorts with the legacy block)
+    when key math can't produce one — pinning must never fail on placement. */
+function topOfPinnedRunOrderKey(): string | undefined {
+  let firstKey: string | null = null;
+  for (const shell of readThreadShells()) {
+    if (shell.pinnedAt == null || shell.pinOrderKey == null) continue;
+    if (firstKey === null || shell.pinOrderKey < firstKey) firstKey = shell.pinOrderKey;
+  }
+  return pinOrderKeyBetween(null, firstKey) ?? undefined;
+}
+
 export class ThreadPinningUnsupportedError extends Schema.TaggedErrorClass<ThreadPinningUnsupportedError>()(
   "ThreadPinningUnsupportedError",
   {
@@ -143,21 +137,47 @@ export class ThreadPinningUnsupportedError extends Schema.TaggedErrorClass<Threa
   }
 }
 
+export class ThreadPinReorderUnsupportedError extends Schema.TaggedErrorClass<ThreadPinReorderUnsupportedError>()(
+  "ThreadPinReorderUnsupportedError",
+  {
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  },
+) {
+  override get message(): string {
+    return "This environment's server does not support reordering pinned threads yet. Update the server to reorder pins.";
+  }
+}
+
+function formatThreadCount(count: number): string {
+  return `${count} thread${count === 1 ? "" : "s"}`;
+}
+
+function formatCleanupSummaryParts(input: {
+  readonly skippedRunningCount: number;
+  readonly skippedQueuedCount: number;
+  readonly failedCount: number;
+}): string[] {
+  return [
+    ...(input.skippedRunningCount > 0
+      ? [`${formatThreadCount(input.skippedRunningCount)} running`]
+      : []),
+    ...(input.skippedQueuedCount > 0
+      ? [`${formatThreadCount(input.skippedQueuedCount)} queued`]
+      : []),
+    ...(input.failedCount > 0 ? [`${formatThreadCount(input.failedCount)} failed`] : []),
+  ];
+}
+
 export function useThreadActions() {
   const closeTerminal = useAtomCommand(terminalEnvironment.close);
   const archiveThreadMutation = useAtomCommand(threadEnvironment.archive, {
-    reportFailure: false,
-  });
-  const getThreadExtensions = useAtomCommand(threadEnvironment.getExtensions, {
     reportFailure: false,
   });
   const unarchiveThreadMutation = useAtomCommand(threadEnvironment.unarchive, {
     reportFailure: false,
   });
   const deleteThreadMutation = useAtomCommand(threadEnvironment.delete, {
-    reportFailure: false,
-  });
-  const forkThreadMutation = useAtomCommand(threadEnvironment.fork, {
     reportFailure: false,
   });
   const settleThreadMutation = useAtomCommand(threadEnvironment.settle, {
@@ -170,6 +190,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const unpinThreadMutation = useAtomCommand(threadEnvironment.unpin, {
+    reportFailure: false,
+  });
+  const reorderPinnedThreadMutation = useAtomCommand(threadEnvironment.reorderPin, {
     reportFailure: false,
   });
   const snoozeThreadMutation = useAtomCommand(threadEnvironment.snooze, {
@@ -264,106 +287,6 @@ export function useThreadActions() {
       return archiveResult;
     },
     [archiveThreadMutation, getCurrentRouteThreadRef, markThreadVisited, resolveThreadTarget],
-  );
-
-  const cleanupInactiveThreads = useCallback(
-    async (input: {
-      readonly inactiveDays: ThreadCleanupInactiveDays;
-      readonly projectDisplayName: string;
-      readonly projectRefs: readonly ScopedProjectRef[];
-    }) => {
-      const projectIdsByEnvironment = new Map<EnvironmentId, Set<string>>();
-      for (const projectRef of input.projectRefs) {
-        const projectIds = projectIdsByEnvironment.get(projectRef.environmentId) ?? new Set();
-        projectIds.add(projectRef.projectId);
-        projectIdsByEnvironment.set(projectRef.environmentId, projectIds);
-      }
-      const threads = [...projectIdsByEnvironment].flatMap(([environmentId, projectIds]) =>
-        readEnvironmentThreadRefs(environmentId).flatMap((threadRef) => {
-          const thread = readThreadShell(threadRef);
-          return thread && projectIds.has(thread.projectId) ? [thread] : [];
-        }),
-      );
-      const buckets = bucketThreadsForCleanup({
-        threads,
-        inactiveDays: input.inactiveDays,
-      });
-      let archivedCount = 0;
-      let skippedRunningCount = buckets.skippedRunning.length;
-      let skippedQueuedCount = buckets.skippedQueued.length;
-      let failedCount = 0;
-
-      for (const thread of buckets.eligible) {
-        const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-        const latest = resolveThreadTarget(threadRef)?.thread;
-        if (!latest) {
-          failedCount += 1;
-          continue;
-        }
-        if (latest.session?.status === "running" && latest.session.activeTurnId != null) {
-          skippedRunningCount += 1;
-          continue;
-        }
-        if (readEnvironmentSupportsThreadExtensions(threadRef.environmentId)) {
-          const extensionResult = await getThreadExtensions({
-            environmentId: threadRef.environmentId,
-            input: { threadId: threadRef.threadId },
-          });
-          if (extensionResult._tag === "Failure") {
-            failedCount += 1;
-            continue;
-          }
-          if (extensionResult.value.queue.items.length > 0) {
-            skippedQueuedCount += 1;
-            continue;
-          }
-        }
-        const result = await archiveThread(threadRef);
-        if (result._tag === "Failure") {
-          failedCount += 1;
-          continue;
-        }
-        archivedCount += 1;
-      }
-
-      const detailParts = formatCleanupSummaryParts({
-        skippedRunningCount,
-        skippedQueuedCount,
-        failedCount,
-      });
-      const detail =
-        detailParts.length > 0
-          ? `Skipped ${detailParts.join(", ")} in ${input.projectDisplayName}.`
-          : archivedCount > 0
-            ? `Cleaned up ${input.projectDisplayName}.`
-            : `No eligible inactive threads remained in ${input.projectDisplayName}.`;
-      toastManager.add(
-        stackedThreadToast({
-          type:
-            archivedCount > 0
-              ? failedCount > 0
-                ? "warning"
-                : "success"
-              : failedCount > 0 || detailParts.length > 0
-                ? "warning"
-                : "info",
-          title:
-            archivedCount > 0
-              ? `Archived ${formatThreadCount(archivedCount)}`
-              : "No inactive threads archived",
-          description: detail,
-        }),
-      );
-
-      return {
-        archivedCount,
-        eligibleCount: buckets.eligible.length,
-        failedCount,
-        skippedQueuedCount,
-        skippedRunningCount,
-      };
-    },
-    [archiveThread, getThreadExtensions, resolveThreadTarget],
   );
 
   const unarchiveThread = useCallback(
@@ -646,7 +569,7 @@ export function useThreadActions() {
   );
 
   const pinThread = useCallback(
-    async (target: ScopedThreadRef) => {
+    async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
       // Version skew: never send the command to a server that predates it.
       if (!readEnvironmentSupportsPinning(target.environmentId)) {
         return AsyncResult.failure(
@@ -658,9 +581,21 @@ export function useThreadActions() {
           ),
         );
       }
+      // Every pin path places the thread at the top of the arranged run:
+      // callers with a better anchor (the sidebar, which knows the displayed
+      // order) pass their own key; everyone else (chat header, context menus)
+      // gets the default so the same action never places differently.
+      // orderKey rides only to servers that decode it; pre-reorder servers
+      // get the bare pin they understand and the thread stays keyless.
+      const orderKey = readEnvironmentSupportsPinReorder(target.environmentId)
+        ? (opts.orderKey ?? topOfPinnedRunOrderKey())
+        : undefined;
       return pinThreadMutation({
         environmentId: target.environmentId,
-        input: { threadId: target.threadId },
+        input: {
+          threadId: target.threadId,
+          ...(orderKey !== undefined ? { orderKey } : {}),
+        },
       });
     },
     [pinThreadMutation],
@@ -684,6 +619,29 @@ export function useThreadActions() {
       });
     },
     [unpinThreadMutation],
+  );
+
+  const reorderPinnedThread = useCallback(
+    async (target: ScopedThreadRef, orderKey: string) => {
+      // Callers (the sidebar drag handler) only enable dragging on
+      // reorder-capable environments; this guard covers races around
+      // capability changes mid-drag.
+      if (!readEnvironmentSupportsPinReorder(target.environmentId)) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new ThreadPinReorderUnsupportedError({
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            }),
+          ),
+        );
+      }
+      return reorderPinnedThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, orderKey },
+      });
+    },
+    [reorderPinnedThreadMutation],
   );
 
   const snoozeThread = useCallback(
@@ -769,6 +727,13 @@ export function useThreadActions() {
     [confirmThreadDelete, deleteThread, resolveThreadTarget],
   );
 
+  const getThreadExtensions = useAtomCommand(threadEnvironment.getExtensions, {
+    reportFailure: false,
+  });
+  const forkThreadMutation = useAtomCommand(threadEnvironment.fork, {
+    reportFailure: false,
+  });
+
   const forkThread = useCallback(
     async (target: ScopedThreadRef) => {
       if (!readEnvironmentSupportsThreadExtensions(target.environmentId)) {
@@ -818,30 +783,132 @@ export function useThreadActions() {
     }
   }, []);
 
+  const cleanupInactiveThreads = useCallback(
+    async (input: {
+      readonly inactiveDays: ThreadCleanupInactiveDays;
+      readonly projectDisplayName: string;
+      readonly projectRefs: readonly ScopedProjectRef[];
+    }) => {
+      const projectIdsByEnvironment = new Map<EnvironmentId, Set<string>>();
+      for (const projectRef of input.projectRefs) {
+        const projectIds = projectIdsByEnvironment.get(projectRef.environmentId) ?? new Set();
+        projectIds.add(projectRef.projectId);
+        projectIdsByEnvironment.set(projectRef.environmentId, projectIds);
+      }
+      const threads = [...projectIdsByEnvironment].flatMap(([environmentId, projectIds]) =>
+        readEnvironmentThreadRefs(environmentId).flatMap((threadRef) => {
+          const thread = readThreadShell(threadRef);
+          return thread && projectIds.has(thread.projectId) ? [thread] : [];
+        }),
+      );
+      const buckets = bucketThreadsForCleanup({
+        threads,
+        inactiveDays: input.inactiveDays,
+      });
+      let archivedCount = 0;
+      let skippedRunningCount = buckets.skippedRunning.length;
+      let skippedQueuedCount = buckets.skippedQueued.length;
+      let failedCount = 0;
+
+      for (const thread of buckets.eligible) {
+        const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+        const latest = resolveThreadTarget(threadRef)?.thread;
+        if (!latest) {
+          failedCount += 1;
+          continue;
+        }
+        if (latest.session?.status === "running" && latest.session.activeTurnId != null) {
+          skippedRunningCount += 1;
+          continue;
+        }
+        if (readEnvironmentSupportsThreadExtensions(threadRef.environmentId)) {
+          const extensionResult = await getThreadExtensions({
+            environmentId: threadRef.environmentId,
+            input: { threadId: threadRef.threadId },
+          });
+          if (extensionResult._tag === "Failure") {
+            failedCount += 1;
+            continue;
+          }
+          if (extensionResult.value.queue.items.length > 0) {
+            skippedQueuedCount += 1;
+            continue;
+          }
+        }
+        const result = await archiveThread(threadRef);
+        if (result._tag === "Failure") {
+          failedCount += 1;
+          continue;
+        }
+        archivedCount += 1;
+      }
+
+      const detailParts = formatCleanupSummaryParts({
+        skippedRunningCount,
+        skippedQueuedCount,
+        failedCount,
+      });
+      const detail =
+        detailParts.length > 0
+          ? `Skipped ${detailParts.join(", ")} in ${input.projectDisplayName}.`
+          : archivedCount > 0
+            ? `Cleaned up ${input.projectDisplayName}.`
+            : `No eligible inactive threads remained in ${input.projectDisplayName}.`;
+      toastManager.add(
+        stackedThreadToast({
+          type:
+            archivedCount > 0
+              ? failedCount > 0
+                ? "warning"
+                : "success"
+              : failedCount > 0 || detailParts.length > 0
+                ? "warning"
+                : "info",
+          title:
+            archivedCount > 0
+              ? `Archived ${formatThreadCount(archivedCount)}`
+              : "No inactive threads archived",
+          description: detail,
+        }),
+      );
+
+      return {
+        archivedCount,
+        eligibleCount: buckets.eligible.length,
+        failedCount,
+        skippedQueuedCount,
+        skippedRunningCount,
+      };
+    },
+    [archiveThread, getThreadExtensions, resolveThreadTarget],
+  );
+
   return useMemo(
     () => ({
       archiveThread,
-      cleanupInactiveThreads,
       unarchiveThread,
       deleteThread,
       confirmAndDeleteThread,
-      forkThread,
-      exportThread,
       settleThread,
       unsettleThread,
       snoozeThread,
       unsnoozeThread,
       pinThread,
       unpinThread,
+      reorderPinnedThread,
+      forkThread,
+      exportThread,
+      cleanupInactiveThreads,
     }),
     [
       archiveThread,
       cleanupInactiveThreads,
       confirmAndDeleteThread,
       deleteThread,
-      forkThread,
       exportThread,
+      forkThread,
       pinThread,
+      reorderPinnedThread,
       settleThread,
       snoozeThread,
       unarchiveThread,
