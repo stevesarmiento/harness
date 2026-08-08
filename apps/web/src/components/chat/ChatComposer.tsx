@@ -13,7 +13,6 @@ import type {
   ServerProviderSupportedInteractionMode,
   ThreadExtensionState,
   ThreadId,
-  TurnId,
 } from "@t3tools/contracts";
 import {
   ProviderDriverKind,
@@ -203,7 +202,6 @@ import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { CircleAlertIcon, XIcon } from "lucide-react";
-import { SidebarPlanReadyIcon } from "../icons/custom";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { getProviderInteractionModeToggle } from "../../providerModels";
 import {
@@ -430,10 +428,6 @@ export interface ChatComposerProps {
   // Plan
   showPlanFollowUpPrompt: boolean;
   activeProposedPlan: Thread["proposedPlans"][number] | null;
-  activePlan: { turnId?: TurnId } | null;
-  sidebarProposedPlan: { turnId?: TurnId } | null;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
 
   // Mode
   interactionMode: FormaInteractionMode;
@@ -487,7 +481,6 @@ export interface ChatComposerProps {
   handleInteractionModeChange: (mode: FormaInteractionMode) => void;
   onRemoveQueuedTurn: (messageId: MessageId) => void;
   onResumeTurnQueue: () => void;
-  togglePlanSidebar: () => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -531,10 +524,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     respondingRequestIds,
     showPlanFollowUpPrompt,
     activeProposedPlan,
-    activePlan,
-    sidebarProposedPlan,
-    planSidebarLabel,
-    planSidebarOpen,
     interactionMode,
     threadExtensionState,
     lockedProvider,
@@ -568,7 +557,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     handleInteractionModeChange,
     onRemoveQueuedTurn,
     onResumeTurnQueue,
-    togglePlanSidebar,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -792,14 +780,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const selectedPromptEffort = composerProviderState.promptEffort;
   const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
+  // Plan mode is a legacy feature behind Settings → Beta. With the flag off,
+  // ChatView forces the effective mode to "default", so hiding the toggle
+  // can't trap anyone in plan mode.
+  const planModeUiEnabled = settings.planModeEnabled;
   const composerProviderControls = useMemo(
     () => ({
-      showInteractionModeToggle: getProviderInteractionModeToggle(
-        providerStatuses,
-        selectedProvider,
-      ),
+      showInteractionModeToggle:
+        planModeUiEnabled && getProviderInteractionModeToggle(providerStatuses, selectedProvider),
     }),
-    [providerStatuses, selectedProvider],
+    [planModeUiEnabled, providerStatuses, selectedProvider],
   );
   const supportedInteractionModes = useMemo<ReadonlyArray<ServerProviderSupportedInteractionMode>>(
     () =>
@@ -956,20 +946,24 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/model",
           description: "Switch response model for this thread",
         },
-        {
-          id: "slash:plan",
-          type: "slash-command",
-          command: "plan",
-          label: "/plan",
-          description: "Switch this thread into plan mode",
-        },
-        {
-          id: "slash:default",
-          type: "slash-command",
-          command: "default",
-          label: "/default",
-          description: "Switch this thread back to normal build mode",
-        },
+        ...(planModeUiEnabled
+          ? ([
+              {
+                id: "slash:plan",
+                type: "slash-command",
+                command: "plan",
+                label: "/plan",
+                description: "Switch this thread into plan mode",
+              },
+              {
+                id: "slash:default",
+                type: "slash-command",
+                command: "default",
+                label: "/default",
+                description: "Switch this thread back to normal build mode",
+              },
+            ] as const)
+          : []),
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
         (command) => ({
@@ -1029,6 +1023,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     allComposerSkills,
     composerTrigger,
     localAgentInventory.commands,
+    planModeUiEnabled,
     selectedProvider,
     selectedProviderStatus,
     workspaceEntries.entries,
@@ -1072,7 +1067,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
 
   const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
-  const showPlanSidebarToggle = Boolean(activePlan || sidebarProposedPlan || planSidebarOpen);
   const composerFooterActionLayoutKey = useMemo(() => {
     if (activePendingProgress) {
       return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
@@ -1837,6 +1831,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event: KeyboardEvent,
   ) => {
     if (key === "Tab" && event.shiftKey) {
+      if (!planModeUiEnabled) return false;
       toggleInteractionMode();
       return true;
     }
@@ -3210,15 +3205,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
                   {isComposerFooterCompact ? (
                     <CompactComposerControlsMenu
-                      activePlan={showPlanSidebarToggle}
                       interactionMode={interactionMode}
                       supportedInteractionModes={supportedInteractionModes}
-                      planSidebarLabel={planSidebarLabel}
-                      planSidebarOpen={planSidebarOpen}
                       showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
                       traitsMenuContent={providerTraitsMenuContent}
                       onInteractionModeChange={handleInteractionModeChange}
-                      onTogglePlanSidebar={togglePlanSidebar}
                     />
                   ) : (
                     <>
@@ -3229,32 +3220,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             className="mx-0.5 hidden h-4 sm:block"
                           />
                           {providerTraitsPicker}
-                        </>
-                      ) : null}
-                      {showPlanSidebarToggle ? (
-                        <>
-                          <Separator
-                            orientation="vertical"
-                            className="mx-0.5 hidden h-4 sm:block"
-                          />
-                          <Button
-                            variant="ghost"
-                            className={cn(
-                              "shrink-0 rounded-full px-2 text-violet-600 hover:text-violet-700 dark:text-violet-300/90 dark:hover:text-violet-200 sm:px-3",
-                              planSidebarOpen && "bg-violet-500/10 hover:bg-violet-500/15",
-                            )}
-                            size="sm"
-                            type="button"
-                            onClick={togglePlanSidebar}
-                            title={
-                              planSidebarOpen
-                                ? `Hide ${planSidebarLabel.toLowerCase()} sidebar`
-                                : `Show ${planSidebarLabel.toLowerCase()} sidebar`
-                            }
-                          >
-                            <SidebarPlanReadyIcon className="size-3.5 shrink-0 fill-current" />
-                            <span className="sr-only sm:not-sr-only">{planSidebarLabel}</span>
-                          </Button>
                         </>
                       ) : null}
                     </>

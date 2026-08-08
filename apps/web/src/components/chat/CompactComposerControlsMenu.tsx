@@ -5,10 +5,8 @@ import type {
 import { memo, type ReactNode } from "react";
 import { IconEllipsis as EllipsisIcon } from "symbols-react";
 import { Button } from "../ui/button";
-import { SidebarPlanReadyIcon } from "../icons/custom";
 import {
   Menu,
-  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
@@ -18,15 +16,11 @@ import {
 import { composerInteractionModeConfig } from "./composerInteractionMode";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
-  activePlan: boolean;
   interactionMode: FormaInteractionMode;
   supportedInteractionModes: ReadonlyArray<ServerProviderSupportedInteractionMode>;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
   onInteractionModeChange: (mode: FormaInteractionMode) => void;
-  onTogglePlanSidebar: () => void;
 }) {
   const interactionModeDescription =
     composerInteractionModeConfig[props.interactionMode].description;
@@ -88,17 +82,6 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
                 Plan
               </MenuRadioItem>
             </MenuRadioGroup>
-          </>
-        ) : null}
-        {props.activePlan ? (
-          <>
-            <MenuDivider />
-            <MenuItem onClick={props.onTogglePlanSidebar}>
-              <SidebarPlanReadyIcon className="size-4 shrink-0 fill-current text-violet-600 dark:text-violet-300/90" />
-              {props.planSidebarOpen
-                ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-                : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`}
-            </MenuItem>
           </>
         ) : null}
       </MenuPopup>

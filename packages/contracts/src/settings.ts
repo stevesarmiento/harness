@@ -141,7 +141,6 @@ export const DEFAULT_APP_ICON_ID: AppIconId = "default";
 
 export const ClientSettingsSchema = Schema.Struct({
   appIcon: AppIconId.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_APP_ICON_ID))),
-  autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   // Thread-attention notifications (Forma). Named "desktop" for storage
@@ -207,6 +206,10 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  // Legacy plan mode. The composer's Build/Plan toggle was removed from the
+  // default UI; this beta flag restores it (plus the /plan and /default slash
+  // commands) for users who still rely on the old workflow.
+  planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
@@ -803,7 +806,6 @@ export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
   appIcon: Schema.optionalKey(AppIconId),
-  autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   desktopNotifyOnApprovalRequests: Schema.optionalKey(Schema.Boolean),
@@ -841,6 +843,7 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
+  planModeEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(

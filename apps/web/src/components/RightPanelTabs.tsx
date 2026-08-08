@@ -33,7 +33,6 @@ import {
   ComponentPreviewSurfaceIcon,
   DiffSurfaceIcon,
   FilesSurfaceIcon,
-  SidebarPlanReadyIcon,
   TerminalSurfaceIcon,
   AgentsSurfaceIcon,
 } from "./icons/custom";
@@ -235,8 +234,6 @@ function surfaceTitle(
         terminalLabelsById.get(surface.activeTerminalId) ??
         getTerminalLabel(surface.activeTerminalId)
       );
-    case "plan":
-      return "Plan";
     case "componentPreview":
       return "Component preview";
     case "agents":
@@ -301,8 +298,6 @@ function SurfaceIcon({
       );
     case "terminal":
       return <TerminalSurfaceIcon className="size-3.5 shrink-0" />;
-    case "plan":
-      return <SidebarPlanReadyIcon className="size-3.5 shrink-0 text-violet-500" />;
     case "componentPreview":
       return <ComponentPreviewSurfaceIcon className="size-3.5 shrink-0" />;
     case "agents":

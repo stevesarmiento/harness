@@ -123,32 +123,6 @@ export function ThreadsSettingsPanel() {
             />
           }
         />
-
-        <SettingsRow
-          title="Auto-open task panel"
-          description="Open the right-side plan and task panel automatically when steps appear."
-          resetAction={
-            settings.autoOpenPlanSidebar !== DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar ? (
-              <SettingResetButton
-                label="auto-open task panel"
-                onClick={() =>
-                  updateSettings({
-                    autoOpenPlanSidebar: DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.autoOpenPlanSidebar}
-              onCheckedChange={(checked) =>
-                updateSettings({ autoOpenPlanSidebar: Boolean(checked) })
-              }
-              aria-label="Open the task panel automatically"
-            />
-          }
-        />
       </SettingsSection>
 
       <SettingsSection title="Safety & cleanup">
