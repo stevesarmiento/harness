@@ -1514,7 +1514,7 @@ const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
  * default so they stay out of the everyday settings path; a settings-search
  * jump to one of the rows unfolds the section.
  */
-function LegacyFeaturesSection() {
+export function LegacyFeaturesSection() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const [open, setOpen] = useState(false);

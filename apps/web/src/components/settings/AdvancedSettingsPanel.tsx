@@ -17,7 +17,7 @@ import { shellEnvironment } from "../../state/shell";
 import { usePrimaryEnvironment } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { AboutVersionSection } from "./SettingsPanels";
+import { AboutVersionSection, LegacyFeaturesSection } from "./SettingsPanels";
 import { formatDiagnosticsDescription } from "./SettingsPanels.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -199,6 +199,8 @@ export function AdvancedSettingsPanel() {
           />
         )}
       </SettingsSection>
+
+      <LegacyFeaturesSection />
     </SettingsPageContainer>
   );
 }

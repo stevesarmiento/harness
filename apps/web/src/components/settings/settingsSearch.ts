@@ -169,17 +169,17 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "legacy-plan-mode",
     title: "Plan mode (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "legacy-token-streaming",
     title: "Stream token by token (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "legacy-sidebar",
     title: "Sidebar (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "keybindings",
