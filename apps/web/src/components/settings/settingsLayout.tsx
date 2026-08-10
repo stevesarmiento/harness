@@ -163,7 +163,7 @@ export function SettingsRow({
   ...rowProps
 }: Omit<ComponentPropsWithoutRef<"div">, "title"> & {
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   status?: ReactNode;
   resetAction?: ReactNode;
   control?: ReactNode;
@@ -254,7 +254,15 @@ export function SettingsSubRow({
   );
 }
 
-export function SettingResetButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function SettingResetButton({
+  label,
+  onClick,
+  disabled = false,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger
@@ -263,6 +271,7 @@ export function SettingResetButton({ label, onClick }: { label: string; onClick:
             size="icon-xs"
             variant="ghost"
             aria-label={`Reset ${label} to default`}
+            disabled={disabled}
             className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
             onClick={(event) => {
               event.stopPropagation();

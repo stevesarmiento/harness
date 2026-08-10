@@ -213,6 +213,7 @@ function AboutVersionTitle() {
 export function AboutVersionSection() {
   const updateState = useDesktopUpdateState();
   const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
+  const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
 
   const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
   const selectedUpdateChannel = updateState?.channel ?? "latest";
@@ -248,7 +249,7 @@ export function AboutVersionSection() {
     [selectedUpdateChannel],
   );
 
-  const handleButtonClick = useCallback(() => {
+  const handleButtonClick = useCallback(async () => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
 
@@ -268,22 +269,43 @@ export function AboutVersionSection() {
     }
 
     if (action === "install") {
-      const confirmed = window.confirm(
-        getDesktopUpdateInstallConfirmationMessage(
-          updateState ?? { availableVersion: null, downloadedVersion: null },
-          navigator.platform,
-        ),
-      );
-      if (!confirmed) return;
-      void bridge.installUpdate().catch((error: unknown) => {
+      if (isUpdateActionPending) return;
+      setIsUpdateActionPending(true);
+      let confirmed = false;
+      try {
+        confirmed = await ensureLocalApi().dialogs.confirm(
+          getDesktopUpdateInstallConfirmationMessage(
+            updateState ?? { availableVersion: null, downloadedVersion: null },
+            navigator.platform,
+          ),
+        );
+      } catch (error) {
+        setIsUpdateActionPending(false);
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not install update",
-            description: error instanceof Error ? error.message : "Install failed.",
+            title: "Could not confirm update",
+            description: error instanceof Error ? error.message : "Update confirmation failed.",
           }),
         );
-      });
+        return;
+      }
+      if (!confirmed) {
+        setIsUpdateActionPending(false);
+        return;
+      }
+      void bridge
+        .installUpdate()
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not install update",
+              description: error instanceof Error ? error.message : "Install failed.",
+            }),
+          );
+        })
+        .finally(() => setIsUpdateActionPending(false));
       return;
     }
 
@@ -311,7 +333,7 @@ export function AboutVersionSection() {
           }),
         );
       });
-  }, [updateState]);
+  }, [isUpdateActionPending, updateState]);
 
   const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
   const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
@@ -345,7 +367,7 @@ export function AboutVersionSection() {
                 <Button
                   size="xs"
                   variant={action === "install" ? "default" : "outline"}
-                  disabled={buttonDisabled}
+                  disabled={buttonDisabled || isUpdateActionPending}
                   onClick={handleButtonClick}
                 >
                   {buttonLabel}
@@ -526,6 +548,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ["Restore default settings?", `This will reset: ${changedSettingLabels.join(", ")}.`].join(
         "\n",
       ),
+      { variant: "destructive" },
     );
     if (!confirmed) return;
 
@@ -2197,6 +2220,7 @@ export function ArchivedThreadsPanel() {
                 environmentId,
                 name: project.title,
                 cwd: project.workspaceRoot,
+                faviconPath: project.faviconPath,
               },
             ] as const,
         ),
@@ -2318,7 +2342,13 @@ export function ArchivedThreadsPanel() {
             key={project.id}
             id={index === 0 ? searchableSetting("archive").id : undefined}
             title={project.name}
-            icon={<ProjectFavicon environmentId={project.environmentId} cwd={project.cwd} />}
+            icon={
+              <ProjectFavicon
+                environmentId={project.environmentId}
+                cwd={project.cwd}
+                faviconPath={project.faviconPath}
+              />
+            }
           >
             {projectThreads.map((thread) => (
               <SettingsRow

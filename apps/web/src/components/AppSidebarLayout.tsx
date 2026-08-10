@@ -19,6 +19,7 @@ import LegacyThreadSidebar from "./LegacySidebar";
 import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { useProjects } from "../state/entities";
 import {
   resolveInitialThreadSidebarWidth,
   resolveThreadSidebarMaximumWidth,
@@ -76,6 +77,14 @@ function SidebarToggleKeybinding() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
+  return null;
+}
+
+// Settings swaps the thread sidebar out of the tree. Keep the lightweight
+// project projection subscribed so returning to a draft never renders the
+// zero-project state while the environment snapshot reconnects.
+function ProjectProjectionRetention() {
+  useProjects();
   return null;
 }
 
@@ -154,6 +163,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       defaultOpen
       style={sidebarProviderStyle}
     >
+      <ProjectProjectionRetention />
       <Sidebar
         side="left"
         collapsible="offcanvas"

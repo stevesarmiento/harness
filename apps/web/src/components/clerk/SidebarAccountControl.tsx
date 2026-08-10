@@ -5,8 +5,11 @@ import { useCallback, useRef } from "react";
 
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
+import { usePrimaryEnvironment } from "../../state/environments";
 import { cn } from "../../lib/utils";
 import {
+  IconArrowTriangleheadPull as PullRequestIcon,
+  IconChartBar as UsageIcon,
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
   IconEllipsis as EllipsisIcon,
@@ -204,6 +207,21 @@ function SidebarAccountRow({
 }) {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+  const primaryEnvironment = usePrimaryEnvironment();
+  const pullRequestsSupported =
+    primaryEnvironment?.serverConfig?.environment.capabilities.pullRequests === true;
+  const handlePullRequestsClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
+  }, [isMobile, navigate, setOpenMobile]);
+  const handleUsageClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/usage" });
+  }, [isMobile, navigate, setOpenMobile]);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const navigateTo = useCallback(
@@ -328,6 +346,16 @@ function SidebarAccountRow({
             </span>
           </MenuItem>
           <SidebarThemeSubmenu />
+          {pullRequestsSupported ? (
+            <MenuItem onClick={handlePullRequestsClick}>
+              <PullRequestIcon className="fill-current" />
+              Pull Requests
+            </MenuItem>
+          ) : null}
+          <MenuItem onClick={handleUsageClick}>
+            <UsageIcon className="fill-current" />
+            Usage
+          </MenuItem>
           <MenuItem onClick={() => navigateTo("/settings")}>
             <SettingsHexIcon />
             Settings

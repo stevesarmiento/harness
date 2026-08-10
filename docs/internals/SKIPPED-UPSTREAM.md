@@ -63,6 +63,20 @@ side and porting only behavioral (non-visual) changes:
 - lucide-icon → `symbols-react` swaps and Forma font-scale tokens
   (`text-ui-*`, `text-code-*`) throughout
 
+## Theme-library follow-ups (v0.0.33) — same policy as #5226
+
+Rejected in the v0.0.33 sync, all touching deleted theme-library files or the
+excised `html[data-theme-id]` CSS block: #6000 built-in theme contrast (incl.
+its 2-line `index.html` boot tweak), #6013 duplicate-theme action, #5964
+theme button icons, #5928 restore-defaults after theme mix (its `themeHalves`
+tracking), #5860 theme button styles, #5938 update-pill theme foregrounds.
+The re-presented theme mapping block in `index.css` was rejected again.
+
+Also of note from that sync: upstream centralized diff styling in
+`components/diffs/StyledDiffCodeView.tsx` (`DIFF_VIEW_UNSAFE_CSS`); the Forma
+diff palette now lives there as a `/* Fork: ... */` block instead of
+`DiffPanel`'s old `DIFF_PANEL_UNSAFE_CSS` option.
+
 ## Mobile workspace exclusion (standing fork policy)
 
 `apps/mobile` is excluded from the pnpm workspace (`!apps/mobile`), so

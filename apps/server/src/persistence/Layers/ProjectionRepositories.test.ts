@@ -33,6 +33,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.4",
         },
+        defaultThreadEnvMode: null,
         scripts: [],
         componentPreviewWorkspaceRecords: [],
         createdAt: "2026-03-24T00:00:00.000Z",
@@ -81,6 +82,8 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         title: "Preview workspace project",
         workspaceRoot: "/tmp/project-preview-workspace-records",
         defaultModelSelection: null,
+        defaultThreadEnvMode: null,
+        faviconPath: null,
         scripts: [],
         componentPreviewWorkspaceRecords: [
           {

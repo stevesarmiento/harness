@@ -111,6 +111,11 @@ interface GitActionsControlProps {
   gitCwd: string | null;
   activeThreadRef: ScopedThreadRef | null;
   draftId?: DraftId;
+  /**
+   * Opens the thread's own change request beside it. Absent when the thread has no project to
+   * place it against, in which case it still opens in the browser.
+   */
+  onOpenPullRequest?: ((number: number) => void) | undefined;
   compact?: boolean;
   renderMode?: "split-button" | "menu-items";
   keybindings?: ResolvedKeybindingsConfig;
@@ -998,6 +1003,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
       gitCwd,
       activeThreadRef,
       draftId,
+      onOpenPullRequest,
       compact = false,
       renderMode = "split-button",
       keybindings,
@@ -1245,6 +1251,13 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
     }, [activeEnvironmentId, gitCwd, refreshVcsStatus]);
 
     const openExistingPr = useCallback(async () => {
+      const openPr = gitStatusForActions?.pr?.state === "open" ? gitStatusForActions.pr : null;
+      // Beside the thread where it was made, the way the browser opens beside it. Checked before
+      // the shell, which opening in the app does not need.
+      if (openPr && onOpenPullRequest) {
+        onOpenPullRequest(openPr.number);
+        return;
+      }
       const api = readLocalApi();
       if (!api) {
         toastManager.add({
@@ -1254,7 +1267,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
         });
         return;
       }
-      const prUrl = gitStatusForActions?.pr?.state === "open" ? gitStatusForActions.pr.url : null;
+      const prUrl = openPr?.url ?? null;
       if (!prUrl) {
         toastManager.add({
           type: "error",
@@ -1274,7 +1287,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
           }),
         );
       });
-    }, [gitStatusForActions, threadToastData]);
+    }, [gitStatusForActions, onOpenPullRequest, threadToastData]);
 
     runGitActionWithToast = useEffectEvent(
       async ({

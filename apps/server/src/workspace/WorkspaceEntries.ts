@@ -313,7 +313,7 @@ export const make = Effect.gen(function* () {
       });
       const result = yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
-        return yield* searchIndex.search(normalizedQuery, input.limit, input.kind);
+        return yield* searchIndex.search(normalizedQuery, input.limit, input.kind, input.imageOnly);
       }).pipe(
         Effect.provide(
           workspaceSearchIndexes.get(

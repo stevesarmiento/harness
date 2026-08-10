@@ -1,6 +1,6 @@
-import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
+import type { ContextMenuItem, PreviewSessionSnapshot, PullRequestState } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Plus, X } from "lucide-react";
+import { GitPullRequest, Plus, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -54,18 +54,29 @@ export interface RightPanelTabStripProps {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
-  onAddComponentPreview: () => void;
+  onAddComponentPreview?: () => void;
+  onAddPullRequest: () => void;
   onAddAgents: () => void;
   browserAvailable: boolean;
+  terminalAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
-  componentPreviewAvailable: boolean;
+  componentPreviewAvailable?: boolean;
+  pullRequestAvailable: boolean;
+  agentsAvailable: boolean;
+  pullRequestStatuses?: Readonly<Record<string, PullRequestTabStatus>>;
+  /** Running + waiting subagents; badges the Agents card in the empty state. */
+  liveAgentCount: number;
   className?: string;
 }
 
 interface RightPanelTabsProps extends Omit<RightPanelTabStripProps, "className"> {
   mode: PreviewPanelMode;
   maximized?: boolean;
+  /** Forwarded to PreviewPanelShell so this surface persists its own width. */
+  widthStorageKey?: string;
+  /** Forwarded to PreviewPanelShell as the initial width before a user resize. */
+  defaultWidth?: number;
   /** Hide the internal tab strip when the parent renders RightPanelTabStrip elsewhere (e.g. in the chrome header). */
   hideTabBar?: boolean;
   /** Parent-owned inline width state so external chrome can width-sync with the panel. */
@@ -73,11 +84,22 @@ interface RightPanelTabsProps extends Omit<RightPanelTabStripProps, "className">
   children: ReactNode;
 }
 
+export interface PullRequestTabStatus {
+  projectId: string;
+  repository: string;
+  number: number;
+  state: PullRequestState;
+  isDraft: boolean;
+}
+
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the T3 Code desktop app.",
+  terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
   componentPreview: "Component previews are only available for server threads.",
+  pullRequest: "This thread's branch has no pull request yet.",
+  agents: "Agents are only available from a thread.",
 } as const;
 
 type TabContextMenuAction = "copy-path" | "close" | "close-others" | "close-to-right" | "close-all";
@@ -115,12 +137,17 @@ function RightPanelEmptyState(props: {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
-  onAddComponentPreview: () => void;
+  onAddComponentPreview?: () => void;
+  onAddPullRequest: () => void;
   onAddAgents: () => void;
   browserAvailable: boolean;
+  terminalAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
-  componentPreviewAvailable: boolean;
+  componentPreviewAvailable?: boolean;
+  pullRequestAvailable: boolean;
+  agentsAvailable: boolean;
+  liveAgentCount: number;
 }) {
   const actions = [
     {
@@ -130,14 +157,16 @@ function RightPanelEmptyState(props: {
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
       onClick: props.onAddBrowser,
+      badgeCount: 0,
     },
     {
       label: "Terminal",
       description: "Start a shell in this workspace.",
       icon: TerminalSurfaceIcon,
-      available: true,
-      disabledReason: null,
+      available: props.terminalAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.terminal,
       onClick: props.onAddTerminal,
+      badgeCount: 0,
     },
     {
       label: "Files",
@@ -146,6 +175,7 @@ function RightPanelEmptyState(props: {
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
+      badgeCount: 0,
     },
     {
       label: "Diff",
@@ -154,23 +184,35 @@ function RightPanelEmptyState(props: {
       available: props.diffAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
+      badgeCount: 0,
+    },
+    {
+      label: "Pull request",
+      description: "Open the pull request for this thread's branch.",
+      icon: GitPullRequest,
+      available: props.pullRequestAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.pullRequest,
+      onClick: props.onAddPullRequest,
+      badgeCount: 0,
     },
     {
       label: "Component preview",
       description: "Render project components live.",
       icon: ComponentPreviewSurfaceIcon,
-      available: props.componentPreviewAvailable,
+      available: props.componentPreviewAvailable ?? false,
       disabledReason: SURFACE_DISABLED_REASONS.componentPreview,
-      onClick: props.onAddComponentPreview,
+      onClick: props.onAddComponentPreview ?? (() => {}),
+      badgeCount: 0,
     },
     {
       id: "agents" as const,
       label: "Agents",
       description: "Watch subagents and workflows run.",
       icon: AgentsSurfaceIcon,
-      available: true,
-      disabledReason: null,
+      available: props.agentsAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.agents,
       onClick: props.onAddAgents,
+      badgeCount: props.liveAgentCount,
     },
   ] as const;
 
@@ -194,7 +236,19 @@ function RightPanelEmptyState(props: {
               <ActionCard
                 title={action.label}
                 description={action.description}
-                icon={<Icon className="size-6" />}
+                icon={
+                  <span className="relative inline-flex">
+                    <Icon className="size-6" />
+                    {action.badgeCount > 0 ? (
+                      <span
+                        aria-hidden
+                        className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-semibold tabular-nums text-white"
+                      >
+                        {action.badgeCount}
+                      </span>
+                    ) : null}
+                  </span>
+                }
                 disabled={!action.available}
                 className="min-h-40 px-4 py-4"
                 onClick={action.onClick}
@@ -236,6 +290,8 @@ function surfaceTitle(
       );
     case "componentPreview":
       return "Component preview";
+    case "pull-request":
+      return `#${surface.number}`;
     case "agents":
       return "Agents";
     case "preview": {
@@ -272,10 +328,12 @@ function SurfaceIcon({
   surface,
   sessions,
   theme,
+  pullRequestStatuses,
 }: {
   surface: RightPanelSurface;
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   theme: "light" | "dark";
+  pullRequestStatuses: Readonly<Record<string, PullRequestTabStatus>> | undefined;
 }) {
   switch (surface.kind) {
     case "preview": {
@@ -300,6 +358,20 @@ function SurfaceIcon({
       return <TerminalSurfaceIcon className="size-3.5 shrink-0" />;
     case "componentPreview":
       return <ComponentPreviewSurfaceIcon className="size-3.5 shrink-0" />;
+    case "pull-request": {
+      const status = pullRequestStatuses?.[surface.id] ?? null;
+      const toneClassName =
+        status?.state === "merged"
+          ? "text-violet-600 dark:text-violet-300/90"
+          : status?.state === "closed"
+            ? "text-red-600 dark:text-red-300/90"
+            : status?.isDraft
+              ? "text-zinc-500 dark:text-zinc-400/80"
+              : status?.state === "open"
+                ? "text-emerald-600 dark:text-emerald-300/90"
+                : "text-muted-foreground";
+      return <GitPullRequest className={cn("size-3.5 shrink-0", toneClassName)} />;
+    }
     case "agents":
       return <AgentsSurfaceIcon className="size-3.5 shrink-0" />;
   }
@@ -435,6 +507,7 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
                             surface={surface}
                             sessions={props.previewSessions}
                             theme={resolvedTheme}
+                            pullRequestStatuses={props.pullRequestStatuses}
                           />
                         </span>
                         <span className="truncate">{title}</span>
@@ -505,12 +578,30 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
                   Diff
                 </SurfaceMenuItem>
                 <SurfaceMenuItem
-                  available={props.componentPreviewAvailable}
-                  disabledReason={SURFACE_DISABLED_REASONS.componentPreview}
-                  onClick={props.onAddComponentPreview}
+                  available={props.pullRequestAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.pullRequest}
+                  onClick={props.onAddPullRequest}
                 >
-                  <ComponentPreviewSurfaceIcon />
-                  Component preview
+                  <GitPullRequest />
+                  Pull request
+                </SurfaceMenuItem>
+                {props.onAddComponentPreview ? (
+                  <SurfaceMenuItem
+                    available={props.componentPreviewAvailable ?? false}
+                    disabledReason={SURFACE_DISABLED_REASONS.componentPreview}
+                    onClick={props.onAddComponentPreview}
+                  >
+                    <ComponentPreviewSurfaceIcon />
+                    Component preview
+                  </SurfaceMenuItem>
+                ) : null}
+                <SurfaceMenuItem
+                  available={props.agentsAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.agents}
+                  onClick={props.onAddAgents}
+                >
+                  <AgentsSurfaceIcon />
+                  Agents
                 </SurfaceMenuItem>
               </MenuPopup>
             </Menu>
@@ -523,11 +614,22 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
 }
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
-  const { mode, maximized, hideTabBar, inlineResizable, children, ...stripProps } = props;
+  const {
+    mode,
+    maximized,
+    widthStorageKey,
+    defaultWidth,
+    hideTabBar,
+    inlineResizable,
+    children,
+    ...stripProps
+  } = props;
   return (
     <PreviewPanelShell
       mode={mode}
       {...(maximized !== undefined ? { maximized } : {})}
+      {...(widthStorageKey !== undefined ? { widthStorageKey } : {})}
+      {...(defaultWidth !== undefined ? { defaultWidth } : {})}
       {...(inlineResizable ? { inlineResizable } : {})}
     >
       {hideTabBar ? null : (
@@ -543,12 +645,21 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}
             onAddFiles={props.onAddFiles}
-            onAddComponentPreview={props.onAddComponentPreview}
+            {...(props.onAddComponentPreview
+              ? { onAddComponentPreview: props.onAddComponentPreview }
+              : {})}
+            onAddPullRequest={props.onAddPullRequest}
             onAddAgents={props.onAddAgents}
             browserAvailable={props.browserAvailable}
+            terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}
-            componentPreviewAvailable={props.componentPreviewAvailable}
+            {...(props.componentPreviewAvailable !== undefined
+              ? { componentPreviewAvailable: props.componentPreviewAvailable }
+              : {})}
+            pullRequestAvailable={props.pullRequestAvailable}
+            agentsAvailable={props.agentsAvailable}
+            liveAgentCount={props.liveAgentCount}
           />
         ) : (
           children

@@ -21,6 +21,7 @@ export * from "./localAgents.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";
 export * from "./sourceControl.ts";
+export * from "./pullRequest.ts";
 export * from "./orchestration.ts";
 export * from "./t3ProjectFile.ts";
 export * from "./editor.ts";
@@ -33,4 +34,5 @@ export * from "./previewAutomation.ts";
 // Fork: component preview harness (Forma feature, distinct from webview preview)
 export * from "./componentPreview.ts";
 export * from "./resourceTelemetry.ts";
+export * from "./usage.ts";
 export * from "./rpc.ts";

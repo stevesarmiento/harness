@@ -7,23 +7,28 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PanelCollapseIcon, PanelExpandIcon, SidebarPanelIcon } from "../icons/custom";
 
 interface PanelLayoutControlsProps {
+  showTerminalControl?: boolean;
   terminalAvailable: boolean;
   terminalOpen: boolean;
   terminalShortcutLabel: string | null;
   rightPanelAvailable: boolean;
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
+  /** Running + waiting subagents in this thread; badges the right panel toggle. */
+  liveAgentCount: number;
   onToggleTerminal: () => void;
   onToggleRightPanel: () => void;
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
+  showTerminalControl = true,
   terminalAvailable,
   terminalOpen,
   terminalShortcutLabel,
   rightPanelAvailable,
   rightPanelOpen,
   rightPanelShortcutLabel,
+  liveAgentCount,
   onToggleTerminal,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
@@ -42,6 +47,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         available={rightPanelAvailable}
         open={rightPanelOpen}
         shortcutLabel={rightPanelShortcutLabel}
+        liveAgentCount={liveAgentCount}
         onToggle={onToggleRightPanel}
       />
     </div>
@@ -89,11 +95,13 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
   available,
   open,
   shortcutLabel,
+  liveAgentCount = 0,
   onToggle,
 }: {
   available: boolean;
   open: boolean;
   shortcutLabel: string | null;
+  liveAgentCount?: number;
   onToggle: () => void;
 }) {
   return (
@@ -101,21 +109,39 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
       <TooltipTrigger
         render={
           <Toggle
-            className="shrink-0 [-webkit-app-region:no-drag]"
+            className="relative shrink-0 [-webkit-app-region:no-drag]"
             pressed={open}
             onPressedChange={onToggle}
-            aria-label={open ? "Close right panel" : "Open right panel"}
+            aria-label={
+              liveAgentCount > 0
+                ? `${open ? "Close" : "Open"} right panel, ${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} working`
+                : open
+                  ? "Close right panel"
+                  : "Open right panel"
+            }
             variant="ghost"
             size="sm"
             disabled={!available}
           >
             <SidebarPanelIcon filled={open} className="size-4 rotate-180" />
+            {liveAgentCount > 0 ? (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-semibold tabular-nums text-white"
+              >
+                {liveAgentCount}
+              </span>
+            ) : null}
           </Toggle>
         }
       />
       <TooltipPopup side="bottom">
         {available
-          ? `${open ? "Close" : "Open"} right panel${shortcutLabel ? ` (${shortcutLabel})` : ""}`
+          ? `${open ? "Close" : "Open"} right panel${shortcutLabel ? ` (${shortcutLabel})` : ""}${
+              liveAgentCount > 0
+                ? ` · ${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} working`
+                : ""
+            }`
           : "Right panel is unavailable"}
       </TooltipPopup>
     </Tooltip>

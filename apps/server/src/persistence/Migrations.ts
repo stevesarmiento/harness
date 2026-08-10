@@ -52,6 +52,8 @@ import Migration0035 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts
 import Migration0036 from "./Migrations/036_ProjectionThreadsPinned.ts";
 import Migration0037 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
 import Migration0038 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
+import Migration0039 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
+import Migration0040 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
 // Fork: fork-only migrations live in the reserved 9xx id block (935+) so
 // upstream can keep shipping 035, 036, ... without ever colliding with us.
 import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
@@ -111,6 +113,8 @@ export const migrationEntries = [
   [36, "ProjectionThreadsPinned", Migration0036],
   [37, "ProjectionTurnsKeysetIndex", Migration0037],
   [38, "ProjectionThreadsPinOrderKey", Migration0038],
+  [39, "ProjectionProjectsDefaultThreadEnvMode", Migration0039],
+  [40, "ProjectionProjectFaviconPath", Migration0040],
   // Fork: ids 935-940 are the reserved fork block; ids 35+ stay free for
   // upstream. These migrations briefly shipped locally as ids 35-40, but no
   // real database ever recorded those ids (the only live fork database was
