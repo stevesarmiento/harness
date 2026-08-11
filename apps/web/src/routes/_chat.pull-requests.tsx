@@ -1241,26 +1241,28 @@ function PullRequestsRouteView() {
               liveAgentCount={0}
               pullRequestStatuses={pullRequestTabStatuses}
             >
-              <PullRequestDetailPanel
-                key={activePullRequestSurface.id}
-                environmentId={pullRequestEnvironmentId}
-                reference={{
-                  projectId: activePullRequestSurface.projectId as ProjectId,
-                  repository: activePullRequestSurface.repository,
-                  number: activePullRequestSurface.number,
-                }}
-                refreshToken={detailRefreshToken}
-                // Merging, closing or reopening changes the row this panel was opened from, so
-                // the list behind it is out of date the moment the host takes the action.
-                onActed={() => {
-                  refreshList();
-                  baselineQuery.refresh();
-                  authoredQuery.refresh();
-                  reviewingQuery.refresh();
-                }}
-                onStateChange={handlePullRequestTabStatusChange}
-                chromeVariant="collapse"
-              />
+              {activePullRequestSurface ? (
+                <PullRequestDetailPanel
+                  key={activePullRequestSurface.id}
+                  environmentId={pullRequestEnvironmentId}
+                  reference={{
+                    projectId: activePullRequestSurface.projectId as ProjectId,
+                    repository: activePullRequestSurface.repository,
+                    number: activePullRequestSurface.number,
+                  }}
+                  refreshToken={detailRefreshToken}
+                  // Merging, closing or reopening changes the row this panel was opened from, so
+                  // the list behind it is out of date the moment the host takes the action.
+                  onActed={() => {
+                    refreshList();
+                    baselineQuery.refresh();
+                    authoredQuery.refresh();
+                    reviewingQuery.refresh();
+                  }}
+                  onStateChange={handlePullRequestTabStatusChange}
+                  chromeVariant="collapse"
+                />
+              ) : null}
             </RightPanelTabs>
           ) : null}
         </SidebarInsetCard>

@@ -557,7 +557,11 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
                   <BrowserSurfaceIcon />
                   Browser
                 </SurfaceMenuItem>
-                <SurfaceMenuItem available onClick={props.onAddTerminal}>
+                <SurfaceMenuItem
+                  available={props.terminalAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.terminal}
+                  onClick={props.onAddTerminal}
+                >
                   <TerminalSurfaceIcon />
                   Terminal
                 </SurfaceMenuItem>
