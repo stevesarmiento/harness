@@ -28,5 +28,6 @@ export * from "./SidebarPanelIcon";
 export * from "./SidebarPlanReadyIcon";
 export * from "./TerminalSurfaceIcon";
 export * from "./TerminalToggleIcon";
+export { LightModeIcon } from "./LightModeIcon";
 export { NightModeIcon } from "./NightModeIcon";
 export { UsageChartIcon } from "./UsageChartIcon";

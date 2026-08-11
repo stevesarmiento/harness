@@ -10,9 +10,8 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
-  IconSunMaxFill as SunIcon,
 } from "symbols-react";
-import { NightModeIcon as MoonIcon } from "../icons/custom";
+import { LightModeIcon as SunIcon, NightModeIcon as MoonIcon } from "../icons/custom";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 
 import { APP_ICON_OPTIONS } from "../../appIcon";

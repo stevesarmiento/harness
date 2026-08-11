@@ -12,12 +12,12 @@ import {
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
   IconEllipsis as EllipsisIcon,
-  IconSunMaxFill as SunIcon,
 } from "symbols-react";
 
 import { useTheme } from "../../hooks/useTheme";
 import type { ThemeMode } from "../../theme";
 import {
+  LightModeIcon as SunIcon,
   NightModeIcon as MoonIcon,
   SettingsHexIcon,
   UsageChartIcon as UsageIcon,
