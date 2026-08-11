@@ -18,7 +18,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../ui/sidebar";
 import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
 import { WorkspaceHeaderTitle } from "../WorkspaceHeaderTitle";
-import { IconChartBar as UsageTitleIcon } from "symbols-react";
+import { UsageChartIcon as UsageTitleIcon } from "../icons/custom";
 import { UsageChartLegend, UsageProviderChart, type UsageChartMetric } from "./UsageProviderChart";
 import { PROVIDER_COLOR, PROVIDER_LABEL, PROVIDER_MARK, PROVIDER_ORDER } from "./usageProviders";
 

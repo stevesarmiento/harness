@@ -9,7 +9,6 @@ import { usePrimaryEnvironment } from "../../state/environments";
 import { cn } from "../../lib/utils";
 import {
   IconArrowTriangleheadPull as PullRequestIcon,
-  IconChartBar as UsageIcon,
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
   IconEllipsis as EllipsisIcon,
@@ -19,7 +18,7 @@ import {
 
 import { useTheme } from "../../hooks/useTheme";
 import type { ThemeMode } from "../../theme";
-import { SettingsHexIcon } from "../icons/custom";
+import { SettingsHexIcon, UsageChartIcon as UsageIcon } from "../icons/custom";
 import {
   Menu,
   MenuItem,
