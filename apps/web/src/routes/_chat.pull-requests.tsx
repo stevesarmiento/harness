@@ -23,6 +23,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import {
   filterPullRequestsByInvolvement,
@@ -915,11 +916,6 @@ function PullRequestsRouteView() {
       onToggleRightPanel={toggleRightPanel}
     />
   );
-  const openPanelControls = (
-    <div className="workspace-titlebar-controls right-2 z-50 gap-1 [-webkit-app-region:no-drag] wco:right-[var(--workspace-controls-right)]">
-      {panelToggleControls}
-    </div>
-  );
   // The rows carried over from the last filters can also narrow to nothing one step further on,
   // where involvement is applied against the viewers of the answer they came from. "Nothing under
   // these filters" is a claim, and it is the wrong one to make about a question still in flight,
@@ -1053,7 +1049,9 @@ function PullRequestsRouteView() {
       onProject={(projectId) => updateListScope({ projectId })}
     />
   );
+  const [headerActionsElement, setHeaderActionsElement] = useState<HTMLDivElement | null>(null);
   const columnProps = {
+    headerActionsElement,
     refreshing,
     onRefresh: () => void refreshFromHost(),
     searchValue: search.q ?? "",
@@ -1066,8 +1064,7 @@ function PullRequestsRouteView() {
     onHost: (host: string | undefined) => updateListScope({ host }),
     searchInput,
     filtersMenu,
-    rightPanelControl:
-      !pullRequestsSupported || rightPanelState.isOpen ? null : panelToggleControls,
+    rightPanelControl: pullRequestsSupported ? panelToggleControls : null,
     rightPanelOpen: rightPanelState.isOpen,
     listBody,
   };
@@ -1131,9 +1128,14 @@ function PullRequestsRouteView() {
             >
               Pull Requests
             </WorkspaceHeaderTitle>
+            {/* The column portals its live controls (filters, search, refresh, panel
+                toggle) here so the page keeps a single Forma header row. */}
+            <div
+              ref={setHeaderActionsElement}
+              className="ms-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5 [-webkit-app-region:no-drag]"
+            />
           </div>
         </header>
-        {pullRequestsSupported && rightPanelState.isOpen ? openPanelControls : null}
         <SidebarInsetCard className="flex-row">
           <PullRequestsColumn {...columnProps} />
 
@@ -1346,8 +1348,9 @@ function PullRequestsColumn({
   searchInput,
   filtersMenu,
   rightPanelControl,
-  rightPanelOpen,
+  rightPanelOpen: _rightPanelOpen,
   listBody,
+  headerActionsElement,
 }: {
   refreshing: boolean;
   onRefresh: () => void;
@@ -1364,6 +1367,7 @@ function PullRequestsColumn({
   rightPanelControl: ReactNode;
   rightPanelOpen: boolean;
   listBody: ReactNode;
+  headerActionsElement: HTMLDivElement | null;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const markerRef = useRef<HTMLDivElement | null>(null);
@@ -1424,61 +1428,58 @@ function PullRequestsColumn({
     // Painted flat like the chat column: the inset underneath carries the chrome grain, and a
     // content surface that lets it show reads as a different background than every thread.
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-      {/* In-card controls strip: the page title lives in the Forma chrome header above the
-          card, so this row only carries the live filters and actions. */}
-      <header
-        className={cn(
-          "workspace-topbar gap-1.5 border-b border-border/70 bg-background px-3 sm:px-5",
-          "[--workspace-topbar-height:40px]",
-        )}
-      >
-        {condensed ? (
-          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            <CompactFilterMenu
-              label="Filter by state"
-              value={state}
-              options={STATE_TABS}
-              onChange={onState}
-            />
-            <CompactFilterMenu
-              label="Filter by involvement"
-              value={involvement}
-              options={INVOLVEMENT_TABS}
-              onChange={onInvolvement}
-            />
-            {hostMenuOptions.length > 2 ? (
-              <CompactFilterMenu
-                label="Filter by host"
-                value={host ?? ""}
-                options={hostMenuOptions}
-                onChange={(next) => onHost(next === "" ? undefined : next)}
-              />
-            ) : null}
-          </div>
-        ) : null}
-        <div className="min-w-0 flex-1" />
-        {condensed ? (
-          <ExpandableSearch
-            searchInput={searchInput}
-            searchValue={searchValue}
-            open={searchOpen}
-            onOpenChange={setSearchOpen}
-            focusToken={searchFocusToken}
-            onFocusWithin={(focused) => {
-              topbarSearchFocusedRef.current = focused;
-            }}
-          />
-        ) : null}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Refresh pull requests"
-          onClick={onRefresh}
-        >
-          <RefreshCwIcon className={cn("size-4", refreshing && "animate-spin")} />
-        </Button>
-        {rightPanelControl}
-      </header>
+      {headerActionsElement
+        ? createPortal(
+            <>
+              {condensed ? (
+                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                  <CompactFilterMenu
+                    label="Filter by state"
+                    value={state}
+                    options={STATE_TABS}
+                    onChange={onState}
+                  />
+                  <CompactFilterMenu
+                    label="Filter by involvement"
+                    value={involvement}
+                    options={INVOLVEMENT_TABS}
+                    onChange={onInvolvement}
+                  />
+                  {hostMenuOptions.length > 2 ? (
+                    <CompactFilterMenu
+                      label="Filter by host"
+                      value={host ?? ""}
+                      options={hostMenuOptions}
+                      onChange={(next) => onHost(next === "" ? undefined : next)}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {condensed ? (
+                <ExpandableSearch
+                  searchInput={searchInput}
+                  searchValue={searchValue}
+                  open={searchOpen}
+                  onOpenChange={setSearchOpen}
+                  focusToken={searchFocusToken}
+                  onFocusWithin={(focused) => {
+                    topbarSearchFocusedRef.current = focused;
+                  }}
+                />
+              ) : null}
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Refresh pull requests"
+                onClick={onRefresh}
+              >
+                <RefreshCwIcon className={cn("size-4", refreshing && "animate-spin")} />
+              </Button>
+              {rightPanelControl}
+            </>,
+            headerActionsElement,
+          )
+        : null}
 
       <div
         ref={scrollRef}
