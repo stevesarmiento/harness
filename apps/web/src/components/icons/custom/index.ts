@@ -30,4 +30,5 @@ export * from "./TerminalSurfaceIcon";
 export * from "./TerminalToggleIcon";
 export { LightModeIcon } from "./LightModeIcon";
 export { NightModeIcon } from "./NightModeIcon";
+export { SystemModeIcon } from "./SystemModeIcon";
 export { UsageChartIcon } from "./UsageChartIcon";

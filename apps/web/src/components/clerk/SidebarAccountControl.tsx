@@ -10,7 +10,6 @@ import { cn } from "../../lib/utils";
 import {
   IconArrowTriangleheadPull as PullRequestIcon,
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
-  IconDisplay as DisplayIcon,
   IconEllipsis as EllipsisIcon,
 } from "symbols-react";
 
@@ -18,6 +17,7 @@ import { useTheme } from "../../hooks/useTheme";
 import type { ThemeMode } from "../../theme";
 import {
   LightModeIcon as SunIcon,
+  SystemModeIcon as DisplayIcon,
   NightModeIcon as MoonIcon,
   SettingsHexIcon,
   UsageChartIcon as UsageIcon,

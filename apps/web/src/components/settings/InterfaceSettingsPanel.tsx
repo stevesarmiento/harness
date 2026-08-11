@@ -7,11 +7,12 @@ import {
   MIN_INTERFACE_FONT_SIZE,
 } from "@t3tools/contracts/settings";
 import { useNavigate } from "@tanstack/react-router";
+import { IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon } from "symbols-react";
 import {
-  IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
-  IconDisplay as DisplayIcon,
-} from "symbols-react";
-import { LightModeIcon as SunIcon, NightModeIcon as MoonIcon } from "../icons/custom";
+  LightModeIcon as SunIcon,
+  NightModeIcon as MoonIcon,
+  SystemModeIcon as DisplayIcon,
+} from "../icons/custom";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 
 import { APP_ICON_OPTIONS } from "../../appIcon";
