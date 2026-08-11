@@ -1079,7 +1079,10 @@ function PullRequestsRouteView() {
     onHost: (host: string | undefined) => updateListScope({ host }),
     searchInput,
     filtersMenu,
-    rightPanelControl: pullRequestsSupported ? panelToggleControls : null,
+    // No surfaces -> no toggle: on this route the panel only ever hosts pull
+    // requests, so with nothing open the button would have nothing to show.
+    rightPanelControl:
+      pullRequestsSupported && rightPanelState.surfaces.length > 0 ? panelToggleControls : null,
     rightPanelOpen: rightPanelState.isOpen,
     listBody,
   };
