@@ -1,7 +1,7 @@
 import { UserButton, useUser } from "@clerk/react";
 import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, LogInIcon, SmartphoneIcon, UserRoundIcon } from "lucide-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type ComponentType } from "react";
 
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
@@ -12,13 +12,16 @@ import {
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
   IconEllipsis as EllipsisIcon,
-  IconMoonFill as MoonIcon,
   IconSunMaxFill as SunIcon,
 } from "symbols-react";
 
 import { useTheme } from "../../hooks/useTheme";
 import type { ThemeMode } from "../../theme";
-import { SettingsHexIcon, UsageChartIcon as UsageIcon } from "../icons/custom";
+import {
+  NightModeIcon as MoonIcon,
+  SettingsHexIcon,
+  UsageChartIcon as UsageIcon,
+} from "../icons/custom";
 import {
   Menu,
   MenuItem,
@@ -53,7 +56,7 @@ const THEME_MODE_ICONS = {
   light: SunIcon,
   dark: MoonIcon,
   highContrast: ContrastIcon,
-} as const satisfies Record<ThemeMode, typeof DisplayIcon>;
+} as const satisfies Record<ThemeMode, ComponentType<{ className?: string }>>;
 
 const THEME_MODES: readonly ThemeMode[] = ["system", "light", "dark", "highContrast"];
 

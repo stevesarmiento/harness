@@ -10,10 +10,10 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon,
   IconDisplay as DisplayIcon,
-  IconMoonFill as MoonIcon,
   IconSunMaxFill as SunIcon,
 } from "symbols-react";
-import { useCallback, useEffect, useState } from "react";
+import { NightModeIcon as MoonIcon } from "../icons/custom";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 
 import { APP_ICON_OPTIONS } from "../../appIcon";
 import {
@@ -70,7 +70,7 @@ const THEME_MODE_ICONS = {
   light: SunIcon,
   dark: MoonIcon,
   highContrast: ContrastIcon,
-} as const satisfies Record<ThemeMode, typeof DisplayIcon>;
+} as const satisfies Record<ThemeMode, ComponentType<{ className?: string }>>;
 
 const THEME_MODES: readonly ThemeMode[] = ["system", "light", "dark", "highContrast"];
 
