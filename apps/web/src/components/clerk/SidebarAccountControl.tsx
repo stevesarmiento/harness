@@ -214,7 +214,7 @@ function SidebarAccountRow({
     if (isMobile) {
       setOpenMobile(false);
     }
-    void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
+    void navigate({ to: "/pull-requests", search: { involvement: "authored", state: "open" } });
   }, [isMobile, navigate, setOpenMobile]);
   const handleUsageClick = useCallback(() => {
     if (isMobile) {
