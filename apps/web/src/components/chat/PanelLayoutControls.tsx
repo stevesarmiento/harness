@@ -37,12 +37,14 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
-      <TerminalDrawerToggleControl
-        available={terminalAvailable}
-        open={terminalOpen}
-        shortcutLabel={terminalShortcutLabel}
-        onToggle={onToggleTerminal}
-      />
+      {showTerminalControl ? (
+        <TerminalDrawerToggleControl
+          available={terminalAvailable}
+          open={terminalOpen}
+          shortcutLabel={terminalShortcutLabel}
+          onToggle={onToggleTerminal}
+        />
+      ) : null}
       <RightPanelToggleControl
         available={rightPanelAvailable}
         open={rightPanelOpen}
