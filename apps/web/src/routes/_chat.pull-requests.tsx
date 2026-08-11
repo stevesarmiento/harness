@@ -142,10 +142,8 @@ const EMPTY_PENDING_SURFACES = new Set<string>();
 
 export const Route = createFileRoute("/_chat/pull-requests")({
   validateSearch: (raw: Record<string, unknown>): PullRequestsSearch => ({
-    // Fork: default to the viewer's own pull requests — "all" is opt-in via
-    // the filters, matching the workspace overview's scoping.
     involvement:
-      raw.involvement === "reviewing" || raw.involvement === "all" ? raw.involvement : "authored",
+      raw.involvement === "reviewing" || raw.involvement === "authored" ? raw.involvement : "all",
     state:
       raw.state === "closed" || raw.state === "merged" || raw.state === "all" ? raw.state : "open",
     ...(typeof raw.repository === "string" && raw.repository
