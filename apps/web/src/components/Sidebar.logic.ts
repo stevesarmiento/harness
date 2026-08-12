@@ -461,23 +461,31 @@ export function resolveThreadRowClassName(input: {
 }
 
 // ── Sidebar thread status model ─────────────────────────────────────
-// Five visual states, three colors: color is reserved for "act now"
-// (approval), "in motion" (working), and "broken" (failed). Ready is the
-// unlabeled resting state — the agent stopped and is waiting on the user,
-// whether it finished, asked a question, or proposed a plan.
+// Color is reserved for "act now" (approval, input, plan ready), "in
+// motion" (working), and "broken" (failed). Ready is the unlabeled resting
+// state — the agent stopped and is waiting on the user.
 // Unread completion is tracked separately: it describes whether a ready
 // thread needs attention, not what the thread is currently doing.
+// Fork: plan mode is live in Forma, so an actionable proposed plan gets its
+// own labeled state (upstream folds it into ready).
 export type SidebarThreadStatus =
   | "approval"
   | "input"
   | "working"
   | "monitoring"
   | "failed"
+  | "plan-ready"
   | "ready";
 
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
-  "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
+  | "hasPendingApprovals"
+  | "hasPendingUserInput"
+  | "session"
+  | "backgroundLiveness"
+  | "hasActionableProposedPlan"
+  | "interactionMode"
+  | "latestTurn"
 >;
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
@@ -494,6 +502,16 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   // see the failure, not a stale Working (review finding).
   if (thread.session?.status === "error") {
     return "failed";
+  }
+  // An actionable plan prompt outranks lingering background work, matching
+  // the legacy pill resolver: it needs the user's decision, while liveness
+  // merely reports.
+  if (
+    thread.interactionMode === "plan" &&
+    isLatestTurnSettled(thread.latestTurn, thread.session) &&
+    thread.hasActionableProposedPlan
+  ) {
+    return "plan-ready";
   }
   // Background work outlives the turn: fleets read as working; monitoring
   // only when watch loops are the sole live work.

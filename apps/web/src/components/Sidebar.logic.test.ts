@@ -670,7 +670,13 @@ describe("resolveSidebarThreadStatus", () => {
     updatedAt: "2026-03-09T10:00:00.000Z",
   };
 
-  const idle = { hasPendingApprovals: false, hasPendingUserInput: false };
+  const idle = {
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    hasActionableProposedPlan: false,
+    interactionMode: "default" as const,
+    latestTurn: null,
+  };
 
   it("prioritizes approval over a running session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, hasPendingApprovals: true, session })).toBe(
@@ -725,6 +731,51 @@ describe("resolveSidebarThreadStatus", () => {
 
   it("defaults to ready with no session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, session: null })).toBe("ready");
+  });
+
+  it("reports plan-ready for a settled plan-mode turn with an actionable plan", () => {
+    const planReady = {
+      ...idle,
+      hasActionableProposedPlan: true,
+      interactionMode: "plan" as const,
+      latestTurn: makeLatestTurn(),
+      session: null,
+    };
+    expect(resolveSidebarThreadStatus(planReady)).toBe("plan-ready");
+    expect(resolveSidebarThreadStatus({ ...planReady, hasActionableProposedPlan: false })).toBe(
+      "ready",
+    );
+    expect(resolveSidebarThreadStatus({ ...planReady, interactionMode: "default" })).toBe("ready");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        latestTurn: makeLatestTurn({ completedAt: null }),
+      }),
+    ).toBe("ready");
+  });
+
+  it("plan-ready loses to a running session but outranks background liveness", () => {
+    const planReady = {
+      ...idle,
+      hasActionableProposedPlan: true,
+      interactionMode: "plan" as const,
+      latestTurn: makeLatestTurn(),
+    };
+    expect(resolveSidebarThreadStatus({ ...planReady, session })).toBe("working");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        session: null,
+        backgroundLiveness: "working" as const,
+      }),
+    ).toBe("plan-ready");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        session: null,
+        backgroundLiveness: "monitoring" as const,
+      }),
+    ).toBe("plan-ready");
   });
 });
 

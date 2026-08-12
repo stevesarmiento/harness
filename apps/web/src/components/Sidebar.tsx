@@ -40,8 +40,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CircleAlertIcon,
-  CircleCheckIcon,
-  CircleDashedIcon,
+  CircleQuestionMarkIcon,
   ClockIcon,
   FolderIcon,
   GitBranchIcon,
@@ -61,8 +60,10 @@ import {
 import {
   NewThreadIcon,
   SettingsHexIcon,
+  SidebarCompletedIcon,
   SidebarFilterIcon,
   SidebarGrabHandleIcon,
+  SidebarPlanReadyIcon,
 } from "./icons/custom";
 import {
   memo,
@@ -177,6 +178,7 @@ import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./u
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
+import { PixelGridLoader } from "./ui/pixel-grid-loader";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
   composerDraftHasUserContent,
@@ -847,22 +849,27 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // working threads aren't your problem yet) — only the colored status label
   // stands out.
   const isInFlight =
-    status === "working" || status === "monitoring" || status === "approval" || status === "input";
+    status === "working" ||
+    status === "monitoring" ||
+    status === "approval" ||
+    status === "input" ||
+    status === "plan-ready";
   const shouldRecede =
     (status === "ready" || isInFlight) && !isUnread && !isWoke && !props.isActive && !isSelected;
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
+  // Fork: status glyphs mirror the legacy (v1) sidebar so a thread reads the
+  // same everywhere — the animated pixel-grid "working bit" for in-motion
+  // states, the filled check for completions, alert/question marks for the
+  // attention states. PixelGridLoader honors prefers-reduced-motion.
   const topStatus =
     status === "working"
       ? {
           label: "Working",
-          icon: "working" as const,
-          // No shimmer: a label that animates forever is noise in a sidebar
-          // full of them (and repaints every vsync on high-refresh displays).
-          // Working is a background state, so it rests at the dim end of what
-          // the old pulse cycled through; only the thread you have open gets
-          // the label at full strength.
+          icon: "grid" as const,
+          // Working is a background state, so it rests dimmed; only the
+          // thread you have open gets the label at full strength.
           className: cn("text-sky-600 dark:text-sky-400", !props.isActive && "opacity-75"),
         }
       : status === "monitoring"
@@ -870,40 +877,46 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             // Monitoring is calm background presence, not active progress
             // (monitoring-pill D6), so it keeps the label at full strength.
             label: "Monitoring",
-            icon: null,
+            icon: "grid" as const,
             className: "text-sky-600 dark:text-sky-400",
           }
         : status === "approval"
           ? {
               label: "Approval",
-              icon: null,
+              icon: "circle-alert" as const,
               className: "text-amber-700 dark:text-amber-300",
             }
           : status === "input"
             ? {
                 label: "Input",
-                icon: null,
+                icon: "circle-question-mark" as const,
                 className: "text-indigo-600 dark:text-indigo-300",
               }
-            : status === "failed"
+            : status === "plan-ready"
               ? {
-                  label: "Failed",
-                  icon: null,
-                  className: "text-red-700 dark:text-red-300",
+                  label: "Plan Ready",
+                  icon: "file-text" as const,
+                  className: "text-violet-600 dark:text-violet-300",
                 }
-              : isWoke
+              : status === "failed"
                 ? {
-                    label: "Woke",
-                    icon: "woke" as const,
-                    className: "text-amber-700 dark:text-amber-300",
+                    label: "Failed",
+                    icon: null,
+                    className: "text-red-700 dark:text-red-300",
                   }
-                : isUnread
+                : isWoke
                   ? {
-                      label: "Done",
-                      icon: "done" as const,
-                      className: "text-emerald-700 dark:text-emerald-300",
+                      label: "Woke",
+                      icon: "woke" as const,
+                      className: "text-amber-700 dark:text-amber-300",
                     }
-                  : null;
+                  : isUnread
+                    ? {
+                        label: "Done",
+                        icon: "check" as const,
+                        className: "text-emerald-700 dark:text-emerald-300",
+                      }
+                    : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1392,10 +1405,29 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         topStatus.className,
                       )}
                     >
-                      {topStatus.icon === "working" ? (
-                        <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                      ) : topStatus.icon === "done" ? (
-                        <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+                      {topStatus.icon === "grid" ? (
+                        <span
+                          aria-hidden
+                          className="inline-flex size-4 shrink-0 items-center justify-center"
+                        >
+                          <PixelGridLoader variant="sidebar" className="text-current" />
+                        </span>
+                      ) : topStatus.icon === "circle-alert" ? (
+                        <CircleAlertIcon
+                          aria-hidden
+                          className="size-3.5 shrink-0"
+                          strokeWidth={2.25}
+                        />
+                      ) : topStatus.icon === "circle-question-mark" ? (
+                        <CircleQuestionMarkIcon
+                          aria-hidden
+                          className="size-3.5 shrink-0"
+                          strokeWidth={2.25}
+                        />
+                      ) : topStatus.icon === "file-text" ? (
+                        <SidebarPlanReadyIcon aria-hidden className="size-3.5 shrink-0" />
+                      ) : topStatus.icon === "check" ? (
+                        <SidebarCompletedIcon aria-hidden className="size-3.5 shrink-0" />
                       ) : null}
                       {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
