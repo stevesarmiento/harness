@@ -186,7 +186,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       >
         {isOnSettings ? (
           <>
-            <SidebarChromeHeader isElectron={isElectron} variant="v1" />
+            <SidebarChromeHeader isElectron={isElectron} />
             <SettingsSidebarNav pathname={pathname} />
           </>
         ) : legacySidebarEnabled ? (

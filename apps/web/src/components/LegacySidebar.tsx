@@ -3848,7 +3848,7 @@ export default function Sidebar() {
       {prewarmedSidebarThreadRefs.map((threadRef) => (
         <SidebarThreadDetailPrewarmer key={scopedThreadKey(threadRef)} threadRef={threadRef} />
       ))}
-      <SidebarChromeHeader isElectron={isElectron} variant="v1" />
+      <SidebarChromeHeader isElectron={isElectron} />
 
       {isOnSettings ? (
         <SettingsSidebarNav pathname={pathname} />

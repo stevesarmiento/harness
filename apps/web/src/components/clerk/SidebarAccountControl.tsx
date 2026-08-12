@@ -318,8 +318,10 @@ function SidebarAccountRow({
               aria-label="Connect and settings"
               className={cn(
                 "shrink-0",
+                // Mirror hover while open so the menu stays anchored to its trigger visually.
+                "data-popup-open:bg-sidebar-row-hover data-popup-open:text-sidebar-foreground data-popup-open:[&>svg]:text-sidebar-foreground data-popup-open:[&>svg]:opacity-100",
                 variant === "v1"
-                  ? "size-7 rounded-lg text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                  ? "size-7 rounded-lg text-muted-foreground/70 hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
                   : "size-8",
               )}
               data-testid="sidebar-connect-settings-trigger"
@@ -347,7 +349,6 @@ function SidebarAccountRow({
               {connect.label}
             </span>
           </MenuItem>
-          <SidebarThemeSubmenu />
           {pullRequestsSupported ? (
             <MenuItem onClick={handlePullRequestsClick}>
               <PullRequestIcon className="fill-current" />
@@ -358,13 +359,15 @@ function SidebarAccountRow({
             <UsageIcon className="fill-current" />
             Usage
           </MenuItem>
+          <MenuSeparator className="-mx-1" />
+          <SidebarThemeSubmenu />
           <MenuItem onClick={() => navigateTo("/settings")}>
             <SettingsHexIcon />
             Settings
           </MenuItem>
           {onSignIn ? (
             <>
-              <MenuSeparator />
+              <MenuSeparator className="-mx-1" />
               <MenuItem data-testid="t3-connect-sign-in" onClick={onSignIn}>
                 <LogInIcon />
                 Sign in to T3 Connect
