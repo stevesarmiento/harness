@@ -12,8 +12,8 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 import { type Project, type SidebarThreadSummary, type Thread } from "../types";
 
 export const RECENT_THREAD_LIMIT = 12;
-export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const ADDON_ICON_CLASS = "size-4";
+export const ITEM_ICON_CLASS = "size-4 fill-muted-foreground/80";
+export const ADDON_ICON_CLASS = "size-4 fill-current";
 
 /**
  * The global search overlay hosts three mutually exclusive surfaces: the
@@ -24,7 +24,7 @@ export const ADDON_ICON_CLASS = "size-4";
 export type SearchOverlayMode = "command" | "files" | "content";
 
 export interface CommandPaletteOpenIntent {
-  readonly kind: "add-project" | "new-thread-in";
+  readonly kind: "add-project" | "new-thread-in" | "switch-project";
 }
 
 export interface CommandPaletteUiState {
@@ -38,6 +38,7 @@ export type CommandPaletteUiAction =
   | { readonly _tag: "ToggleMode"; readonly mode: SearchOverlayMode }
   | { readonly _tag: "OpenAddProject" }
   | { readonly _tag: "OpenNewThreadIn" }
+  | { readonly _tag: "OpenProjectSwitcher" }
   | { readonly _tag: "ClearOpenIntent" };
 
 export function reduceCommandPaletteUiState(
@@ -59,6 +60,8 @@ export function reduceCommandPaletteUiState(
       return { open: true, mode: "command", openIntent: { kind: "add-project" } };
     case "OpenNewThreadIn":
       return { open: true, mode: "command", openIntent: { kind: "new-thread-in" } };
+    case "OpenProjectSwitcher":
+      return { open: true, mode: "command", openIntent: { kind: "switch-project" } };
     case "ClearOpenIntent":
       return state.openIntent ? { ...state, openIntent: null } : state;
   }

@@ -1525,6 +1525,7 @@ function mapToRuntimeEvents(
         ...runtimeEventBase(event, canonicalThreadId),
         payload: {
           message,
+          ...(willRetry ? { classification: "retry" as const } : {}),
           ...(!willRetry ? { class: "provider_error" as const } : {}),
           ...(event.payload !== undefined ? { detail: event.payload } : {}),
         },
@@ -1825,6 +1826,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+        ...(input.askOverride !== undefined ? { askOverride: input.askOverride } : {}),
         ...(codexAttachments.length > 0 ? { attachments: codexAttachments } : {}),
       })
       .pipe(Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "turn/start", cause)));

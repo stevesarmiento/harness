@@ -13,8 +13,11 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
+  appIcon: "default",
   confirmThreadArchive: true,
   confirmThreadDelete: false,
+  desktopNotifyOnApprovalRequests: false,
+  desktopNotifyOnUserInputRequests: false,
   dismissedProviderUpdateNotificationKeys: [],
   diffIgnoreWhitespace: true,
   environmentIdentificationMode: "artwork",
@@ -39,6 +42,7 @@ const clientSettings: ClientSettings = {
   sidebarProjectSortOrder: "manual",
   sidebarThreadSortOrder: "created_at",
   sidebarThreadPreviewCount: 6,
+  threadCleanupInactiveDays: 1,
   legacySidebarEnabled: false,
   timestampFormat: "24-hour",
   wordWrap: true,

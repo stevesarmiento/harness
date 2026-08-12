@@ -35,6 +35,7 @@ import {
 } from "../ui/sidebar";
 import { T3ConnectSidebarAvatar, T3ConnectSidebarSignIn } from "../clerk/T3ConnectSidebarSignIn";
 import { scrollToSettingsTarget } from "./settingsLayout";
+import { SETTINGS_NAV_ITEMS, resolveSettingsPathname } from "./settingsNavigation";
 import {
   searchSettings,
   SETTINGS_SECTION_LABELS,
@@ -42,31 +43,27 @@ import {
   type SettingsSearchItem,
 } from "./settingsSearch";
 
-const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsPath, ComponentType<{ className?: string }>>
-> = {
-  "/settings/general": Settings2Icon,
-  "/settings/appearance": PaletteIcon,
-  "/settings/keybindings": KeyboardIcon,
-  "/settings/providers": BotIcon,
-  "/settings/source-control": GitBranchIcon,
-  "/settings/connections": Link2Icon,
-  "/settings/archived": ArchiveIcon,
-};
-
-export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
-  label: string;
-  to: SettingsPath;
-  icon: ComponentType<{ className?: string }>;
-}> = (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[]).map((to) => ({
-  to,
-  label: SETTINGS_SECTION_LABELS[to],
-  icon: SETTINGS_SECTION_ICONS[to],
-}));
+// Fork: the sidebar renders the Forma settings IA from settingsNavigation;
+// search results may point at legacy upstream sections, so icons fall back.
+const SETTINGS_SECTION_ICONS = new Map<string, ComponentType<{ className?: string }>>(
+  SETTINGS_NAV_ITEMS.map((item) => [item.to, item.icon]),
+);
+const SETTINGS_SECTION_ICON_USES_FILL = new Map<string, boolean>(
+  SETTINGS_NAV_ITEMS.map((item) => [item.to, item.iconUsesFill]),
+);
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
-  const Icon = SETTINGS_SECTION_ICONS[to];
-  return <Icon className="mt-0.5 size-3.5 shrink-0 text-sidebar-muted-foreground/60" />;
+  const Icon = SETTINGS_SECTION_ICONS.get(to) ?? Settings2Icon;
+  const usesFill = SETTINGS_SECTION_ICON_USES_FILL.get(to) ?? false;
+  return (
+    <Icon
+      className={
+        usesFill
+          ? "mt-0.5 size-3.5 shrink-0 fill-current text-sidebar-muted-foreground/60"
+          : "mt-0.5 size-3.5 shrink-0 text-sidebar-muted-foreground/60"
+      }
+    />
+  );
 }
 
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
@@ -122,7 +119,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   }, [isMobile, open, setOpen, setOpenMobile]);
 
   const handleSectionClick = useCallback(
-    (to: SettingsPath) => {
+    (to: SettingsPath | (typeof SETTINGS_NAV_ITEMS)[number]["to"]) => {
       if (isMobile) {
         setOpenMobile(false);
       }
@@ -277,14 +274,17 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                 ))
               : SETTINGS_NAV_ITEMS.map((item) => {
                   const Icon = item.icon;
-                  const isActive = pathname === item.to || pathname.startsWith(`${item.to}/`);
+                  const resolvedPathname = resolveSettingsPathname(pathname);
+                  const isActive =
+                    resolvedPathname === item.to ||
+                    (resolvedPathname?.startsWith(`${item.to}/`) ?? false);
                   return (
                     <SidebarMenuItem key={item.to}>
                       <SidebarMenuButton
                         isActive={isActive}
                         onClick={() => handleSectionClick(item.to)}
                       >
-                        <Icon />
+                        {item.iconUsesFill ? <Icon className="fill-current" /> : <Icon />}
                         <span className="truncate">{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

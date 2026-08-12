@@ -65,12 +65,14 @@ import {
   XIcon,
   ZapIcon,
 } from "lucide-react";
+import { PixelGridLoader } from "../ui/pixel-grid-loader";
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
-import { MessageCopyButton } from "./MessageCopyButton";
+import { MessageCopyButton, SUBTLE_MESSAGE_COPY_BUTTON_CLASS_NAME } from "./MessageCopyButton";
+import { MICRO_FADE_MOTION_CLASS_NAME } from "~/lib/motion";
 import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
@@ -89,11 +91,11 @@ import {
   type TimelineLatestTurn,
 } from "./MessagesTimeline.logic";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
+import { CodeContextInlineChip } from "./CodeContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import {
-  deriveDisplayedUserMessageState,
-  type ParsedTerminalContextEntry,
-} from "~/lib/terminalContext";
+import { type ParsedTerminalContextEntry } from "~/lib/terminalContext";
+import { type ParsedCodeContextEntry } from "~/lib/codeContext";
+import { deriveDisplayedUserMessageState } from "~/lib/composerAttachedContexts";
 import {
   extractTrailingElementContexts,
   type ParsedElementContextEntry,
@@ -112,6 +114,11 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
+import {
+  buildInlineCodeContextText,
+  formatInlineCodeContextLabel,
+  textContainsInlineCodeContextLabels,
+} from "./userMessageCodeContexts";
 import { SkillInlineText } from "./SkillInlineText";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import {
@@ -157,7 +164,20 @@ interface TimelineRowActivityState {
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
 const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
-const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
+type TimelineRenderItem =
+  | {
+      id: string;
+      kind: "standalone-row";
+      row: MessagesTimelineRow;
+    }
+  | {
+      id: string;
+      kind: "user-section";
+      userRow: Extract<MessagesTimelineRow, { kind: "message" }>;
+      contentRows: MessagesTimelineRow[];
+    };
+
+const TIMELINE_LIST_HEADER = <div className="h-px" />;
 const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 
 // Header row shown when older turns exist beyond the loaded window. Plain
@@ -187,6 +207,16 @@ function TimelineLoadEarlierHeader({
   );
 }
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
+const STICKY_USER_MESSAGE_SURFACE_STYLE = {
+  backgroundColor: "var(--chat-area-background, var(--background))",
+} as const;
+const STICKY_USER_MESSAGE_SHADOW_STYLE = {
+  backgroundColor: "rgb(0 0 0 / 0.16)",
+} as const;
+const STICKY_USER_MESSAGE_FADE_STYLE = {
+  background:
+    "linear-gradient(to bottom, rgb(from var(--chat-area-background, var(--background)) r g b / 1) 0%, rgb(from var(--chat-area-background, var(--background)) r g b / 0.78) 62%, rgb(from var(--chat-area-background, var(--background)) r g b / 0) 100%)",
+} as const;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
 const TIMELINE_MAINTAIN_SCROLL_AT_END = {
   animated: false,
@@ -227,6 +257,7 @@ interface MessagesTimelineProps {
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
+  onAnchorSizeChanged?: (messageId: MessageId, size: number) => void;
   contentInsetEndAdjustment: number;
   /**
    * Whether the timeline should keep pinning to the live edge as content
@@ -273,6 +304,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   skills = EMPTY_TIMELINE_SKILLS,
   anchorMessageId,
   onAnchorReady,
+  onAnchorSizeChanged,
   contentInsetEndAdjustment,
   liveFollowEnabled,
   onIsAtEndChange,
@@ -319,7 +351,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     });
   }, []);
 
-  const shouldRestoreVisibleContentPosition = useCallback((row: MessagesTimelineRow) => {
+  const shouldRestoreVisibleContentPosition = useCallback((row: TimelineRenderItem) => {
     const disclosureAnchorKey = disclosureAnchorKeyRef.current;
     return disclosureAnchorKey === null || row.id === disclosureAnchorKey;
   }, []);
@@ -419,7 +451,53 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     ],
   );
   const rows = useStableRows(rawRows);
-  const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
+  // Group each user message with the content rows that follow it, so the user
+  // message can stick within its own section (and get pushed away by the next
+  // section) instead of snapping between list-level sticky headers.
+  const renderedItems = useMemo<TimelineRenderItem[]>(() => {
+    const nextItems: TimelineRenderItem[] = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      if (!row) {
+        continue;
+      }
+
+      if (row.kind === "message" && row.message.role === "user") {
+        const contentRows: MessagesTimelineRow[] = [];
+        let cursor = index + 1;
+        while (cursor < rows.length) {
+          const nextRow = rows[cursor];
+          if (!nextRow) {
+            cursor += 1;
+            continue;
+          }
+          if (nextRow.kind === "message" && nextRow.message.role === "user") {
+            break;
+          }
+          contentRows.push(nextRow);
+          cursor += 1;
+        }
+
+        nextItems.push({
+          id: `user-section:${row.id}`,
+          kind: "user-section",
+          userRow: row,
+          contentRows,
+        });
+        index = cursor - 1;
+        continue;
+      }
+
+      nextItems.push({
+        id: row.id,
+        kind: "standalone-row",
+        row,
+      });
+    }
+    return nextItems;
+  }, [rows]);
+  const minimapItems = useMemo(() => deriveTimelineMinimapItems(renderedItems), [renderedItems]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
   );
@@ -433,12 +511,27 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     },
     [anchorMessageId, onAnchorReady],
   );
+
+  const handleAnchorSizeChanged = useCallback(
+    (size: number) => {
+      if (anchorMessageId !== null) {
+        onAnchorSizeChanged?.(anchorMessageId, size);
+      }
+    },
+    [anchorMessageId, onAnchorSizeChanged],
+  );
   const anchoredEndSpace = useMemo(() => {
-    const config = resolveChatListAnchoredEndSpace(rows, anchorMessageId, (row) =>
-      row.kind === "message" ? row.message.id : null,
+    const config = resolveChatListAnchoredEndSpace(renderedItems, anchorMessageId, (item) =>
+      item.kind === "user-section"
+        ? item.userRow.message.id
+        : item.row.kind === "message"
+          ? item.row.message.id
+          : null,
     );
-    return config ? { ...config, onReady: handleAnchorReady } : undefined;
-  }, [anchorMessageId, handleAnchorReady, rows]);
+    return config
+      ? { ...config, onReady: handleAnchorReady, onSizeChanged: handleAnchorSizeChanged }
+      : undefined;
+  }, [anchorMessageId, handleAnchorReady, handleAnchorSizeChanged, renderedItems]);
 
   const handleScroll = useCallback(() => {
     const state = listRef.current?.getState?.();
@@ -549,9 +642,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   // Stable renderItem — no closure deps. Row components read shared state
   // from TimelineRowCtx, which propagates through LegendList's memo.
   const renderItem = useCallback(
-    ({ item }: { item: MessagesTimelineRow }) => (
-      <div className="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">
-        <TimelineRowContent row={item} />
+    ({ item }: { item: TimelineRenderItem }) => (
+      <div
+        className={cn(
+          "mx-auto w-full min-w-0 max-w-3xl",
+          item.kind === "standalone-row" && "overflow-x-clip",
+        )}
+        data-timeline-root="true"
+      >
+        {item.kind === "standalone-row" ? (
+          <TimelineRowContent row={item.row} />
+        ) : (
+          <TimelineUserSection userRow={item.userRow} contentRows={item.contentRows} />
+        )}
       </div>
     ),
     [],
@@ -572,9 +675,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
         <div ref={setTimelineViewportElement} className="relative h-full min-h-0">
-          <LegendList<MessagesTimelineRow>
+          <LegendList<TimelineRenderItem>
             ref={listRef}
-            data={rows}
+            data={renderedItems}
             keyExtractor={keyExtractor}
             getItemType={getItemType}
             renderItem={renderItem}
@@ -629,12 +732,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
 });
 
-function keyExtractor(item: MessagesTimelineRow) {
+function keyExtractor(item: TimelineRenderItem) {
   return item.id;
 }
 
-function getItemType(item: MessagesTimelineRow) {
-  return item.kind === "message" ? `message:${item.message.role}` : item.kind;
+function getItemType(item: TimelineRenderItem) {
+  if (item.kind === "user-section") {
+    return "user-section";
+  }
+  return item.row.kind === "message" ? `message:${item.row.message.role}` : item.row.kind;
 }
 
 interface TimelineMinimapItem {
@@ -653,37 +759,30 @@ interface TimelinePositionState {
 }
 
 function deriveTimelineMinimapItems(
-  rows: ReadonlyArray<MessagesTimelineRow>,
+  items: ReadonlyArray<TimelineRenderItem>,
 ): TimelineMinimapItem[] {
-  const items: TimelineMinimapItem[] = [];
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    if (row?.kind !== "message" || row.message.role !== "user") {
+  const minimapItems: TimelineMinimapItem[] = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (item?.kind !== "user-section") {
       continue;
     }
 
-    items.push({
-      id: row.id,
+    minimapItems.push({
+      id: item.userRow.id,
       rowIndex: index,
-      userText: compactMinimapPreview(row.message.text),
-      assistantText: compactMinimapPreview(resolveFinalAssistantTextForTurn(rows, index)),
+      userText: compactMinimapPreview(item.userRow.message.text),
+      assistantText: compactMinimapPreview(resolveFinalAssistantTextForTurn(item.contentRows)),
     });
   }
-  return items;
+  return minimapItems;
 }
 
-function resolveFinalAssistantTextForTurn(
-  rows: ReadonlyArray<MessagesTimelineRow>,
-  userRowIndex: number,
-) {
+function resolveFinalAssistantTextForTurn(contentRows: ReadonlyArray<MessagesTimelineRow>) {
   let finalAssistantText: string | null = null;
-  for (let index = userRowIndex + 1; index < rows.length; index += 1) {
-    const row = rows[index];
-    if (row?.kind !== "message") {
+  for (const row of contentRows) {
+    if (row.kind !== "message") {
       continue;
-    }
-    if (row.message.role === "user") {
-      break;
     }
     if (row.message.role === "assistant") {
       finalAssistantText = row.message.text ?? null;
@@ -925,6 +1024,51 @@ type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
+const TimelineUserSection = memo(function TimelineUserSection({
+  userRow,
+  contentRows,
+}: {
+  userRow: Extract<TimelineRow, { kind: "message" }>;
+  contentRows: MessagesTimelineRow[];
+}) {
+  return (
+    <section className="relative">
+      <div data-sticky-user-message="true" className="sticky top-0 z-20 w-full py-2">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-2 inset-y-3 z-0 rounded-[26px] opacity-40 blur-xl sm:inset-x-4"
+          style={STICKY_USER_MESSAGE_SHADOW_STYLE}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 -inset-x-3 z-0 opacity-95 blur-lg sm:-inset-x-5"
+          style={STICKY_USER_MESSAGE_SURFACE_STYLE}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-[-0.75rem] bottom-[-1rem] z-0 h-12 opacity-90 blur-xl sm:-inset-x-5"
+          style={STICKY_USER_MESSAGE_FADE_STYLE}
+        />
+        <div
+          className="relative z-10"
+          data-timeline-row-id={userRow.id}
+          data-timeline-row-kind={userRow.kind}
+          data-message-id={userRow.message.id}
+          data-message-role={userRow.message.role}
+        >
+          <UserTimelineRow row={userRow} />
+        </div>
+      </div>
+
+      <div className="overflow-x-clip">
+        {contentRows.map((row) => (
+          <TimelineRowContent key={row.id} row={row} />
+        ))}
+      </div>
+    </section>
+  );
+});
+
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   return (
     <div
@@ -963,6 +1107,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
   const terminalContexts = displayedUserMessage.contexts;
+  const codeContexts = displayedUserMessage.codeContexts;
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
   let visibleText = displayedUserMessage.visibleText;
   while (true) {
@@ -981,8 +1126,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
 
   return (
-    <div className="group flex flex-col items-end gap-1">
-      <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
+    <div className="group flex flex-col items-end gap-1 px-0.5">
+      <div
+        className="relative w-full rounded-xl border border-border/80 bg-secondary/95 px-4 py-3 shadow-sm"
+        data-user-message-card="true"
+      >
         {regularImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {regularImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (
@@ -1036,24 +1184,37 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         <CollapsibleUserMessageBody
           text={elementContextState.promptText}
           terminalContexts={terminalContexts}
+          codeContexts={codeContexts}
           skills={ctx.skills}
           markdownCwd={ctx.markdownCwd}
         />
       </div>
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+      <div
+        className={cn(
+          "flex w-full items-center justify-end pe-1 tabular-nums opacity-0 focus-within:opacity-100 group-hover:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
-            <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+            <TooltipTrigger
+              render={<p className="text-ui-2xs text-muted-foreground/70 tabular-nums" />}
+            >
               {formatShortTimestamp(row.message.createdAt, ctx.timestampFormat)}
             </TooltipTrigger>
             <TooltipPopup>
               {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
             </TooltipPopup>
           </Tooltip>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1.5">
             {canRevertAgentWork && <RevertUserMessageButton messageId={row.message.id} />}
             {displayedUserMessage.copyText && (
-              <MessageCopyButton text={displayedUserMessage.copyText} variant="ghost" />
+              <MessageCopyButton
+                text={displayedUserMessage.copyText}
+                size="icon-xs"
+                variant="outline"
+                className={SUBTLE_MESSAGE_COPY_BUTTON_CLASS_NAME}
+              />
             )}
           </div>
         </div>
@@ -1072,8 +1233,9 @@ function RevertUserMessageButton({ messageId }: { messageId: MessageId }) {
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="outline"
+            className={SUBTLE_MESSAGE_COPY_BUTTON_CLASS_NAME}
             disabled={activity.isRevertingCheckpoint || activity.isWorking}
             onClick={() => ctx.onRevertUserMessage(messageId)}
             aria-label="Revert to this message"
@@ -1128,12 +1290,11 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
         {row.showAssistantMeta ? (
-          <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
-            <AssistantCopyButton row={row} />
+          <div className="mt-1.5 flex items-center gap-2 tabular-nums">
             {!row.message.streaming && (
               <Tooltip>
                 <TooltipTrigger
-                  render={<p className="text-muted-foreground text-xs tabular-nums" />}
+                  render={<p className="text-ui-2xs text-muted-foreground/30 tabular-nums" />}
                 >
                   {formatShortTimestamp(row.message.updatedAt, ctx.timestampFormat)}
                 </TooltipTrigger>
@@ -1142,6 +1303,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 </TooltipPopup>
               </Tooltip>
             )}
+            <AssistantCopyButton row={row} />
           </div>
         ) : null}
       </div>
@@ -1160,7 +1322,21 @@ function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "messa
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  return (
+    <div
+      className={cn(
+        "flex items-center opacity-0 focus-within:opacity-100 group-hover/assistant:opacity-100",
+        MICRO_FADE_MOTION_CLASS_NAME,
+      )}
+    >
+      <MessageCopyButton
+        text={assistantCopyState.text ?? ""}
+        size="icon-xs"
+        variant="outline"
+        className={SUBTLE_MESSAGE_COPY_BUTTON_CLASS_NAME}
+      />
+    </div>
+  );
 }
 
 function ProposedPlanTimelineRow({
@@ -1287,11 +1463,9 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
   const { workingStepLabel } = use(TimelineRowActivityCtx);
   return (
     <div className="py-0.5 pl-1.5">
-      <div className="flex min-w-0 items-center gap-2 pt-1 text-secondary-label text-[11px] tabular-nums">
-        <span className="inline-flex items-center gap-[3px]">
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse" />
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:200ms]" />
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:400ms]" />
+      <div className="text-ui-xs flex min-w-0 items-center gap-2 pt-1 text-muted-foreground/70 tabular-nums">
+        <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
+          <PixelGridLoader variant="chat" />
         </span>
         <span className="shrink-0">
           {row.createdAt ? (
@@ -1510,6 +1684,17 @@ const UserMessageTerminalContextInlineLabel = memo(
   },
 );
 
+const UserMessageCodeContextInlineLabel = memo(function UserMessageCodeContextInlineLabel(props: {
+  context: ParsedCodeContextEntry;
+}) {
+  const tooltipText =
+    props.context.body.length > 0
+      ? `${props.context.header}\n${props.context.body}`
+      : props.context.header;
+
+  return <CodeContextInlineChip selection={props.context} tooltipText={tooltipText} />;
+});
+
 const UserMessageElementContextChip = memo(function UserMessageElementContextChip(props: {
   context: ParsedElementContextEntry;
 }) {
@@ -1604,12 +1789,16 @@ function shouldCollapseUserMessage(text: string): boolean {
 const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(props: {
   text: string;
   terminalContexts: ParsedTerminalContextEntry[];
+  codeContexts: ParsedCodeContextEntry[];
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   markdownCwd: string | undefined;
   footer?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const hasVisibleBody = props.text.trim().length > 0 || props.terminalContexts.length > 0;
+  const hasVisibleBody =
+    props.text.trim().length > 0 ||
+    props.terminalContexts.length > 0 ||
+    props.codeContexts.length > 0;
   const canCollapse = hasVisibleBody && shouldCollapseUserMessage(props.text);
   const isCollapsed = canCollapse && !expanded;
 
@@ -1634,6 +1823,7 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
           <UserMessageBody
             text={props.text}
             terminalContexts={props.terminalContexts}
+            codeContexts={props.codeContexts}
             skills={props.skills}
             markdownCwd={props.markdownCwd}
           />
@@ -1672,6 +1862,7 @@ const CollapsibleUserMessageBody = memo(function CollapsibleUserMessageBody(prop
 const UserMessageBody = memo(function UserMessageBody(props: {
   text: string;
   terminalContexts: ParsedTerminalContextEntry[];
+  codeContexts: ParsedCodeContextEntry[];
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   markdownCwd: string | undefined;
 }) {
@@ -1729,39 +1920,77 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     );
   }
 
-  if (props.terminalContexts.length > 0) {
-    const hasEmbeddedInlineLabels = textContainsInlineTerminalContextLabels(
-      props.text,
-      props.terminalContexts,
-    );
-    const inlinePrefix = buildInlineTerminalContextText(props.terminalContexts);
+  if (props.terminalContexts.length > 0 || props.codeContexts.length > 0) {
+    const hasEmbeddedInlineLabels =
+      textContainsInlineTerminalContextLabels(props.text, props.terminalContexts) &&
+      textContainsInlineCodeContextLabels(props.text, props.codeContexts);
+    const inlinePrefix = [
+      buildInlineTerminalContextText(props.terminalContexts),
+      buildInlineCodeContextText(props.codeContexts),
+    ]
+      .filter((value) => value.length > 0)
+      .join(" ");
     const inlineNodes: ReactNode[] = [];
 
     if (hasEmbeddedInlineLabels) {
       let cursor = 0;
+      const remainingTerminalContexts = [...props.terminalContexts];
+      const remainingCodeContexts = [...props.codeContexts];
 
-      for (const context of props.terminalContexts) {
-        const label = formatInlineTerminalContextLabel(context.header);
-        const matchIndex = props.text.indexOf(label, cursor);
-        if (matchIndex === -1) {
+      while (remainingTerminalContexts.length > 0 || remainingCodeContexts.length > 0) {
+        const nextTerminalContext = remainingTerminalContexts[0];
+        const nextCodeContext = remainingCodeContexts[0];
+        const nextTerminalLabel = nextTerminalContext
+          ? formatInlineTerminalContextLabel(nextTerminalContext.header)
+          : null;
+        const nextCodeLabel = nextCodeContext
+          ? formatInlineCodeContextLabel(nextCodeContext)
+          : null;
+        const nextTerminalIndex =
+          nextTerminalLabel === null ? -1 : props.text.indexOf(nextTerminalLabel, cursor);
+        const nextCodeIndex =
+          nextCodeLabel === null ? -1 : props.text.indexOf(nextCodeLabel, cursor);
+
+        if (nextTerminalIndex === -1 && nextCodeIndex === -1) {
           inlineNodes.length = 0;
           break;
         }
+
+        const useTerminal =
+          nextTerminalIndex !== -1 && (nextCodeIndex === -1 || nextTerminalIndex <= nextCodeIndex);
+        const matchIndex = useTerminal ? nextTerminalIndex : nextCodeIndex;
+        const matchLabel = useTerminal ? nextTerminalLabel : nextCodeLabel;
+        const key = useTerminal
+          ? (nextTerminalContext?.header ?? `terminal:${cursor}`)
+          : `${nextCodeContext?.filePath ?? "code"}:${nextCodeContext?.lineStart ?? 0}:${nextCodeContext?.lineEnd ?? 0}`;
+
         if (matchIndex > cursor) {
           inlineNodes.push(
             renderInlineMarkdownSegment(
               props.text.slice(cursor, matchIndex),
-              `user-terminal-context-inline-before:${context.header}:${cursor}`,
+              `user-inline-context-before:${key}:${cursor}`,
             ),
           );
         }
         inlineNodes.push(
-          <UserMessageTerminalContextInlineLabel
-            key={`user-terminal-context-inline:${context.header}`}
-            context={context}
-          />,
+          useTerminal && nextTerminalContext ? (
+            <UserMessageTerminalContextInlineLabel
+              key={`user-terminal-context-inline:${key}`}
+              context={nextTerminalContext}
+            />
+          ) : nextCodeContext ? (
+            <UserMessageCodeContextInlineLabel
+              key={`user-code-context-inline:${key}`}
+              context={nextCodeContext}
+            />
+          ) : null,
         );
-        cursor = matchIndex + label.length;
+        cursor = matchIndex + (matchLabel?.length ?? 0);
+        if (useTerminal) {
+          remainingTerminalContexts.shift();
+        } else {
+          remainingCodeContexts.shift();
+        }
       }
 
       if (inlineNodes.length > 0) {
@@ -1769,7 +1998,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
           inlineNodes.push(
             renderInlineMarkdownSegment(
               props.text.slice(cursor),
-              `user-message-terminal-context-inline-rest:${cursor}`,
+              `user-message-inline-context-rest:${cursor}`,
             ),
           );
         }
@@ -1791,6 +2020,20 @@ const UserMessageBody = memo(function UserMessageBody(props: {
       );
       inlineNodes.push(
         <span key={`user-terminal-context-inline-space:${context.header}`} aria-hidden="true">
+          {" "}
+        </span>,
+      );
+    }
+    for (const context of props.codeContexts) {
+      const key = `${context.filePath}:${context.lineStart}:${context.lineEnd}`;
+      inlineNodes.push(
+        <UserMessageCodeContextInlineLabel
+          key={`user-code-context-inline:${key}`}
+          context={context}
+        />,
+      );
+      inlineNodes.push(
+        <span key={`user-code-context-inline-space:${key}`} aria-hidden="true">
           {" "}
         </span>,
       );

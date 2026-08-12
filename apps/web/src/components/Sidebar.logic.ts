@@ -48,7 +48,37 @@ type LogicalSidebarProject = SidebarProject & {
   }[];
 };
 
+type ReorderableSidebarProject = {
+  projectKey: string;
+  memberProjects: readonly {
+    physicalProjectKey: string;
+  }[];
+};
+
 export type ThreadTraversalDirection = "previous" | "next";
+
+export function resolveSidebarProjectReorder(
+  projects: readonly ReorderableSidebarProject[],
+  activeProjectKey: string,
+  targetProjectKey: string,
+): {
+  currentProjectOrder: readonly string[];
+  draggedProjectKeys: readonly string[];
+  targetProjectKeys: readonly string[];
+} | null {
+  if (activeProjectKey === targetProjectKey) return null;
+  const activeProject = projects.find((project) => project.projectKey === activeProjectKey);
+  const targetProject = projects.find((project) => project.projectKey === targetProjectKey);
+  if (!activeProject || !targetProject) return null;
+
+  return {
+    currentProjectOrder: projects.flatMap((project) =>
+      project.memberProjects.map((member) => member.physicalProjectKey),
+    ),
+    draggedProjectKeys: activeProject.memberProjects.map((member) => member.physicalProjectKey),
+    targetProjectKeys: targetProject.memberProjects.map((member) => member.physicalProjectKey),
+  };
+}
 
 export async function archiveSelectedThreadEntries<
   TEntry extends { readonly threadKey: string },
@@ -126,10 +156,20 @@ export interface ThreadStatusPill {
     | "Pending Approval"
     | "Awaiting Input"
     | "Plan Ready";
-  colorClass: string;
-  dotClass: string;
+  toneClass: string;
+  glyph: "grid" | "circle-alert" | "circle-question-mark" | "file-text" | "check-check";
   pulse: boolean;
 }
+
+const THREAD_STATUS_TONE_BY_LABEL: Record<ThreadStatusPill["label"], string> = {
+  "Pending Approval": "text-amber-600 dark:text-amber-300/90",
+  "Awaiting Input": "text-indigo-600 dark:text-indigo-300/90",
+  Working: "text-sky-600 dark:text-sky-300/80",
+  Monitoring: "text-sky-600 dark:text-sky-300/80",
+  Connecting: "text-sky-600 dark:text-sky-300/80",
+  "Plan Ready": "text-violet-600 dark:text-violet-300/90",
+  Completed: "text-emerald-600 dark:text-emerald-300/90",
+};
 
 // Rollup order mirrors the per-thread resolver exactly: attention states,
 // then active work, then the actionable plan prompt, then passive
@@ -394,53 +434,58 @@ export function resolveThreadRowClassName(input: {
   isSelected: boolean;
 }): string {
   const baseClassName =
-    "h-8 w-full translate-x-0 cursor-pointer justify-start rounded-md px-2 text-left text-sm select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+    "h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
 
   if (input.isSelected && input.isActive) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-active text-sidebar-foreground font-medium hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-primary/22 text-foreground font-medium hover:bg-primary/26 hover:text-foreground dark:bg-primary/30 dark:hover:bg-primary/36",
     );
   }
 
   if (input.isSelected) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-selected text-sidebar-foreground hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-primary/15 text-foreground hover:bg-primary/19 hover:text-foreground dark:bg-primary/22 dark:hover:bg-primary/28",
     );
   }
 
   if (input.isActive) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-active text-sidebar-foreground font-medium hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-accent/85 text-foreground font-medium hover:bg-accent hover:text-foreground dark:bg-accent/55 dark:hover:bg-accent/70",
     );
   }
 
-  return cn(
-    baseClassName,
-    "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-  );
+  return cn(baseClassName, "text-muted-foreground hover:bg-accent hover:text-foreground");
 }
 
 // ── Sidebar thread status model ─────────────────────────────────────
-// Five visual states, three colors: color is reserved for "act now"
-// (approval), "in motion" (working), and "broken" (failed). Ready is the
-// unlabeled resting state — the agent stopped and is waiting on the user,
-// whether it finished, asked a question, or proposed a plan.
+// Color is reserved for "act now" (approval, input, plan ready), "in
+// motion" (working), and "broken" (failed). Ready is the unlabeled resting
+// state — the agent stopped and is waiting on the user.
 // Unread completion is tracked separately: it describes whether a ready
 // thread needs attention, not what the thread is currently doing.
+// Fork: plan mode is live in Forma, so an actionable proposed plan gets its
+// own labeled state (upstream folds it into ready).
 export type SidebarThreadStatus =
   | "approval"
   | "input"
   | "working"
   | "monitoring"
   | "failed"
+  | "plan-ready"
   | "ready";
 
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
-  "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
+  | "hasPendingApprovals"
+  | "hasPendingUserInput"
+  | "session"
+  | "backgroundLiveness"
+  | "hasActionableProposedPlan"
+  | "interactionMode"
+  | "latestTurn"
 >;
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
@@ -457,6 +502,16 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   // see the failure, not a stale Working (review finding).
   if (thread.session?.status === "error") {
     return "failed";
+  }
+  // An actionable plan prompt outranks lingering background work, matching
+  // the legacy pill resolver: it needs the user's decision, while liveness
+  // merely reports.
+  if (
+    thread.interactionMode === "plan" &&
+    isLatestTurnSettled(thread.latestTurn, thread.session) &&
+    thread.hasActionableProposedPlan
+  ) {
+    return "plan-ready";
   }
   // Background work outlives the turn: fleets read as working; monitoring
   // only when watch loops are the sole live work.
@@ -614,8 +669,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.hasPendingApprovals) {
     return {
       label: "Pending Approval",
-      colorClass: "text-amber-600 dark:text-amber-300/90",
-      dotClass: "bg-amber-500 dark:bg-amber-300/90",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL["Pending Approval"],
+      glyph: "circle-alert",
       pulse: false,
     };
   }
@@ -623,8 +678,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.hasPendingUserInput) {
     return {
       label: "Awaiting Input",
-      colorClass: "text-indigo-600 dark:text-indigo-300/90",
-      dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL["Awaiting Input"],
+      glyph: "circle-question-mark",
       pulse: false,
     };
   }
@@ -632,8 +687,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.session?.status === "running") {
     return {
       label: "Working",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Working,
+      glyph: "grid",
       pulse: true,
     };
   }
@@ -641,8 +696,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.session?.status === "starting") {
     return {
       label: "Connecting",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Connecting,
+      glyph: "grid",
       pulse: true,
     };
   }
@@ -657,8 +712,8 @@ export function resolveThreadStatusPill(input: {
   if (hasPlanReadyPrompt) {
     return {
       label: "Plan Ready",
-      colorClass: "text-violet-600 dark:text-violet-300/90",
-      dotClass: "bg-violet-500 dark:bg-violet-300/90",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL["Plan Ready"],
+      glyph: "file-text",
       pulse: false,
     };
   }
@@ -670,8 +725,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.backgroundLiveness === "working") {
     return {
       label: "Working",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Working,
+      glyph: "grid",
       pulse: true,
     };
   }
@@ -679,8 +734,8 @@ export function resolveThreadStatusPill(input: {
   if (thread.backgroundLiveness === "monitoring") {
     return {
       label: "Monitoring",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Monitoring,
+      glyph: "grid",
       pulse: false,
     };
   }
@@ -688,8 +743,8 @@ export function resolveThreadStatusPill(input: {
   if (hasUnseenCompletion(thread)) {
     return {
       label: "Completed",
-      colorClass: "text-emerald-600 dark:text-emerald-300/90",
-      dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
+      toneClass: THREAD_STATUS_TONE_BY_LABEL.Completed,
+      glyph: "check-check",
       pulse: false,
     };
   }

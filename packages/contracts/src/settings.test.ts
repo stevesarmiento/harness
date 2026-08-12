@@ -67,27 +67,49 @@ describe("ClientSettings environment identification", () => {
   });
 });
 
+describe("ClientSettings app icon", () => {
+  it("defaults to the build-specific icon", () => {
+    expect(decodeClientSettings({}).appIcon).toBe("default");
+  });
+
+  it.each(["forma-arc", "forma-fluted", "forma-foil", "forma-blueprint"] as const)(
+    "accepts %s",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe(appIcon);
+      expect(decodeClientSettingsPatch({ appIcon }).appIcon).toBe(appIcon);
+    },
+  );
+
+  it.each(["forma-prod", "forma-dev", "forma-nightly"] as const)(
+    "normalizes the legacy %s build icon to default",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe("default");
+    },
+  );
+});
+
 describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar with a three-day auto-settle threshold", () => {
+  // Fork: the Forma sidebar is the legacy implementation and stays the default.
+  it("defaults to the Forma (legacy) sidebar with a three-day auto-settle threshold", () => {
     const settings = decodeClientSettings({});
-    expect(settings.legacySidebarEnabled).toBe(false);
+    expect(settings.legacySidebarEnabled).toBe(true);
     expect(settings.sidebarAutoSettleAfterDays).toBe(3);
   });
 
-  it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
+  it("drops the retired sidebar v2 beta keys, resetting everyone to the Forma default", () => {
     const decoded = decodeClientSettings({
       sidebarV2Enabled: false,
       sidebarV2ConfiguredByUser: true,
     });
-    expect(decoded.legacySidebarEnabled).toBe(false);
+    expect(decoded.legacySidebarEnabled).toBe(true);
     expect(decoded).not.toHaveProperty("sidebarV2Enabled");
     expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
   });
 
-  it("preserves an explicit legacy sidebar opt-in", () => {
-    expect(decodeClientSettings({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(true);
-    expect(decodeClientSettingsPatch({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(
-      true,
+  it("preserves an explicit sidebar v2 opt-out of the legacy sidebar", () => {
+    expect(decodeClientSettings({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(
+      false,
     );
   });
 
@@ -100,6 +122,26 @@ describe("ClientSettings sidebar", () => {
   it.each([-1, 0, 91])("rejects an auto-settle threshold outside 1..90: %s", (value) => {
     expect(() => decodeClientSettings({ sidebarAutoSettleAfterDays: value })).toThrow();
     expect(() => decodeClientSettingsPatch({ sidebarAutoSettleAfterDays: value })).toThrow();
+  });
+});
+
+describe("ClientSettings thread cleanup", () => {
+  it("defaults cleanup to one inactive day", () => {
+    expect(decodeClientSettings({}).threadCleanupInactiveDays).toBe(1);
+  });
+
+  it.each([1, 3, 7, 14, 30] as const)("accepts the %s day cleanup window", (value) => {
+    expect(
+      decodeClientSettings({ threadCleanupInactiveDays: value }).threadCleanupInactiveDays,
+    ).toBe(value);
+    expect(
+      decodeClientSettingsPatch({ threadCleanupInactiveDays: value }).threadCleanupInactiveDays,
+    ).toBe(value);
+  });
+
+  it.each([0, 2, 31])("rejects an unsupported cleanup window: %s", (value) => {
+    expect(() => decodeClientSettings({ threadCleanupInactiveDays: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ threadCleanupInactiveDays: value })).toThrow();
   });
 });
 

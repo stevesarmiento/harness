@@ -20,6 +20,8 @@ export const RIGHT_PANEL_KINDS = [
   "file",
   "preview",
   "terminal",
+  // Fork: component preview harness surface (distinct from webview "preview").
+  "componentPreview",
   "pull-request",
   "agents",
 ] as const;
@@ -38,6 +40,7 @@ export type RightPanelSurface =
     }
   | { id: "diff"; kind: "diff" }
   | { id: "files"; kind: "files" }
+  | { id: "componentPreview"; kind: "componentPreview" }
   | {
       id: `file:${string}`;
       kind: "file";
@@ -104,6 +107,17 @@ interface RightPanelStoreState {
   closeAllSurfaces: (ref: ScopedThreadRef) => void;
   reconcileBrowserSurfaces: (ref: ScopedThreadRef, tabIds: readonly string[]) => void;
   reconcileFileSurfaces: (ref: ScopedThreadRef, workspaceAvailable: boolean) => void;
+  renameFileSurfaces: (
+    ref: ScopedThreadRef,
+    fromRelativePath: string,
+    toRelativePath: string,
+    kind: "file" | "directory",
+  ) => void;
+  removeFileSurfaces: (
+    ref: ScopedThreadRef,
+    relativePath: string,
+    kind: "file" | "directory",
+  ) => void;
   show: (ref: ScopedThreadRef) => void;
   close: (ref: ScopedThreadRef) => void;
   toggleVisibility: (ref: ScopedThreadRef) => void;
@@ -128,6 +142,8 @@ const singletonSurface = (
       return { id: "diff", kind };
     case "files":
       return { id: "files", kind };
+    case "componentPreview":
+      return { id: "componentPreview", kind };
     case "agents":
       return { id: "agents", kind };
   }
@@ -567,6 +583,58 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               isOpen: surfaces.length > 0 ? current.isOpen : false,
               surfaces,
               activeSurfaceId: activeStillExists
+                ? current.activeSurfaceId
+                : (surfaces.at(-1)?.id ?? null),
+            };
+          }),
+        })),
+      renameFileSurfaces: (ref, fromRelativePath, toRelativePath, kind) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) => {
+            const matches = (relativePath: string) =>
+              relativePath === fromRelativePath ||
+              (kind === "directory" && relativePath.startsWith(`${fromRelativePath}/`));
+            const renamePath = (relativePath: string) =>
+              relativePath === fromRelativePath
+                ? toRelativePath
+                : `${toRelativePath}${relativePath.slice(fromRelativePath.length)}`;
+            const renamedActiveSurfaceId =
+              current.activeSurfaceId?.startsWith("file:") &&
+              matches(current.activeSurfaceId.slice("file:".length))
+                ? `file:${renamePath(current.activeSurfaceId.slice("file:".length))}`
+                : current.activeSurfaceId;
+            const surfaces = current.surfaces.flatMap<RightPanelSurface>((surface) => {
+              if (surface.kind !== "file" || !matches(surface.relativePath)) return [surface];
+              const relativePath = renamePath(surface.relativePath);
+              return [{ ...surface, id: `file:${relativePath}`, relativePath }];
+            });
+            const deduped = surfaces.filter(
+              (surface, index) =>
+                surfaces.findIndex((candidate) => candidate.id === surface.id) === index,
+            );
+            return {
+              ...current,
+              surfaces: deduped,
+              activeSurfaceId: deduped.some((surface) => surface.id === renamedActiveSurfaceId)
+                ? renamedActiveSurfaceId
+                : (deduped.at(-1)?.id ?? null),
+            };
+          }),
+        })),
+      removeFileSurfaces: (ref, relativePath, kind) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) => {
+            const removed = (surface: RightPanelSurface) =>
+              surface.kind === "file" &&
+              (surface.relativePath === relativePath ||
+                (kind === "directory" && surface.relativePath.startsWith(`${relativePath}/`)));
+            const surfaces = current.surfaces.filter((surface) => !removed(surface));
+            if (surfaces.length === current.surfaces.length) return current;
+            return {
+              ...current,
+              isOpen: surfaces.length > 0 && current.isOpen,
+              surfaces,
+              activeSurfaceId: surfaces.some((surface) => surface.id === current.activeSurfaceId)
                 ? current.activeSurfaceId
                 : (surfaces.at(-1)?.id ?? null),
             };

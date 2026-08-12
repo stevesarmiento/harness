@@ -1,64 +1,10 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-vi.mock("~/hooks/useSettings", () => ({
-  useEnvironmentIdentificationMode: () => "none",
-}));
-vi.mock("../SidebarStageBackdrop", () => ({
-  StageBackdropButtonArt: () => null,
-  useSidebarStageBackdropVariant: () => null,
-}));
-
-import { ComposerPrimaryActions, formatPendingPrimaryActionLabel } from "./ComposerPrimaryActions";
-
-function renderPendingActions(isRunning: boolean) {
-  return renderToStaticMarkup(
-    createElement(ComposerPrimaryActions, {
-      compact: true,
-      pendingAction: {
-        questionIndex: 0,
-        isLastQuestion: true,
-        canAdvance: true,
-        isResponding: false,
-        isComplete: true,
-      },
-      isRunning,
-      showPlanFollowUpPrompt: false,
-      promptHasText: false,
-      isSendBusy: false,
-      sendDisabledReason: null,
-      isConnecting: false,
-      isEnvironmentUnavailable: false,
-      isPreparingWorktree: false,
-      hasSendableContent: false,
-      onPreviousPendingQuestion: () => {},
-      onInterrupt: () => {},
-      onImplementPlanInNewThread: () => {},
-    }),
-  );
-}
-
-function renderStandaloneStop() {
-  return renderToStaticMarkup(
-    createElement(ComposerPrimaryActions, {
-      compact: true,
-      pendingAction: null,
-      isRunning: true,
-      showPlanFollowUpPrompt: false,
-      promptHasText: false,
-      isSendBusy: false,
-      sendDisabledReason: null,
-      isConnecting: false,
-      isEnvironmentUnavailable: false,
-      isPreparingWorktree: false,
-      hasSendableContent: false,
-      onPreviousPendingQuestion: () => {},
-      onInterrupt: () => {},
-      onImplementPlanInNewThread: () => {},
-    }),
-  );
-}
+import {
+  formatPendingPrimaryActionLabel,
+  resolveComposerPrimaryAction,
+  shouldBlockComposerSubmit,
+} from "./ComposerPrimaryActions";
 
 describe("formatPendingPrimaryActionLabel", () => {
   it("returns 'Submitting...' while responding", () => {
@@ -150,18 +96,105 @@ describe("formatPendingPrimaryActionLabel", () => {
   });
 });
 
-describe("ComposerPrimaryActions", () => {
-  it("offers Stop generation while a running turn is waiting for user input", () => {
-    expect(renderPendingActions(true)).toContain('aria-label="Stop generation"');
+describe("resolveComposerPrimaryAction", () => {
+  const idle = {
+    isRunning: false,
+    queueStatus: "idle" as const,
+    isSendBusy: false,
+    sendDisabledReason: null,
+    isConnecting: false,
+    isEnvironmentUnavailable: false,
+    isPreparingWorktree: false,
+    hasSendableContent: true,
+  };
+
+  it("sends when idle with content", () => {
+    expect(resolveComposerPrimaryAction(idle)).toEqual({
+      kind: "send",
+      label: "Send message",
+      disabled: false,
+    });
   });
 
-  it("does not offer Stop generation for a pending request without a running turn", () => {
-    expect(renderPendingActions(false)).not.toContain('aria-label="Stop generation"');
+  it("queues when a turn is running and the composer has content", () => {
+    expect(resolveComposerPrimaryAction({ ...idle, isRunning: true })).toEqual({
+      kind: "queue",
+      label: "Add to queue",
+      disabled: false,
+    });
   });
 
-  it("matches the small pending action size without changing the standalone size", () => {
-    expect(renderPendingActions(true)).toContain("size-8 sm:size-7");
-    expect(renderStandaloneStop()).toContain("size-8 sm:h-8 sm:w-8");
-    expect(renderStandaloneStop()).not.toContain("sm:size-7");
+  it("interrupts when a turn is running and the composer is empty", () => {
+    expect(
+      resolveComposerPrimaryAction({
+        ...idle,
+        isRunning: true,
+        hasSendableContent: false,
+      }),
+    ).toEqual({
+      kind: "interrupt",
+      label: "Interrupt turn",
+      disabled: false,
+    });
+  });
+
+  it("keeps queue intent visible for queued and paused states", () => {
+    expect(resolveComposerPrimaryAction({ ...idle, queueStatus: "queued" }).kind).toBe("queue");
+    expect(resolveComposerPrimaryAction({ ...idle, queueStatus: "paused" }).kind).toBe("queue");
+  });
+
+  it("reports connection and worktree preparation states", () => {
+    expect(resolveComposerPrimaryAction({ ...idle, isConnecting: true })).toMatchObject({
+      kind: "busy",
+      label: "Connecting",
+      disabled: true,
+    });
+    expect(resolveComposerPrimaryAction({ ...idle, isPreparingWorktree: true })).toMatchObject({
+      kind: "busy",
+      label: "Preparing worktree",
+      disabled: true,
+    });
+  });
+
+  it("preserves explicit disabled reasons", () => {
+    expect(
+      resolveComposerPrimaryAction({
+        ...idle,
+        sendDisabledReason: "Messages loading",
+      }),
+    ).toEqual({
+      kind: "disabled",
+      label: "Messages loading",
+      disabled: true,
+    });
+  });
+});
+
+describe("shouldBlockComposerSubmit", () => {
+  it("does not apply ordinary send gates while advancing pending questions", () => {
+    expect(
+      shouldBlockComposerSubmit({
+        hasPendingAction: true,
+        noProviderAvailable: true,
+        isSendDisabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps provider and loading gates for ordinary messages", () => {
+    expect(
+      shouldBlockComposerSubmit({
+        hasPendingAction: false,
+        noProviderAvailable: true,
+        isSendDisabled: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldBlockComposerSubmit({
+        hasPendingAction: false,
+        noProviderAvailable: false,
+        isSendDisabled: true,
+      }),
+    ).toBe(true);
   });
 });

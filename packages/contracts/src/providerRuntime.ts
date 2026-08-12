@@ -101,6 +101,15 @@ const RuntimeErrorClass = Schema.Literals([
 ]);
 export type RuntimeErrorClass = typeof RuntimeErrorClass.Type;
 
+const RuntimeWarningClassification = Schema.Literals([
+  "retry",
+  "rate-limit",
+  "overloaded",
+  "auth",
+  "generic",
+]);
+export type RuntimeWarningClassification = typeof RuntimeWarningClassification.Type;
+
 export const TOOL_LIFECYCLE_ITEM_TYPES = [
   "command_execution",
   "file_change",
@@ -766,6 +775,9 @@ export type ToolDeniedPayload = typeof ToolDeniedPayload.Type;
 const RuntimeWarningPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
   detail: Schema.optional(Schema.Unknown),
+  classification: Schema.optional(RuntimeWarningClassification),
+  retryAt: Schema.optional(IsoDateTime),
+  retryDelayMs: Schema.optional(NonNegativeInt),
 });
 export type RuntimeWarningPayload = typeof RuntimeWarningPayload.Type;
 

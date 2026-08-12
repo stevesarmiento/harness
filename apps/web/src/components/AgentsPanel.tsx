@@ -22,7 +22,8 @@ import {
   formatSubagentTokenCount,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { Bot, Braces, Check, ChevronDown, ChevronRight, X } from "lucide-react";
+import { Braces, Check, ChevronDown, ChevronRight, X } from "lucide-react";
+import { AgentsSurfaceIcon } from "./icons/custom";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
@@ -530,7 +531,7 @@ export function AgentsPanel({
   if (!model.hasAgents) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-        <Bot aria-hidden className="size-6 text-muted-foreground/60" />
+        <AgentsSurfaceIcon aria-hidden className="size-6 text-muted-foreground/60" />
         <p className="text-sm font-medium">No agents yet</p>
         <p className="max-w-56 text-xs text-muted-foreground">
           When this thread spawns subagents or runs a workflow, they show up here with live status,

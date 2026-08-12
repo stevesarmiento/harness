@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { isElectron } from "~/env";
-import { useResizableWidth } from "~/hooks/useResizableWidth";
+import { useResizableWidth, type ResizableWidthHandlers } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 
 import { RightPanelResizeHandle } from "./RightPanelResizeHandle";
@@ -18,14 +18,41 @@ export function getPreviewPanelMaxWidth(viewportWidth: number): number {
   return Math.floor(viewportWidth * PREVIEW_PANEL_MAX_WIDTH_FRACTION);
 }
 
+export interface InlinePanelResizable {
+  readonly width: number;
+  readonly handlers: ResizableWidthHandlers;
+}
+
+/**
+ * Width state for the inline right panel. Hoisted out of PreviewPanelShell so
+ * the chrome header's tab-strip zone (rendered by ChatView) can share the
+ * exact width of the panel below it and the two stay aligned during drags.
+ */
+export function useInlinePanelWidth(options?: {
+  storageKey?: string;
+  defaultWidth?: number;
+}): InlinePanelResizable {
+  const maxWidth = useViewportClampedMaxWidth();
+  return useResizableWidth({
+    storageKey: options?.storageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
+    defaultWidth: options?.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
+    minWidth: PREVIEW_PANEL_MIN_WIDTH,
+    maxWidth,
+    edge: "left",
+  });
+}
+
 /**
  * Shell for the preview panel. In inline mode the panel is user-resizable
- * via a drag handle on the left edge; width persists per browser. In
+ * via a drag handle on the left edge; width persists per browser. The parent
+ * may own that width state (via useInlinePanelWidth) when it also renders
+ * width-synced chrome; otherwise the shell manages it internally. In
  * sheet/sidebar modes the parent owns the size.
  */
 export function PreviewPanelShell(props: {
   mode: PreviewPanelMode;
   maximized?: boolean;
+  inlineResizable?: InlinePanelResizable;
   /**
    * Overrides the localStorage key used to persist the panel width. Callers
    * embedding this shell for a different surface (e.g. the pull requests
@@ -39,24 +66,19 @@ export function PreviewPanelShell(props: {
 }) {
   const useDragRegion = isElectron && props.mode !== "sheet" && props.mode !== "embedded";
   const isInline = props.mode === "inline";
-  const maxWidth = useViewportClampedMaxWidth();
-  const { width, handlers } = useResizableWidth({
-    storageKey: props.widthStorageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
-    defaultWidth: props.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
-    minWidth: PREVIEW_PANEL_MIN_WIDTH,
-    maxWidth,
-    edge: "left",
+  const internalResizable = useInlinePanelWidth({
+    ...(props.widthStorageKey !== undefined ? { storageKey: props.widthStorageKey } : {}),
+    ...(props.defaultWidth !== undefined ? { defaultWidth: props.defaultWidth } : {}),
   });
+  const { width, handlers } = props.inlineResizable ?? internalResizable;
 
   return (
     <div
       className={cn(
         "relative flex h-full min-h-0 min-w-0 flex-col self-stretch bg-background",
-        isInline
-          ? props.maximized
-            ? "flex-1 border-l border-border"
-            : "shrink-0 border-l border-border"
-          : "w-full",
+        // No border-l when maximized: the chat column collapses to zero width,
+        // so the divider would paint as a stray line at the card's left edge.
+        isInline ? (props.maximized ? "flex-1" : "shrink-0 border-l border-border") : "w-full",
       )}
       style={isInline && !props.maximized ? { width: `${width}px` } : undefined}
       data-preview-panel-mode={props.mode}

@@ -8,6 +8,7 @@ export * from "./desktopBootstrap.ts";
 export * from "./remoteAccess.ts";
 export * from "./ipc.ts";
 export * from "./terminal.ts";
+export * from "./threadExtensions.ts";
 export * from "./provider.ts";
 export * from "./providerInstance.ts";
 export * from "./providerRuntime.ts";
@@ -15,6 +16,8 @@ export * from "./model.ts";
 export * from "./keybindings.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
+// Fork: project-local agents (Forma feature)
+export * from "./localAgents.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";
 export * from "./sourceControl.ts";
@@ -28,6 +31,8 @@ export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
+// Fork: component preview harness (Forma feature, distinct from webview preview)
+export * from "./componentPreview.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./rpc.ts";

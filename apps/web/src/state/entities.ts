@@ -241,6 +241,13 @@ export function readEnvironmentSupportsSnooze(environmentId: EnvironmentId): boo
   );
 }
 
+export function readEnvironmentSupportsThreadExtensions(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadExtensions === true
+  );
+}
+
 /** Whether the environment's server understands thread.pin/unpin.
     Same version-skew contract as settlement. */
 export function readEnvironmentSupportsPinning(environmentId: EnvironmentId): boolean {

@@ -10,6 +10,17 @@ import { checkpointRefForThreadTurn } from "./Utils.ts";
 import * as CheckpointDiffQuery from "./CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./CheckpointStore.ts";
 import { CheckpointThreadNotFoundError } from "./Errors.ts";
+import { CheckpointDiffBlobRepository } from "../persistence/Services/CheckpointDiffBlobs.ts";
+
+const CheckpointDiffBlobRepositoryTest = Layer.succeed(CheckpointDiffBlobRepository, {
+  upsert: () => Effect.void,
+  get: () => Effect.succeed(Option.none()),
+  deleteByThreadId: () => Effect.void,
+  deleteAfterTurn: () => Effect.void,
+});
+const CheckpointDiffQueryTestLayer = CheckpointDiffQuery.layer.pipe(
+  Layer.provide(CheckpointDiffBlobRepositoryTest),
+);
 
 function makeThreadCheckpointContext(input: {
   readonly projectId: ProjectId;
@@ -71,7 +82,7 @@ describe("CheckpointDiffQuery.layer", () => {
         deleteCheckpointRefs: () => Effect.void,
       };
 
-      const layer = CheckpointDiffQuery.layer.pipe(
+      const layer = CheckpointDiffQueryTestLayer.pipe(
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -180,7 +191,7 @@ describe("CheckpointDiffQuery.layer", () => {
         deleteCheckpointRefs: () => Effect.void,
       };
 
-      const layer = CheckpointDiffQuery.layer.pipe(
+      const layer = CheckpointDiffQueryTestLayer.pipe(
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -264,7 +275,7 @@ describe("CheckpointDiffQuery.layer", () => {
         deleteCheckpointRefs: () => Effect.void,
       };
 
-      const layer = CheckpointDiffQuery.layer.pipe(
+      const layer = CheckpointDiffQueryTestLayer.pipe(
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -333,7 +344,7 @@ describe("CheckpointDiffQuery.layer", () => {
         deleteCheckpointRefs: () => Effect.void,
       };
 
-      const layer = CheckpointDiffQuery.layer.pipe(
+      const layer = CheckpointDiffQueryTestLayer.pipe(
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -387,7 +398,7 @@ describe("CheckpointDiffQuery.layer", () => {
         deleteCheckpointRefs: () => Effect.void,
       };
 
-      const layer = CheckpointDiffQuery.layer.pipe(
+      const layer = CheckpointDiffQueryTestLayer.pipe(
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {

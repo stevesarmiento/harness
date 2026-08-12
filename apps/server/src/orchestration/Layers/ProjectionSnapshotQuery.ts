@@ -11,6 +11,7 @@ import {
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
+  ProjectComponentPreviewWorkspaceRecord,
   ProjectScript,
   TurnId,
   type OrchestrationCheckpointSummary,
@@ -73,6 +74,9 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    componentPreviewWorkspaceRecords: Schema.fromJsonString(
+      Schema.Array(ProjectComponentPreviewWorkspaceRecord),
+    ),
   }),
 );
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
@@ -319,6 +323,7 @@ function mapProjectShellRow(
     defaultThreadEnvMode: row.defaultThreadEnvMode,
     faviconPath: row.faviconPath ?? null,
     scripts: row.scripts,
+    componentPreviewWorkspaceRecords: row.componentPreviewWorkspaceRecords,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -396,6 +401,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          preview_workspace_records_json AS "componentPreviewWorkspaceRecords",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -851,6 +857,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          preview_workspace_records_json AS "componentPreviewWorkspaceRecords",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -875,6 +882,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          preview_workspace_records_json AS "componentPreviewWorkspaceRecords",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -1553,6 +1561,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 defaultThreadEnvMode: row.defaultThreadEnvMode,
                 faviconPath: row.faviconPath ?? null,
                 scripts: row.scripts,
+                componentPreviewWorkspaceRecords: row.componentPreviewWorkspaceRecords,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 deletedAt: row.deletedAt,
@@ -1684,6 +1693,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   defaultThreadEnvMode: row.defaultThreadEnvMode,
                   faviconPath: row.faviconPath ?? null,
                   scripts: row.scripts,
+                  componentPreviewWorkspaceRecords: row.componentPreviewWorkspaceRecords,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   deletedAt: row.deletedAt,
@@ -2177,6 +2187,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     defaultThreadEnvMode: option.value.defaultThreadEnvMode,
                     faviconPath: option.value.faviconPath ?? null,
                     scripts: option.value.scripts,
+                    componentPreviewWorkspaceRecords: option.value.componentPreviewWorkspaceRecords,
                     createdAt: option.value.createdAt,
                     updatedAt: option.value.updatedAt,
                     deletedAt: option.value.deletedAt,

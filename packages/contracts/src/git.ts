@@ -149,6 +149,11 @@ export const GitPullRequestRefInput = Schema.Struct({
 });
 export type GitPullRequestRefInput = typeof GitPullRequestRefInput.Type;
 
+export const GitListOpenPullRequestsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitListOpenPullRequestsInput = typeof GitListOpenPullRequestsInput.Type;
+
 export const GitPreparePullRequestThreadInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   reference: GitPullRequestReference,
@@ -198,7 +203,6 @@ const VcsStatusChangeRequest = Schema.Struct({
   headRef: TrimmedNonEmptyStringSchema,
   state: VcsStatusChangeRequestState,
 });
-
 const VcsStatusLocalShape = {
   isRepo: Schema.Boolean,
   sourceControlProvider: Schema.optional(SourceControlProviderInfo),
@@ -271,6 +275,11 @@ export const GitResolvePullRequestResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,
 });
 export type GitResolvePullRequestResult = typeof GitResolvePullRequestResult.Type;
+
+export const GitListOpenPullRequestsResult = Schema.Struct({
+  pullRequests: Schema.Array(VcsStatusChangeRequest),
+});
+export type GitListOpenPullRequestsResult = typeof GitListOpenPullRequestsResult.Type;
 
 export const GitPreparePullRequestThreadResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,

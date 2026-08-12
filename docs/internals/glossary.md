@@ -2,12 +2,13 @@
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-This is a living glossary for T3 Code. It explains what common terms mean in this codebase.
+This is a living glossary for Forma. It explains what common terms mean in this codebase.
 
 ## Table of contents
 
 - [Project and workspace](#project-and-workspace)
 - [Thread timeline](#thread-timeline)
+- [Forma extensions](#forma-extensions)
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
 - [Checkpointing](#checkpointing)
@@ -37,6 +38,28 @@ The main durable unit of conversation and workspace history. In [the orchestrati
 #### Turn
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
+
+### Forma extensions
+
+#### Thread extension state
+
+Server-authoritative, Forma-only state associated with a thread. It contains
+the Ask override and persistent turn-queue status, but is intentionally absent
+from the required upstream thread snapshot. Forma web and desktop read it
+through extension RPCs; the official mobile client continues to decode an
+ordinary v0.0.31 thread.
+
+#### Turn queue
+
+A persistent FIFO of prompts waiting for a thread to settle. Promotion happens
+only after provider, checkpoint, diff, and settlement barriers are complete.
+Queue state is not streamed through the standard thread subscription.
+
+#### Component preview
+
+A project component harness, such as Storybook, managed by Forma’s component
+preview runtime. It is separate from Browser Preview: each has its own
+right-panel surface, RPC namespace, lifecycle, and project-scoped state.
 
 #### Activity
 

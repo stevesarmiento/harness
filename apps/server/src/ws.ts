@@ -36,7 +36,11 @@ import {
   type ProjectFileFailure,
   type ProjectFileOperation,
   ProjectListEntriesError,
+  ProjectCreateDirectoryError,
+  ProjectDeleteEntryError,
+  ProjectFileVersionConflictError,
   ProjectReadFileError,
+  ProjectRenameEntryError,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
@@ -51,6 +55,7 @@ import {
   RpcClientId,
   EnvironmentAuthorizationError,
   ThreadId,
+  ThreadExtensionError,
   type TerminalAttachStreamEvent,
   type TerminalError,
   type TerminalEvent,
@@ -87,6 +92,7 @@ import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
+import * as ComponentPreviewManager from "./componentPreview/Services/ComponentPreviewManager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
@@ -98,6 +104,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import { ProjectAgentInventory } from "./project/Services/ProjectAgentInventory.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -105,6 +112,7 @@ import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
+import { ThreadExtensionService } from "./threadExtensions/ThreadExtensionService.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
@@ -124,6 +132,10 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isProjectFileVersionConflictError = Schema.is(ProjectFileVersionConflictError);
+const isProjectCreateDirectoryError = Schema.is(ProjectCreateDirectoryError);
+const isProjectRenameEntryError = Schema.is(ProjectRenameEntryError);
+const isProjectDeleteEntryError = Schema.is(ProjectDeleteEntryError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const EDITOR_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -199,6 +211,15 @@ function projectEntriesFailureContext(error: WorkspaceEntries.WorkspaceEntriesEr
         normalizedCwd: error.cwd,
         detail: error.reason,
       };
+    // Protected paths behave as hidden: report the workspace root as not
+    // found instead of widening the `ProjectEntriesFailure` wire union, which
+    // older clients could not decode.
+    case "WorkspaceEntriesProtectedPathError":
+      return {
+        failure: "workspace_root_not_found",
+        normalizedCwd: error.path,
+        detail: "Path is protected by Forma safety settings.",
+      };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -216,6 +237,10 @@ function filesystemBrowseFailureContext(error: WorkspaceEntries.WorkspaceEntries
       return { failure: "current_project_required" };
     case "WorkspaceEntriesReadDirectoryError":
       return { failure: "read_directory_failed", parentPath: error.parentPath };
+    // Reported as a read failure to avoid widening the wire union; the
+    // parent path names the protected location.
+    case "WorkspaceEntriesProtectedPathError":
+      return { failure: "read_directory_failed", parentPath: error.path };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -252,6 +277,10 @@ function projectFileFailureContext(
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
     case "WorkspaceBinaryFileError":
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
+    // Reported as a generic operation failure to avoid widening the
+    // `ProjectFileFailure` wire union that older clients decode.
+    case "WorkspaceProtectedPathError":
+      return { failure: "operation_failed", resolvedPath: error.resolvedPath };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -359,6 +388,7 @@ const makeWsRpcLayer = (
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+      const threadExtensions = yield* ThreadExtensionService;
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
@@ -367,6 +397,7 @@ const makeWsRpcLayer = (
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
       const terminalManager = yield* TerminalManager.TerminalManager;
       const previewManager = yield* PreviewManager.PreviewManager;
+      const componentPreviewManager = yield* ComponentPreviewManager.ComponentPreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
@@ -377,6 +408,7 @@ const makeWsRpcLayer = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+      const projectAgentInventory = yield* ProjectAgentInventory;
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
@@ -412,6 +444,61 @@ const makeWsRpcLayer = (
       const pullRequests = yield* PullRequestService.PullRequestService;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
+      // Fork: keybinding commands added after upstream v0.0.31 break clients whose
+      // decoders predate upstream #5055 (forward-compatible config unions) — the
+      // official mobile app fails the ENTIRE initial config on one unknown command
+      // literal and drops the connection in a loop. Until fixed clients are the
+      // norm, send mobile sessions only the upstream-v0.0.31 command set.
+      const LEGACY_SAFE_KEYBINDING_COMMANDS: ReadonlySet<string> = new Set([
+        "sidebar.toggle",
+        "terminal.toggle",
+        "terminal.split",
+        "terminal.splitVertical",
+        "terminal.new",
+        "terminal.close",
+        "rightPanel.toggle",
+        "diff.toggle",
+        "preview.toggle",
+        "preview.refresh",
+        "preview.focusUrl",
+        "preview.zoomIn",
+        "preview.zoomOut",
+        "preview.resetZoom",
+        "commandPalette.toggle",
+        "composer.stash",
+        "chat.new",
+        "chat.newLocal",
+        "editor.openFavorite",
+        "modelPicker.toggle",
+        "thread.previous",
+        "thread.next",
+      ]);
+      const isLegacySafeKeybindingCommand = (command: string): boolean =>
+        LEGACY_SAFE_KEYBINDING_COMMANDS.has(command) ||
+        (command.startsWith("script.") && command.endsWith(".run"));
+      const currentSessionUsesLegacyConfigDecoder = sessions.listActive().pipe(
+        Effect.map((clientSessions) =>
+          clientSessions.some(
+            (clientSession) =>
+              clientSession.sessionId === currentSessionId &&
+              clientSession.client.deviceType === "mobile",
+          ),
+        ),
+        Effect.orElseSucceed(() => false),
+      );
+      const filterKeybindingsForSession = Effect.fn("ws.filterKeybindingsForSession")(function* <
+        Payload extends {
+          readonly keybindings: ReadonlyArray<{ readonly command: string }>;
+        },
+      >(payload: Payload) {
+        if (!(yield* currentSessionUsesLegacyConfigDecoder)) return payload;
+        return {
+          ...payload,
+          keybindings: payload.keybindings.filter((rule) =>
+            isLegacySafeKeybindingCommand(rule.command),
+          ),
+        };
+      });
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
@@ -991,7 +1078,9 @@ const makeWsRpcLayer = (
       };
 
       const loadServerConfig = Effect.gen(function* () {
-        const keybindingsConfig = yield* keybindings.loadConfigState;
+        const keybindingsConfig = yield* keybindings.loadConfigState.pipe(
+          Effect.flatMap(filterKeybindingsForSession),
+        );
         const providers = yield* providerRegistry.getProviders;
         const settings = ServerSettings.redactServerSettingsForClient(
           yield* serverSettings.getSettings,
@@ -1033,11 +1122,105 @@ const makeWsRpcLayer = (
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
+        [WS_METHODS.threadExtensionsGet]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsGet,
+            threadExtensions.getState(input.threadId),
+          ),
+        [WS_METHODS.threadExtensionsSetInteractionMode]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsSetInteractionMode,
+            threadExtensions.setInteractionMode(input.threadId, input.mode),
+          ),
+        [WS_METHODS.threadExtensionsEnqueueTurn]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsEnqueueTurn,
+            Effect.gen(function* () {
+              const normalized = yield* normalizeDispatchCommand({
+                type: "thread.turn.start",
+                commandId: CommandId.make(`extension:enqueue:${yield* crypto.randomUUIDv4}`),
+                threadId: input.threadId,
+                message: {
+                  messageId: input.message.messageId,
+                  role: "user",
+                  text: input.message.text,
+                  attachments: input.message.attachments,
+                },
+                ...(input.modelSelection === undefined
+                  ? {}
+                  : { modelSelection: input.modelSelection }),
+                ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
+                runtimeMode: input.runtimeMode,
+                interactionMode: input.interactionMode,
+                ...(input.askOverride === undefined ? {} : { askOverride: input.askOverride }),
+                ...(input.sourceProposedPlan === undefined
+                  ? {}
+                  : { sourceProposedPlan: input.sourceProposedPlan }),
+                createdAt: input.createdAt,
+              });
+              if (normalized.type !== "thread.turn.start") {
+                return yield* new ThreadExtensionError({
+                  threadId: input.threadId,
+                  message: "The queued turn could not be normalized.",
+                });
+              }
+              return yield* threadExtensions.enqueueNormalizedTurn(input, normalized);
+            }).pipe(
+              Effect.mapError((cause) =>
+                Schema.is(ThreadExtensionError)(cause)
+                  ? cause
+                  : new ThreadExtensionError({
+                      threadId: input.threadId,
+                      message: "Failed to enqueue the turn.",
+                      cause,
+                    }),
+              ),
+            ),
+          ),
+        [WS_METHODS.threadExtensionsRemoveQueuedTurn]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsRemoveQueuedTurn,
+            threadExtensions.removeQueuedTurn(input.threadId, input.messageId),
+          ),
+        [WS_METHODS.threadExtensionsResumeQueue]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsResumeQueue,
+            threadExtensions.resumeQueue(input.threadId),
+          ),
+        [WS_METHODS.threadExtensionsFork]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadExtensionsFork,
+            threadExtensions.forkThread(input.sourceThreadId),
+          ),
+        [WS_METHODS.subscribeThreadExtensions]: (input) =>
+          observeRpcStreamEffect(
+            WS_METHODS.subscribeThreadExtensions,
+            Effect.succeed(threadExtensions.subscribe(input.threadId)),
+          ),
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
               const normalizedCommand = yield* normalizeDispatchCommand(command);
+              if (normalizedCommand.type === "thread.turn.start") {
+                // Best-effort fork bookkeeping: interaction-mode extension state must never
+                // fail an upstream turn dispatch (official mobile clients don't know about it).
+                yield* threadExtensions
+                  .setInteractionMode(
+                    normalizedCommand.threadId,
+                    normalizedCommand.askOverride === true
+                      ? "ask"
+                      : normalizedCommand.interactionMode,
+                  )
+                  .pipe(
+                    Effect.catchCause((cause) =>
+                      Effect.logWarning("failed to record thread interaction mode extension", {
+                        threadId: normalizedCommand.threadId,
+                        cause,
+                      }),
+                    ),
+                  );
+              }
               // Archive and settle both mean "done with this thread", so a
               // live provider session must not keep running background work
               // (PR monitors, dev servers, subagent fleets) after either
@@ -1792,15 +1975,78 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.projectsWriteFile,
             workspaceFileSystem.writeFile(input).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ProjectWriteFileError({
-                    cwd: input.cwd,
-                    relativePath: input.relativePath,
-                    ...projectFileFailureContext(cause),
-                    cause,
-                  }),
+              Effect.mapError((cause) => {
+                if (isProjectFileVersionConflictError(cause)) {
+                  return cause;
+                }
+                return new ProjectWriteFileError({
+                  cwd: input.cwd,
+                  relativePath: input.relativePath,
+                  ...projectFileFailureContext(cause),
+                  cause,
+                });
+              }),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsLocalAgentInventory]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsLocalAgentInventory,
+            projectAgentInventory.getInventory(input.cwd),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsCreateDirectory]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsCreateDirectory,
+            workspaceFileSystem.createDirectory(input).pipe(
+              Effect.mapError((cause) =>
+                isProjectCreateDirectoryError(cause)
+                  ? cause
+                  : new ProjectCreateDirectoryError({
+                      cwd: input.cwd,
+                      relativePath: input.relativePath,
+                      message: `Failed to create workspace directory '${input.relativePath}'.`,
+                      cause,
+                    }),
               ),
+              Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsRenameEntry]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsRenameEntry,
+            workspaceFileSystem.renameEntry(input).pipe(
+              Effect.mapError((cause) =>
+                isProjectRenameEntryError(cause)
+                  ? cause
+                  : new ProjectRenameEntryError({
+                      cwd: input.cwd,
+                      fromRelativePath: input.fromRelativePath,
+                      toRelativePath: input.toRelativePath,
+                      message: `Failed to rename workspace entry '${input.fromRelativePath}'.`,
+                      cause,
+                    }),
+              ),
+              Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsDeleteEntry]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsDeleteEntry,
+            workspaceFileSystem.deleteEntry(input).pipe(
+              Effect.mapError((cause) =>
+                isProjectDeleteEntryError(cause)
+                  ? cause
+                  : new ProjectDeleteEntryError({
+                      cwd: input.cwd,
+                      relativePath: input.relativePath,
+                      message: `Failed to delete workspace entry '${input.relativePath}'.`,
+                      cause,
+                    }),
+              ),
+              Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
             ),
             { "rpc.aggregate": "workspace" },
           ),
@@ -1953,6 +2199,12 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "git",
             },
+          ),
+        [WS_METHODS.gitListOpenPullRequests]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gitListOpenPullRequests,
+            gitWorkflow.listOpenPullRequests(input),
+            { "rpc.aggregate": "git" },
           ),
         [WS_METHODS.gitPreparePullRequestThread]: (input) =>
           observeRpcEffect(
@@ -2115,6 +2367,66 @@ const makeWsRpcLayer = (
           observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
             "rpc.aggregate": "preview",
           }),
+        [WS_METHODS.componentPreviewInspectProject]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewInspectProject,
+            componentPreviewManager.inspectProject(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewSearchComponents]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewSearchComponents,
+            componentPreviewManager.searchComponents(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewResolveTarget]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewResolveTarget,
+            componentPreviewManager.resolveTarget(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewPrepareBootstrapThread]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewPrepareBootstrapThread,
+            componentPreviewManager.prepareBootstrapThread(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewPrepareGenerationTurn]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewPrepareGenerationTurn,
+            componentPreviewManager.prepareGenerationTurn(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewPrepareRepairTurn]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewPrepareRepairTurn,
+            componentPreviewManager.prepareRepairTurn(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewEnsureRuntime]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewEnsureRuntime,
+            componentPreviewManager.ensureRuntime(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewIssueAccessToken]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewIssueAccessToken,
+            componentPreviewManager.issueAccessToken(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.componentPreviewStopRuntime]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.componentPreviewStopRuntime,
+            componentPreviewManager.stopRuntime(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
+        [WS_METHODS.subscribeComponentPreviewProject]: (input) =>
+          observeRpcStream(
+            WS_METHODS.subscribeComponentPreviewProject,
+            componentPreviewManager.streamProject(input),
+            { "rpc.aggregate": "component-preview" },
+          ),
         [WS_METHODS.subscribeDiscoveredLocalServers]: (_input) =>
           observeRpcStream(
             WS_METHODS.subscribeDiscoveredLocalServers,
@@ -2142,6 +2454,7 @@ const makeWsRpcLayer = (
             WS_METHODS.subscribeServerConfig,
             Effect.gen(function* () {
               const keybindingsUpdates = keybindings.streamChanges.pipe(
+                Stream.mapEffect(filterKeybindingsForSession),
                 Stream.map((event) => ({
                   version: 1 as const,
                   type: "keybindingsUpdated" as const,

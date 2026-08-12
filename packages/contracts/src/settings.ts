@@ -33,6 +33,11 @@ export const SidebarProjectGroupingMode = Schema.Literals([
 ]);
 export type SidebarProjectGroupingMode = typeof SidebarProjectGroupingMode.Type;
 export const DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE: SidebarProjectGroupingMode = "repository";
+
+export const ThreadCleanupInactiveDays = Schema.Literals([1, 3, 7, 14, 30]);
+export type ThreadCleanupInactiveDays = typeof ThreadCleanupInactiveDays.Type;
+export const DEFAULT_THREAD_CLEANUP_INACTIVE_DAYS: ThreadCleanupInactiveDays = 1;
+
 export const MIN_SIDEBAR_THREAD_PREVIEW_COUNT = 1;
 export const MAX_SIDEBAR_THREAD_PREVIEW_COUNT = 15;
 export const SidebarThreadPreviewCount = Schema.Int.check(
@@ -110,10 +115,44 @@ export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationM
  */
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
+const AppIconPreference = Schema.Literals([
+  "default",
+  "forma-arc",
+  "forma-fluted",
+  "forma-foil",
+  "forma-blueprint",
+]);
+const LegacyBuildAppIconId = Schema.Literals(["forma-prod", "forma-dev", "forma-nightly"]);
+export const AppIconId = Schema.Union([AppIconPreference, LegacyBuildAppIconId]).pipe(
+  Schema.decodeTo(
+    AppIconPreference,
+    SchemaTransformation.transformOrFail({
+      decode: (value) =>
+        Effect.succeed(
+          value === "forma-prod" || value === "forma-dev" || value === "forma-nightly"
+            ? "default"
+            : value,
+        ),
+      encode: Effect.succeed,
+    }),
+  ),
+);
+export type AppIconId = typeof AppIconId.Type;
+export const DEFAULT_APP_ICON_ID: AppIconId = "default";
 
 export const ClientSettingsSchema = Schema.Struct({
+  appIcon: AppIconId.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_APP_ICON_ID))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Thread-attention notifications (Forma). Named "desktop" for storage
+  // compatibility with existing Forma clients; the web app also uses these to
+  // gate browser Notification API alerts.
+  desktopNotifyOnApprovalRequests: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  desktopNotifyOnUserInputRequests: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -176,7 +215,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // (was `sidebarV2Enabled` + `sidebarV2ConfiguredByUser`): decoding drops the
   // old keys, so everyone, including prior beta opt-outs, resets to the new
   // default sidebar.
-  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Fork: Forma's project-grouped sidebar (LegacySidebar) stays the default;
+  // sidebar v2 is an explicit opt-out of it.
+  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
@@ -195,6 +236,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
+  ),
+  threadCleanupInactiveDays: ThreadCleanupInactiveDays.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_CLEANUP_INACTIVE_DAYS)),
   ),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
@@ -477,6 +521,13 @@ export const ObservabilitySettings = Schema.Struct({
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
 
+export const SafetySettings = Schema.Struct({
+  protectedFilesystemPathsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+});
+export type SafetySettings = typeof SafetySettings.Type;
+
 export const SourceControlWritingStyleMode = Schema.Literals([
   "repo_conventions",
   "conventional_commits",
@@ -611,6 +662,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  safety: SafetySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -737,6 +789,11 @@ export const ServerSettingsPatch = Schema.Struct({
       otlpMetricsUrl: Schema.optionalKey(TrimmedString),
     }),
   ),
+  safety: Schema.optionalKey(
+    Schema.Struct({
+      protectedFilesystemPathsEnabled: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   providers: Schema.optionalKey(
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),
@@ -755,8 +812,11 @@ export const ServerSettingsPatch = Schema.Struct({
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  appIcon: Schema.optionalKey(AppIconId),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
+  desktopNotifyOnApprovalRequests: Schema.optionalKey(Schema.Boolean),
+  desktopNotifyOnUserInputRequests: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
@@ -800,6 +860,7 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
+  threadCleanupInactiveDays: Schema.optionalKey(ThreadCleanupInactiveDays),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });

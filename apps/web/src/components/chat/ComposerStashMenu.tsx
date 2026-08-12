@@ -1,4 +1,4 @@
-import { BookmarkIcon, XIcon } from "lucide-react";
+import { IconBookmark as BookmarkIcon, IconXmark as XIcon } from "symbols-react";
 import { memo, useEffect, useState } from "react";
 
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -6,6 +6,10 @@ import { cn } from "~/lib/utils";
 import { type PromptStashEntry } from "../../promptStashStore";
 import { Command, CommandGroup, CommandGroupLabel, CommandItem, CommandList } from "../ui/command";
 import { Button } from "../ui/button";
+import {
+  composerPopoverLabelClassName,
+  composerPopoverSurfaceClassName,
+} from "./composerPopoverStyles";
 
 const SNIPPET_MAX_CHARS = 90;
 
@@ -91,15 +95,17 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
 
   return (
     <Command autoHighlight={false} mode="none">
-      <div className="dropdown-glass relative w-full overflow-hidden rounded-[20px]">
+      <div className={cn(composerPopoverSurfaceClassName, "w-full")}>
         <CommandList className="max-h-72">
           <CommandGroup>
-            <CommandGroupLabel className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary-label">
+            <CommandGroupLabel
+              className={cn(composerPopoverLabelClassName, "flex items-center gap-1.5")}
+            >
               <BookmarkIcon className="size-3" aria-hidden="true" />
               Stashed prompts
             </CommandGroupLabel>
             {entries.length === 0 ? (
-              <p className="px-3 pb-3 pt-1 text-secondary-label text-xs">
+              <p className="px-3 pb-3 pt-1 text-muted-foreground/70 text-xs">
                 Nothing stashed yet. Press ⌘S with a prompt in the composer to stash it.
               </p>
             ) : (
@@ -108,8 +114,8 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   key={entry.id}
                   value={entry.id}
                   className={cn(
-                    "group/stash cursor-pointer select-none gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
-                    highlightedId === entry.id && "bg-accent! text-accent-foreground!",
+                    "group/stash mx-1 cursor-pointer select-none gap-2 rounded-lg px-2.5 py-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
+                    highlightedId === entry.id && "bg-accent/85! text-accent-foreground!",
                   )}
                   onMouseMove={() => {
                     if (highlightedId !== entry.id) setHighlightedId(entry.id);
@@ -134,23 +140,23 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                       ))}
                     </span>
                   ) : (
-                    <BookmarkIcon className="size-4 shrink-0 text-icon-muted" />
+                    <BookmarkIcon className="size-4 shrink-0 text-muted-foreground/60" />
                   )}
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {stashEntrySnippet(entry)}
                   </span>
                   {entry.pendingImageCount ? (
-                    <span className="shrink-0 text-[10px] text-secondary-label">
+                    <span className="shrink-0 text-[10px] text-muted-foreground/60">
                       saving {entry.pendingImageCount} image
                       {entry.pendingImageCount === 1 ? "" : "s"}…
                     </span>
                   ) : missingImageCount(entry) > 0 ? (
-                    <span className="shrink-0 text-[10px] text-warning-foreground">
+                    <span className="shrink-0 text-[10px] text-amber-600">
                       {missingImageCount(entry)} image
                       {missingImageCount(entry) === 1 ? "" : "s"} dropped
                     </span>
                   ) : null}
-                  <span className="shrink-0 text-secondary-label text-xs">
+                  <span className="shrink-0 text-muted-foreground/60 text-xs">
                     {formatRelativeTimeLabel(entry.createdAt)}
                   </span>
                   <Button
@@ -163,7 +169,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                       onDelete(entry);
                     }}
                   >
-                    <XIcon />
+                    <XIcon className="size-3" />
                   </Button>
                 </CommandItem>
               ))

@@ -16,6 +16,8 @@ import {
   GitActionProgressEvent,
   GitActionProgressPhase,
   GitCommandError,
+  type GitListOpenPullRequestsInput,
+  type GitListOpenPullRequestsResult,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
@@ -57,6 +59,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
+import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
 
@@ -93,6 +96,9 @@ export class GitManager extends Context.Service<
     readonly resolvePullRequest: (
       input: GitPullRequestRefInput,
     ) => Effect.Effect<GitResolvePullRequestResult, GitManagerServiceError>;
+    readonly listOpenPullRequests: (
+      input: GitListOpenPullRequestsInput,
+    ) => Effect.Effect<GitListOpenPullRequestsResult, GitManagerServiceError>;
     readonly preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
@@ -594,6 +600,7 @@ function toPullRequestHeadRemoteInfo(pr: {
 export const make = Effect.gen(function* () {
   const gitCore = yield* GitVcsDriver.GitVcsDriver;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
+  const gitHubCli = yield* GitHubCli.GitHubCli;
   const textGeneration = yield* TextGeneration.TextGeneration;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
@@ -1798,6 +1805,57 @@ export const make = Effect.gen(function* () {
     return { pullRequest };
   });
 
+  const listOpenPullRequests: GitManager["Service"]["listOpenPullRequests"] = Effect.fn(
+    "listOpenPullRequests",
+  )(function* (input) {
+    // Only surface the current user's PRs in the overview; without this,
+    // upstream repos with many fork contributors drown the list.
+    const listAuthoredByMe = (repo?: string) =>
+      gitHubCli.listOpenPullRequests({
+        cwd: input.cwd,
+        author: "@me",
+        limit: 20,
+        ...(repo ? { repo } : {}),
+      });
+
+    const pullRequests = yield* listAuthoredByMe().pipe(
+      Effect.mapError(
+        (cause) =>
+          new GitManagerError({
+            operation: "listOpenPullRequests",
+            cwd: input.cwd,
+            detail: cause.detail,
+            cause,
+          }),
+      ),
+    );
+
+    // On forks, gh resolves the default repo to the upstream, so the query
+    // above misses PRs opened on the fork itself. Probe origin as well and
+    // dedupe; when origin IS the default repo the extra query is a no-op.
+    const originRepository = parseGitHubRepositoryNameWithOwnerFromRemoteUrl(
+      yield* readConfigValueNullable(input.cwd, "remote.origin.url"),
+    );
+    const originPullRequests = originRepository
+      ? yield* listAuthoredByMe(originRepository).pipe(Effect.orElseSucceed(() => []))
+      : [];
+
+    const pullRequestsByUrl = new Map(
+      [...pullRequests, ...originPullRequests].map((pullRequest) => [pullRequest.url, pullRequest]),
+    );
+
+    return {
+      pullRequests: Array.from(pullRequestsByUrl.values(), (pullRequest) => ({
+        number: pullRequest.number,
+        title: pullRequest.title,
+        url: pullRequest.url,
+        baseRef: pullRequest.baseRefName,
+        headRef: pullRequest.headRefName,
+        state: pullRequest.state ?? "open",
+      })),
+    };
+  });
+
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
   )(function* (input) {
@@ -2314,6 +2372,7 @@ export const make = Effect.gen(function* () {
     invalidateLocalStatus,
     invalidateRemoteStatus,
     invalidateStatus,
+    listOpenPullRequests,
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,

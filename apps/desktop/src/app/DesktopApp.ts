@@ -12,6 +12,7 @@ import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
+import * as DesktopAppIcon from "./DesktopAppIcon.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
@@ -128,7 +129,7 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
-      "T3 Code failed to start",
+      "Forma failed to start",
       `Stage: ${stage}\n${message}${detail}`,
     );
   }
@@ -220,6 +221,7 @@ const bootstrap = Effect.gen(function* () {
 
 const startup = Effect.gen(function* () {
   const appIdentity = yield* DesktopAppIdentity.DesktopAppIdentity;
+  const appIcon = yield* DesktopAppIcon.DesktopAppIcon;
   const applicationMenu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
   const electronApp = yield* ElectronApp.ElectronApp;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
@@ -269,6 +271,7 @@ const startup = Effect.gen(function* () {
   }
 
   yield* appIdentity.configure;
+  yield* appIcon.applyStored;
   yield* lifecycle.register;
   yield* clerk.configure;
 

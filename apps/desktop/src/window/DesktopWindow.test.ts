@@ -37,6 +37,7 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
@@ -97,6 +98,7 @@ function makeFakeBrowserWindow() {
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
     setAutoHideCursor: vi.fn(),
+    setWindowButtonVisibility: vi.fn(),
     setTitle: vi.fn(),
     setTitleBarOverlay: vi.fn(),
     show: vi.fn(),
@@ -117,6 +119,7 @@ function makeFakeBrowserWindow() {
     reload: webContents.reload,
     send: webContents.send,
     setAutoHideCursor: window.setAutoHideCursor,
+    setWindowButtonVisibility: window.setWindowButtonVisibility,
     webContentsListeners,
     windowListeners,
   };
@@ -129,6 +132,7 @@ const desktopAssetsLayer = Layer.succeed(DesktopAssets.DesktopAssets, {
     png: Option.none<string>(),
   }),
   resolveResourcePath: () => Effect.succeed(Option.none<string>()),
+  resolveAppIconPath: () => Effect.succeed(Option.none<string>()),
 } satisfies DesktopAssets.DesktopAssets["Service"]);
 
 const desktopServerExposureLayer = Layer.succeed(DesktopServerExposure.DesktopServerExposure, {
@@ -246,6 +250,7 @@ function makeTestLayer(input: {
         desktopAssetsLayer,
         desktopEnvironmentLayer,
         desktopAppSettingsLayer,
+        DesktopClientSettings.layerTest(),
         desktopServerExposureLayer,
         DesktopState.layer,
         electronMenuLayer,
@@ -345,6 +350,7 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
           desktopAssetsLayer,
           desktopEnvironmentLayer,
           DesktopAppSettings.layerTest(),
+          DesktopClientSettings.layerTest(),
           desktopServerExposureLayer,
           electronMenuLayer,
           Layer.succeed(ElectronShell.ElectronShell, {
@@ -430,8 +436,11 @@ describe("DesktopWindow", () => {
         assert.isUndefined(createdWindowOptions[0]?.x);
         assert.isUndefined(createdWindowOptions[0]?.y);
         assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
+        assert.equal(createdWindowOptions[0]?.titleBarStyle, "hidden");
+        assert.isUndefined(createdWindowOptions[0]?.trafficLightPosition);
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
+        assert.deepEqual(fakeWindow.setWindowButtonVisibility.mock.calls, [[false]]);
         assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));

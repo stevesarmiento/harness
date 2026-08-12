@@ -18,6 +18,14 @@ function renderSidebarButton(className?: string) {
   );
 }
 
+function renderSidebarTrigger(defaultOpen = true) {
+  return renderToStaticMarkup(
+    <SidebarProvider defaultOpen={defaultOpen}>
+      <SidebarTrigger />
+    </SidebarProvider>,
+  );
+}
+
 describe("sidebar interactive cursors", () => {
   it("uses mobile sheet visibility for the shared responsive state", () => {
     expect(resolveSidebarState({ isMobile: true, open: true, openMobile: false })).toBe(
@@ -63,7 +71,8 @@ describe("sidebar interactive cursors", () => {
     expect(html).toContain("cursor-pointer");
     expect(html).toContain("gap-[var(--sidebar-control-gap)]");
     expect(html).toContain("text-[var(--sidebar-icon-color)]");
-    expect(html).not.toContain("[&amp;&gt;svg]:opacity-60");
+    // Fork: Forma keeps the sidebar icon opacity ramp.
+    expect(html).toContain("[&amp;&gt;svg]:opacity-60");
   });
 
   it("applies the shared default treatment to icon-only menu buttons", () => {
@@ -107,5 +116,21 @@ describe("sidebar interactive cursors", () => {
 
     expect(html).toContain('data-slot="sidebar-menu-sub-button"');
     expect(html).toContain("cursor-pointer");
+  });
+});
+
+describe("SidebarTrigger", () => {
+  it("uses a collapse label and title when the desktop sidebar is open", () => {
+    const html = renderSidebarTrigger();
+
+    expect(html).toContain('aria-label="Collapse sidebar"');
+    expect(html).toContain('title="Collapse sidebar"');
+  });
+
+  it("uses an open label and title when the desktop sidebar is collapsed", () => {
+    const html = renderSidebarTrigger(false);
+
+    expect(html).toContain('aria-label="Open sidebar"');
+    expect(html).toContain('title="Open sidebar"');
   });
 });

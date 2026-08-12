@@ -164,6 +164,8 @@ beforeAll(async () => {
     documentElement: {
       classList,
       offsetHeight: 0,
+      dataset: {},
+      style: { setProperty: () => {}, backgroundColor: "" },
     },
   });
 
@@ -461,7 +463,8 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
-    expect(markup).toContain("rounded-2xl bg-message p-3");
+    // Forma user-message card styling.
+    expect(markup).toContain("rounded-xl border border-border/80 bg-secondary/95 px-4 py-3");
   });
 
   it("renders inline terminal labels with the composer chip UI", () => {
@@ -485,7 +488,9 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("Terminal 1 lines 1-5");
-    expect(markup).toContain("lucide-terminal");
+    // The chip renders symbols-react's IconAppleTerminal (not lucide), so
+    // assert on the chip icon's styling classes instead of a lucide class.
+    expect(markup).toContain("shrink-0 opacity-85 size-3.5 fill-current");
     expect(markup).toContain("yoo what&#x27;s</p>");
     expect(markup).toContain('<span aria-hidden="true"> </span>');
     expect(markup).toContain("Show full message");

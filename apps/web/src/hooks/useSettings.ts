@@ -26,12 +26,6 @@ import {
 } from "@t3tools/contracts/settings";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import { ensureLocalApi } from "~/localApi";
-import {
-  getThemeDefinition,
-  getThemePreviewSidebarArtwork,
-  resolveThemeHalf,
-  subscribeToThemePreview,
-} from "~/themePalette";
 import * as Struct from "effect/Struct";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { usePrimaryEnvironment } from "~/state/environments";
@@ -246,26 +240,14 @@ export function resolveEnvironmentIdentificationMode(input: {
 export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMode {
   const settingsHydrated = useClientSettingsHydrated();
   const mode = useClientSettingsValue().environmentIdentificationMode;
-  const { resolvedTheme, theme, themeHalves } = useTheme();
-  const previewSidebarArtwork = useSyncExternalStore(
-    subscribeToThemePreview,
-    getThemePreviewSidebarArtwork,
-    () => null,
-  );
-  const activeTheme = resolveThemeHalf(theme, themeHalves, resolvedTheme);
-  const activeThemeDefinition = getThemeDefinition(activeTheme);
-  return resolveEnvironmentIdentificationMode({
-    mode,
-    settingsHydrated,
-    paletteThemeActive: previewSidebarArtwork !== null || activeThemeDefinition !== null,
-    paletteThemeAllowsArtwork:
-      previewSidebarArtwork ?? activeThemeDefinition?.sidebarArtwork === true,
-  });
+  // Fork: no palette-theme library, so stage artwork never needs suppressing.
+  return resolveEnvironmentIdentificationMode({ mode, settingsHydrated });
 }
 
 /**
  * Whether the legacy sidebar (Settings → General → Legacy features) replaces
- * the default one.
+ * the default one. Fork: the Forma sidebar is the legacy implementation and it
+ * is the default — the schema default is `true` and hydration holds it on.
  *
  * Held at the default sidebar until client settings hydrate: the pre-hydration
  * snapshot is just the schema defaults, so resolving against it could mount one
@@ -275,7 +257,7 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
 export function useLegacySidebarEnabled(): boolean {
   const settingsHydrated = useClientSettingsHydrated();
   const legacySidebarEnabled = useClientSettingsValue().legacySidebarEnabled;
-  return settingsHydrated && legacySidebarEnabled;
+  return settingsHydrated ? legacySidebarEnabled : true;
 }
 
 /** Read current settings for one environment, merged with client-local preferences. */

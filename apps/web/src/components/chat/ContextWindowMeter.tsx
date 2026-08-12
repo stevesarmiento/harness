@@ -14,9 +14,11 @@ function formatPercentage(value: number | null): string | null {
 
 export function ContextWindowMeter(props: {
   usage: ContextWindowSnapshot;
+  variant?: "icon" | "labeled";
   providerDisplayName?: string | null;
 }) {
   const { usage, providerDisplayName } = props;
+  const variant = props.variant ?? "icon";
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;
@@ -26,8 +28,12 @@ export function ContextWindowMeter(props: {
   const showTotalProcessed = totalProcessedTokens !== null && totalProcessedTokens > 0;
   const isOverloaded = normalizedPercentage > 90;
   const usageColor = isOverloaded
-    ? "var(--color-error)"
-    : "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)";
+    ? "var(--color-red-500)"
+    : variant === "labeled"
+      ? "var(--color-primary)"
+      : "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)";
+  const visibleLabel = usedPercentage ?? formatContextWindowTokens(usage.usedTokens);
+  const isLabeled = variant === "labeled";
 
   return (
     <Popover>
@@ -39,7 +45,8 @@ export function ContextWindowMeter(props: {
           <button
             type="button"
             className={cn(
-              "inline-flex size-7 cursor-pointer items-center justify-center rounded-full border border-transparent text-muted-foreground outline-none transition-colors",
+              "inline-flex cursor-pointer items-center justify-center border border-transparent text-muted-foreground outline-none transition-colors",
+              isLabeled ? "h-7 gap-1 rounded-md px-1.5" : "size-7 rounded-full",
               "hover:bg-accent data-[pressed]:bg-accent",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             )}
@@ -49,7 +56,12 @@ export function ContextWindowMeter(props: {
                 : `Context window ${formatContextWindowTokens(usage.usedTokens)} tokens used`
             }
           >
-            <span className="relative flex size-5 items-center justify-center">
+            <span
+              className={cn(
+                "relative flex items-center justify-center",
+                isLabeled ? "size-5" : "size-6",
+              )}
+            >
               <svg
                 viewBox="0 0 24 24"
                 className="-rotate-90 absolute inset-0 size-full transform-gpu"
@@ -73,10 +85,20 @@ export function ContextWindowMeter(props: {
                   strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={dashOffset}
-                  className="transition-[stroke-dashoffset,stroke] duration-500 ease-out motion-reduce:transition-none"
+                  className="transition-[stroke-dashoffset,stroke] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-out)] motion-reduce:transition-none"
                 />
               </svg>
+              {!isLabeled ? (
+                <span className="relative flex size-[15px] items-center justify-center rounded-full bg-background text-[8px] font-medium text-muted-foreground">
+                  {usage.usedPercentage !== null
+                    ? Math.round(usage.usedPercentage)
+                    : formatContextWindowTokens(usage.usedTokens)}
+                </span>
+              ) : null}
             </span>
+            {isLabeled ? (
+              <span className="text-xs tabular-nums text-muted-foreground">{visibleLabel}</span>
+            ) : null}
           </button>
         }
       />
@@ -91,7 +113,7 @@ export function ContextWindowMeter(props: {
           <div className="flex items-center justify-between gap-3">
             <div className="font-medium text-muted-foreground text-xs">Context Window</div>
             {usage.maxTokens !== null && usedPercentage ? (
-              <div className="text-secondary-label text-[11px] tabular-nums">
+              <div className="text-[11px] tabular-nums text-muted-foreground/70">
                 <span>{usedPercentage}</span>
                 <span className="mx-1">·</span>
                 <span>
@@ -100,7 +122,7 @@ export function ContextWindowMeter(props: {
                 </span>
               </div>
             ) : (
-              <div className="text-secondary-label text-[11px] tabular-nums">
+              <div className="text-[11px] tabular-nums text-muted-foreground/70">
                 {formatContextWindowTokens(usage.usedTokens)}
               </div>
             )}
@@ -115,21 +137,21 @@ export function ContextWindowMeter(props: {
               aria-label="Context window usage"
             >
               <div
-                className="h-full rounded-full transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none"
+                className="h-full rounded-full transition-[width,background-color] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-out)] motion-reduce:transition-none"
                 style={{ width: `${normalizedPercentage}%`, backgroundColor: usageColor }}
               />
             </div>
           ) : null}
           {showTotalProcessed ? (
             <div className="flex items-center justify-between gap-3 text-[11px] leading-4">
-              <span className="text-secondary-label">Total processed</span>
-              <span className="font-medium tabular-nums text-secondary-label">
+              <span className="text-muted-foreground/60">Total processed</span>
+              <span className="font-medium tabular-nums text-muted-foreground/80">
                 {formatContextWindowTokens(totalProcessedTokens)}
               </span>
             </div>
           ) : null}
           {usage.compactsAutomatically ? (
-            <div className="mt-1 text-pretty text-secondary-label text-[11px] font-medium">
+            <div className="mt-1 text-pretty text-[11px] font-medium text-muted-foreground/70">
               {providerDisplayName ?? "It"} automatically compacts its context when needed.
             </div>
           ) : null}

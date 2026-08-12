@@ -5,7 +5,13 @@ export type SettingsPath =
   | "/settings/providers"
   | "/settings/source-control"
   | "/settings/connections"
-  | "/settings/archived";
+  | "/settings/archived"
+  // Fork: Forma settings sections.
+  | "/settings/interface"
+  | "/settings/threads"
+  | "/settings/notifications"
+  | "/settings/safety"
+  | "/settings/advanced";
 
 export interface SettingsSearchItem {
   readonly id: string;
@@ -26,6 +32,12 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
   "/settings/archived": "Archive",
+  // Fork: Forma settings sections.
+  "/settings/interface": "Interface",
+  "/settings/threads": "Threads",
+  "/settings/notifications": "Notifications",
+  "/settings/safety": "Safety",
+  "/settings/advanced": "Advanced",
 };
 
 /**
@@ -157,17 +169,17 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "legacy-plan-mode",
     title: "Plan mode (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "legacy-token-streaming",
     title: "Stream token by token (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "legacy-sidebar",
     title: "Sidebar (legacy)",
-    to: "/settings/general",
+    to: "/settings/advanced",
   },
   {
     id: "keybindings",
@@ -194,6 +206,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Archived threads",
     to: "/settings/archived",
   },
+  // Fork: Forma sections.
+  { id: "forma-theme", title: "Theme (hue, saturation, high contrast)", to: "/settings/interface" },
+  { id: "forma-fonts", title: "Font size and smoothing", to: "/settings/interface" },
+  { id: "forma-protected-paths", title: "Protected filesystem paths", to: "/settings/safety" },
+  {
+    id: "forma-notifications",
+    title: "Thread attention notifications",
+    to: "/settings/notifications",
+  },
+  { id: "forma-thread-defaults", title: "Thread defaults and archiving", to: "/settings/threads" },
+  { id: "forma-advanced", title: "Keybindings file and logs", to: "/settings/advanced" },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];

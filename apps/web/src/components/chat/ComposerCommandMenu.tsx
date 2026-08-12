@@ -1,6 +1,8 @@
 import {
   type ProjectEntry,
   type ProviderDriverKind,
+  type ServerLocalAgentCommand,
+  type ServerLocalAgentSkill,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
@@ -19,6 +21,10 @@ import {
   CommandSeparator,
 } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
+import {
+  composerPopoverLabelClassName,
+  composerPopoverSurfaceClassName,
+} from "./composerPopoverStyles";
 
 export type ComposerCommandItem =
   | {
@@ -46,9 +52,23 @@ export type ComposerCommandItem =
     }
   | {
       id: string;
+      type: "local-slash-command";
+      command: ServerLocalAgentCommand;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
       type: "skill";
       provider: ProviderDriverKind;
       skill: ServerProviderSkill;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
+      type: "local-skill";
+      skill: ServerLocalAgentSkill;
       label: string;
       description: string;
     };
@@ -84,18 +104,31 @@ function groupCommandItems(
   groupSlashCommandSections: boolean,
 ): ComposerCommandGroup[] {
   if (triggerKind === "skill") {
-    return items.length > 0 ? [{ id: "skills", label: "Skills", items }] : [];
+    const localItems = items.filter((item) => item.type === "local-skill");
+    const providerItems = items.filter((item) => item.type === "skill");
+    return [
+      ...(localItems.length > 0
+        ? [{ id: "project-skills", label: "Project", items: localItems }]
+        : []),
+      ...(providerItems.length > 0
+        ? [{ id: "provider-skills", label: "Provider", items: providerItems }]
+        : []),
+    ];
   }
   if (triggerKind !== "slash-command" || !groupSlashCommandSections) {
     return [{ id: "default", label: null, items }];
   }
 
   const builtInItems = items.filter((item) => item.type === "slash-command");
+  const localItems = items.filter((item) => item.type === "local-slash-command");
   const providerItems = items.filter((item) => item.type === "provider-slash-command");
 
   const groups: ComposerCommandGroup[] = [];
   if (builtInItems.length > 0) {
     groups.push({ id: "built-in", label: "Built-in", items: builtInItems });
+  }
+  if (localItems.length > 0) {
+    groups.push({ id: "project", label: "Project", items: localItems });
   }
   if (providerItems.length > 0) {
     groups.push({ id: "provider", label: "Provider", items: providerItems });
@@ -141,7 +174,10 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     >
       <div
         ref={listRef}
-        className="dropdown-glass relative w-full overflow-hidden rounded-[20px] **:data-[slot=scroll-area-scrollbar]:data-[orientation=vertical]:my-4"
+        className={cn(
+          composerPopoverSurfaceClassName,
+          "w-full **:data-[slot=scroll-area-scrollbar]:data-[orientation=vertical]:my-3",
+        )}
       >
         {props.items.length > 0 ? (
           <CommandList className="max-h-72">
@@ -150,7 +186,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 {groupIndex > 0 ? <CommandSeparator className="my-0.5" /> : null}
                 <CommandGroup>
                   {group.label ? (
-                    <CommandGroupLabel className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary-label">
+                    <CommandGroupLabel className={composerPopoverLabelClassName}>
                       {group.label}
                     </CommandGroupLabel>
                   ) : null}
@@ -172,7 +208,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
           <div className="px-5 py-3.5">
             {props.triggerKind === "skill" ? (
               <CommandGroup>
-                <CommandGroupLabel className="px-0 pt-0 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary-label">
+                <CommandGroupLabel className={cn(composerPopoverLabelClassName, "px-0 pt-0")}>
                   Skills
                 </CommandGroupLabel>
                 <p className="text-secondary-label text-xs">
@@ -207,15 +243,19 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   onSelect: (item: ComposerCommandItem) => void;
 }) {
   const skillSourceLabel =
-    props.item.type === "skill" ? formatProviderSkillInstallSource(props.item.skill) : null;
+    props.item.type === "skill"
+      ? formatProviderSkillInstallSource(props.item.skill)
+      : props.item.type === "local-skill" || props.item.type === "local-slash-command"
+        ? "Project"
+        : null;
 
   return (
     <CommandItem
       value={props.item.id}
       data-composer-item-id={props.item.id}
       className={cn(
-        "cursor-pointer select-none gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
-        props.isActive && "bg-accent! text-accent-foreground!",
+        "mx-1 cursor-pointer select-none gap-2 rounded-lg px-2.5 py-2 text-[13px] hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit",
+        props.isActive && "bg-accent/85! text-accent-foreground!",
       )}
       onMouseMove={() => {
         if (!props.isActive) props.onHighlight(props.item.id);
@@ -237,13 +277,13 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       {props.item.type === "slash-command" ? (
         <BotIcon className="size-4 shrink-0 text-icon-muted" />
       ) : null}
-      {props.item.type === "provider-slash-command" ? (
-        <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
+      {props.item.type === "provider-slash-command" || props.item.type === "local-slash-command" ? (
+        <span className="inline-flex size-4 shrink-0 items-center justify-center text-muted-foreground/80">
           <SkillGlyph className="size-3.5" />
         </span>
       ) : null}
-      {props.item.type === "skill" ? (
-        <span className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted">
+      {props.item.type === "skill" || props.item.type === "local-skill" ? (
+        <span className="inline-flex size-4 shrink-0 items-center justify-center text-muted-foreground/80">
           <SkillGlyph className="size-3.5" />
         </span>
       ) : null}

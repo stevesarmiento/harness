@@ -9,6 +9,7 @@
 import {
   IsoDateTime,
   ModelSelection,
+  ProjectComponentPreviewWorkspaceRecord,
   ProjectId,
   ProjectScript,
   ThreadEnvMode,
@@ -28,6 +29,8 @@ export const ProjectionProject = Schema.Struct({
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
   faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
   scripts: Schema.Array(ProjectScript),
+  // Fork: component preview harness workspace records.
+  componentPreviewWorkspaceRecords: Schema.Array(ProjectComponentPreviewWorkspaceRecord),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),

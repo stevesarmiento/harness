@@ -15,14 +15,19 @@ import { Route as PairRouteImport } from './routes/pair'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
+import { Route as SettingsThreadsRouteImport } from './routes/settings.threads'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
+import { Route as SettingsSafetyRouteImport } from './routes/settings.safety'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
+import { Route as SettingsInterfaceRouteImport } from './routes/settings.interface'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsAdvancedRouteImport } from './routes/settings.advanced'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
@@ -58,9 +63,19 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ChatRoute,
 } as any)
+const SettingsThreadsRoute = SettingsThreadsRouteImport.update({
+  id: '/threads',
+  path: '/threads',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
   id: '/source-control',
   path: '/source-control',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsSafetyRoute = SettingsSafetyRouteImport.update({
+  id: '/safety',
+  path: '/safety',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
@@ -68,9 +83,19 @@ const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
   path: '/providers',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
   id: '/keybindings',
   path: '/keybindings',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsInterfaceRoute = SettingsInterfaceRouteImport.update({
+  id: '/interface',
+  path: '/interface',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
@@ -96,6 +121,11 @@ const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
 const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   id: '/appearance',
   path: '/appearance',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAdvancedRoute = SettingsAdvancedRouteImport.update({
+  id: '/advanced',
+  path: '/advanced',
   getParentRoute: () => SettingsRoute,
 } as any)
 const ProjectsProjectKeyRoute = ProjectsProjectKeyRouteImport.update({
@@ -134,14 +164,19 @@ export interface FileRoutesByFullPath {
   '/pull-requests': typeof ChatPullRequestsRoute
   '/connect/callback': typeof ConnectCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/safety': typeof SettingsSafetyRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/settings/threads': typeof SettingsThreadsRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
 }
@@ -153,14 +188,19 @@ export interface FileRoutesByTo {
   '/pull-requests': typeof ChatPullRequestsRoute
   '/connect/callback': typeof ConnectCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/safety': typeof SettingsSafetyRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/settings/threads': typeof SettingsThreadsRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -175,14 +215,19 @@ export interface FileRoutesById {
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
   '/connect_/callback': typeof ConnectCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
+  '/settings/interface': typeof SettingsInterfaceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/safety': typeof SettingsSafetyRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/settings/threads': typeof SettingsThreadsRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -198,14 +243,19 @@ export interface FileRouteTypes {
     | '/pull-requests'
     | '/connect/callback'
     | '/projects/$projectKey'
+    | '/settings/advanced'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
+    | '/settings/interface'
     | '/settings/keybindings'
+    | '/settings/notifications'
     | '/settings/providers'
+    | '/settings/safety'
     | '/settings/source-control'
+    | '/settings/threads'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
   fileRoutesByTo: FileRoutesByTo
@@ -217,14 +267,19 @@ export interface FileRouteTypes {
     | '/pull-requests'
     | '/connect/callback'
     | '/projects/$projectKey'
+    | '/settings/advanced'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
+    | '/settings/interface'
     | '/settings/keybindings'
+    | '/settings/notifications'
     | '/settings/providers'
+    | '/settings/safety'
     | '/settings/source-control'
+    | '/settings/threads'
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -238,14 +293,19 @@ export interface FileRouteTypes {
     | '/_chat/pull-requests'
     | '/connect_/callback'
     | '/projects/$projectKey'
+    | '/settings/advanced'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
     | '/settings/general'
+    | '/settings/interface'
     | '/settings/keybindings'
+    | '/settings/notifications'
     | '/settings/providers'
+    | '/settings/safety'
     | '/settings/source-control'
+    | '/settings/threads'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
@@ -305,11 +365,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/settings/threads': {
+      id: '/settings/threads'
+      path: '/threads'
+      fullPath: '/settings/threads'
+      preLoaderRoute: typeof SettingsThreadsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/source-control': {
       id: '/settings/source-control'
       path: '/source-control'
       fullPath: '/settings/source-control'
       preLoaderRoute: typeof SettingsSourceControlRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/safety': {
+      id: '/settings/safety'
+      path: '/safety'
+      fullPath: '/settings/safety'
+      preLoaderRoute: typeof SettingsSafetyRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/providers': {
@@ -319,11 +393,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsProvidersRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/keybindings': {
       id: '/settings/keybindings'
       path: '/keybindings'
       fullPath: '/settings/keybindings'
       preLoaderRoute: typeof SettingsKeybindingsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/interface': {
+      id: '/settings/interface'
+      path: '/interface'
+      fullPath: '/settings/interface'
+      preLoaderRoute: typeof SettingsInterfaceRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/general': {
@@ -359,6 +447,13 @@ declare module '@tanstack/react-router' {
       path: '/appearance'
       fullPath: '/settings/appearance'
       preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/advanced': {
+      id: '/settings/advanced'
+      path: '/advanced'
+      fullPath: '/settings/advanced'
+      preLoaderRoute: typeof SettingsAdvancedRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/projects/$projectKey': {
@@ -416,25 +511,35 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
+  SettingsAdvancedRoute: typeof SettingsAdvancedRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
+  SettingsInterfaceRoute: typeof SettingsInterfaceRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
+  SettingsSafetyRoute: typeof SettingsSafetyRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
+  SettingsThreadsRoute: typeof SettingsThreadsRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAdvancedRoute: SettingsAdvancedRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
+  SettingsInterfaceRoute: SettingsInterfaceRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsSafetyRoute: SettingsSafetyRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
+  SettingsThreadsRoute: SettingsThreadsRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(

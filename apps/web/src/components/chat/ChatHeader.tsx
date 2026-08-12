@@ -1,69 +1,72 @@
 import {
-  type EnvironmentId,
   type EditorId,
+  type EnvironmentId,
+  type ProjectId,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import { useNavigate } from "@tanstack/react-router";
+import { memo, type ReactNode, type RefObject } from "react";
 import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { ChangeRequestStateLike } from "@t3tools/client-runtime/state/thread-settled";
-import { ChevronDownIcon } from "lucide-react";
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
-import GitActionsControl from "../GitActionsControl";
-import { type DraftId } from "~/composerDraftStore";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { toastManager } from "../ui/toast";
-import ProjectScriptsControl, {
-  type NewProjectScriptInput,
-  type ProjectScriptActionResult,
-} from "../ProjectScriptsControl";
-import { OpenInPicker } from "./OpenInPicker";
-import { usePrimaryEnvironmentId } from "../../state/environments";
-import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
-import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
-import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { ProjectFavicon } from "../ProjectFavicon";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../WorkspaceBreadcrumb";
+  IconBubbleLeftAndTextBubbleRight as ThreadIcon,
+  IconCheckmark as CheckIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconCube as CubeIcon,
+  IconPlus as PlusIcon,
+} from "symbols-react";
+
+import { openCommandPalette } from "~/commandPaletteBus";
+import type { DraftId } from "~/composerDraftStore";
+import { useClientSettings } from "~/hooks/useSettings";
+import { sortThreads } from "~/lib/threadSort";
 import { cn } from "~/lib/utils";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useThreadShells } from "~/state/entities";
+import { buildThreadRouteParams } from "~/threadRoutes";
+
+import type { GitActionsControlHandle } from "../GitActionsControl";
+import { HeaderIconActionButton } from "../HeaderIconActionButton";
+import { SidebarPanelIcon } from "../icons/custom";
+import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
+import type { NewProjectScriptInput, ProjectScriptActionResult } from "../ProjectScriptsControl";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
+import { Badge } from "../ui/badge";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { SidebarTrigger } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ChatHeaderActionsMenu } from "./ChatHeaderActionsMenu";
 
 interface ChatHeaderProps {
+  routeKind: "server" | "draft";
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
-  /** Drafts have no server thread yet, so the title carries no action menu. */
-  isServerThread: boolean;
-  /** PR state feeding the settled classification, resolved by ChatView. */
-  changeRequestState: ChangeRequestStateLike | null;
+  activeProjectId: ProjectId | null;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
-  activeProjectFaviconPath: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
+  isGitRepo: boolean;
+  rightPanelAvailable: boolean;
   rightPanelOpen: boolean;
   gitCwd: string | null;
-  readonly onOpenPullRequest?: ((number: number) => void) | undefined;
+  workspaceRoot: string | null;
+  gitActionsRef?: RefObject<GitActionsControlHandle | null> | undefined;
+  /** Rendered inside the breadcrumb nav after the thread title (e.g. right-panel surface pills). */
+  breadcrumbTrailing?: ReactNode;
+  /** Rendered in the right action cluster before the actions menu (e.g. the panel maximize control). */
+  actionsLeading?: ReactNode;
   onNewThreadInProject: () => void;
+  onToggleRightPanel: () => void;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateProjectScript: (
@@ -71,20 +74,13 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
-}
-
-/**
- * Rename commit rule shared with the sidebar's inline rename: trim, reject
- * empty (the caller toasts), and skip the mutation when nothing changed.
- */
-export function resolveRenameCommit(input: {
-  readonly title: string;
-  readonly originalTitle: string;
-}): { action: "commit"; title: string } | { action: "reject-empty" } | { action: "noop" } {
-  const trimmed = input.title.trim();
-  if (trimmed.length === 0) return { action: "reject-empty" };
-  if (trimmed === input.originalTitle) return { action: "noop" };
-  return { action: "commit", title: trimmed };
+  onExportThread?: (() => void) | undefined;
+  onCopyThreadAsMarkdown?: (() => void) | undefined;
+  onCopyWorkspacePath?: (() => void) | undefined;
+  onCopyThreadId?: (() => void) | undefined;
+  onForkThread?: (() => void) | undefined;
+  onArchiveThread?: (() => void) | undefined;
+  onDeleteThread?: (() => void) | undefined;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -99,243 +95,240 @@ export function shouldShowOpenInPicker(input: {
   );
 }
 
+export function selectHeaderThreads(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  sortOrder: SidebarThreadSortOrder,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return sortThreads(
+    threads.filter(
+      (thread) =>
+        thread.archivedAt === null &&
+        thread.environmentId === environmentId &&
+        thread.projectId === projectId,
+    ),
+    sortOrder,
+  );
+}
+
 export const ChatHeader = memo(function ChatHeader({
+  routeKind,
   activeThreadEnvironmentId,
   activeThreadId,
   draftId,
   activeThreadTitle,
-  isServerThread,
-  changeRequestState,
+  activeProjectId,
   activeProjectName,
   activeProjectCwd,
-  activeProjectFaviconPath,
   openInCwd,
   activeProjectScripts,
   preferredScriptId,
   keybindings,
   availableEditors,
+  isGitRepo,
+  rightPanelAvailable,
   rightPanelOpen,
   gitCwd,
-  onOpenPullRequest,
+  workspaceRoot,
+  gitActionsRef,
+  breadcrumbTrailing,
+  actionsLeading,
   onNewThreadInProject,
+  onToggleRightPanel,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onExportThread,
+  onCopyThreadAsMarkdown,
+  onCopyWorkspacePath,
+  onCopyThreadId,
+  onForkThread,
+  onArchiveThread,
+  onDeleteThread,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const fileScripts = useT3ProjectFileScripts(
-    activeThreadEnvironmentId,
-    activeProjectScripts ? activeProjectCwd : null,
-  );
-  const showOpenInPicker = shouldShowOpenInPicker({
+  const showOpenIn = shouldShowOpenInPicker({
     activeProjectName,
     activeThreadEnvironmentId,
     primaryEnvironmentId,
   });
-  const activeThreadRef = useMemo(
-    () => scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
-    [activeThreadEnvironmentId, activeThreadId],
-  );
-  const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
-    reportFailure: false,
-  });
-  // Inline rename, keyed by thread: navigating away drops an in-progress
-  // rename instead of committing stale text. Cleared on thread change (not
-  // just hidden) so returning to the thread doesn't revive the old draft.
-  const [renaming, setRenaming] = useState<{ threadId: ThreadId; title: string } | null>(null);
-  if (renaming !== null && renaming.threadId !== activeThreadId) {
-    setRenaming(null);
-  }
-  const renamingTitle = renaming?.threadId === activeThreadId ? renaming.title : null;
-  const renameCommittedRef = useRef(false);
-  const startRename = useCallback(() => {
-    renameCommittedRef.current = false;
-    setRenaming({ threadId: activeThreadId, title: activeThreadTitle });
-  }, [activeThreadId, activeThreadTitle]);
-  const commitRename = useCallback(
-    (title: string) => {
-      setRenaming(null);
-      const resolution = resolveRenameCommit({ title, originalTitle: activeThreadTitle });
-      if (resolution.action === "reject-empty") {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
-        return;
-      }
-      if (resolution.action === "noop") return;
-      void updateThreadMetadata({
-        environmentId: activeThreadEnvironmentId,
-        input: { threadId: activeThreadId, title: resolution.title },
-      }).then((result) => {
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: "Failed to rename thread",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        }
-      });
-    },
-    [activeThreadEnvironmentId, activeThreadId, activeThreadTitle, updateThreadMetadata],
-  );
-  const { openMenu } = useThreadActionMenu({
-    threadRef: isServerThread ? activeThreadRef : null,
-    projectCwd: activeProjectCwd,
-    changeRequestState,
-    onStartRename: startRename,
-  });
-  const titleButtonRef = useRef<HTMLButtonElement | null>(null);
-  const openMenuFromTitle = useCallback(() => {
-    const rect = titleButtonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    openMenu({ x: rect.left, y: rect.bottom + 4 });
-  }, [openMenu]);
-  const handleHeaderContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
-      if (!isServerThread || renamingTitle !== null) return;
-      // The right-side controls (git, scripts, open-in) keep their own
-      // behavior; only the breadcrumb area opens the thread menu.
-      if ((event.target as HTMLElement).closest("[data-chat-header-actions]")) return;
-      event.preventDefault();
-      openMenu({ x: event.clientX, y: event.clientY });
-    },
-    [isServerThread, openMenu, renamingTitle],
-  );
-  const handleRenameKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter") {
-        renameCommittedRef.current = true;
-        commitRename(event.currentTarget.value);
-      } else if (event.key === "Escape") {
-        renameCommittedRef.current = true;
-        setRenaming(null);
-      }
-    },
-    [commitRename],
-  );
+
   return (
-    <div
-      className="@container/header-actions flex min-w-0 flex-1 items-center gap-2 sm:gap-3"
-      onContextMenu={handleHeaderContextMenu}
-    >
-      <WorkspaceBreadcrumb ariaLabel="Thread breadcrumb" className="flex-1">
-        {/* The project always leads the header: knowing which project a
-            thread lives in is priority zero, and the thread title alone
-            doesn't answer it. */}
-        {activeProjectName ? (
-          <>
-            <WorkspaceBreadcrumbItem>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={`New thread in ${activeProjectName}`}
-                      onClick={onNewThreadInProject}
-                      className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <ProjectFavicon
-                    environmentId={activeThreadEnvironmentId}
-                    cwd={activeProjectCwd ?? ""}
-                    faviconPath={activeProjectFaviconPath}
-                    className="size-3.5"
-                  />
-                  <span className="max-w-40 truncate">{activeProjectName}</span>
-                </TooltipTrigger>
-                <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
-              </Tooltip>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator />
-          </>
-        ) : null}
-        <WorkspaceBreadcrumbItem current className="flex-1">
-          {renamingTitle !== null ? (
-            <input
-              autoFocus
-              aria-label="Thread title"
-              className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring"
-              defaultValue={renamingTitle}
-              onBlur={(event) => {
-                if (renameCommittedRef.current) return;
-                commitRename(event.currentTarget.value);
-              }}
-              onFocus={(event) => event.currentTarget.select()}
-              onKeyDown={handleRenameKeyDown}
+    <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3 md:overflow-visible">
+        <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+        <DesktopSidebarReopenButton className="md:ml-0" />
+        {activeProjectName && activeProjectId ? (
+          <nav aria-label="Thread breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
+            <button
+              type="button"
+              aria-label="Switch project"
+              aria-haspopup="dialog"
+              onClick={() => openCommandPalette({ open: "switch-project" })}
+              // Flat pill matching the right-panel surface tabs (no border/divider).
+              className="flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+              title={activeProjectName}
+            >
+              <CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              <span className="min-w-0 truncate">{activeProjectName}</span>
+            </button>
+            <ChevronRightIcon className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME} aria-hidden />
+            <ThreadTitleMenu
+              activeThreadEnvironmentId={activeThreadEnvironmentId}
+              activeThreadId={activeThreadId}
+              activeThreadTitle={activeThreadTitle}
+              activeProjectId={activeProjectId}
+              onNewThreadInProject={onNewThreadInProject}
             />
-          ) : isServerThread ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    ref={titleButtonRef}
-                    type="button"
-                    aria-label={`Thread actions for ${activeThreadTitle}`}
-                    aria-haspopup="menu"
-                    onClick={openMenuFromTitle}
-                    className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
-              >
-                <h2 className="min-w-0 truncate">{activeThreadTitle}</h2>
-                <ChevronDownIcon
-                  aria-hidden
-                  className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <h2 aria-label={activeThreadTitle} className="min-w-0 flex-1 truncate">
-                    {activeThreadTitle}
-                  </h2>
-                }
+            {breadcrumbTrailing}
+          </nav>
+        ) : (
+          <h2
+            aria-label={activeThreadTitle}
+            className="min-w-0 flex-1 truncate px-2 py-0.5 text-sm font-medium text-foreground"
+            title={activeThreadTitle}
+          >
+            {activeThreadTitle}
+          </h2>
+        )}
+        {activeProjectName && !isGitRepo ? (
+          <Badge variant="outline" className="text-ui-2xs shrink-0 text-amber-700">
+            No Git
+          </Badge>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center justify-end gap-2 [-webkit-app-region:no-drag]">
+        {actionsLeading}
+        <ChatHeaderActionsMenu
+          routeKind={routeKind}
+          activeThreadEnvironmentId={activeThreadEnvironmentId}
+          activeThreadId={activeThreadId}
+          {...(draftId ? { draftId } : {})}
+          activeProjectCwd={activeProjectCwd}
+          openInCwd={openInCwd}
+          activeProjectScripts={activeProjectScripts}
+          preferredScriptId={preferredScriptId}
+          keybindings={keybindings}
+          gitActionsRef={gitActionsRef}
+          availableEditors={availableEditors}
+          gitCwd={gitCwd}
+          workspaceRoot={workspaceRoot}
+          showOpenIn={showOpenIn}
+          onRunProjectScript={onRunProjectScript}
+          onAddProjectScript={onAddProjectScript}
+          onUpdateProjectScript={onUpdateProjectScript}
+          onDeleteProjectScript={onDeleteProjectScript}
+          onExportThread={onExportThread}
+          onCopyThreadAsMarkdown={onCopyThreadAsMarkdown}
+          onCopyWorkspacePath={onCopyWorkspacePath}
+          onCopyThreadId={onCopyThreadId}
+          onForkThread={onForkThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+        />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <HeaderIconActionButton
+                aria-label={rightPanelOpen ? "Close right panel" : "Open right panel"}
+                disabled={!rightPanelAvailable}
+                onClick={onToggleRightPanel}
               />
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
-            </Tooltip>
-          )}
-        </WorkspaceBreadcrumbItem>
-      </WorkspaceBreadcrumb>
-      <div
-        data-chat-header-actions
-        className={cn(
-          "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
-          rightPanelOpen ? "pr-0" : "pr-16",
-        )}
-      >
-        {activeProjectScripts && (
-          <ProjectScriptsControl
-            scripts={activeProjectScripts}
-            fileScripts={fileScripts}
-            keybindings={keybindings}
-            preferredScriptId={preferredScriptId}
-            onRunScript={onRunProjectScript}
-            onAddScript={onAddProjectScript}
-            onUpdateScript={onUpdateProjectScript}
-            onDeleteScript={onDeleteProjectScript}
-          />
-        )}
-        {showOpenInPicker && (
-          <OpenInPicker
-            environmentId={activeThreadEnvironmentId}
-            keybindings={keybindings}
-            availableEditors={availableEditors}
-            openInCwd={openInCwd}
-          />
-        )}
-        {activeProjectName && (
-          <GitActionsControl
-            gitCwd={gitCwd}
-            activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}
-            onOpenPullRequest={onOpenPullRequest}
-            {...(draftId ? { draftId } : {})}
-          />
-        )}
+            }
+          >
+            <SidebarPanelIcon filled={rightPanelOpen} className="size-4 rotate-180" aria-hidden />
+          </TooltipTrigger>
+          <TooltipPopup side="bottom">
+            {rightPanelAvailable
+              ? rightPanelOpen
+                ? "Close right panel"
+                : "Open right panel"
+              : "Right panel is unavailable until a project is open"}
+          </TooltipPopup>
+        </Tooltip>
       </div>
     </div>
   );
 });
+
+function ThreadTitleMenu({
+  activeThreadEnvironmentId,
+  activeThreadId,
+  activeThreadTitle,
+  activeProjectId,
+  onNewThreadInProject,
+}: {
+  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadId: ThreadId;
+  activeThreadTitle: string;
+  activeProjectId: ProjectId;
+  onNewThreadInProject: () => void;
+}) {
+  const navigate = useNavigate();
+  const threadShells = useThreadShells();
+  const threadSortOrder = useClientSettings((settings) => settings.sidebarThreadSortOrder);
+  const visibleThreads = selectHeaderThreads(
+    threadShells,
+    activeThreadEnvironmentId,
+    activeProjectId,
+    threadSortOrder,
+  );
+
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Switch thread"
+            // Flat pill: rounded fill with no border/shadow so it reads as an
+            // object at rest, keeping the original hover treatment. Text and
+            // icon sizing match the right-panel surface pills.
+            className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+            title={activeThreadTitle}
+          />
+        }
+      >
+        <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+        <span className="min-w-0 truncate">{activeThreadTitle}</span>
+        <ChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
+      </MenuTrigger>
+      <MenuPopup align="start" className="w-80 max-w-[calc(100vw-1rem)]">
+        {visibleThreads.length > 0 ? (
+          visibleThreads.map((thread) => {
+            const isActive = thread.id === activeThreadId;
+            return (
+              <MenuItem
+                key={`${thread.environmentId}:${thread.id}`}
+                className={cn("grid grid-cols-[1rem_1fr] gap-2", isActive && "bg-accent/60")}
+                onClick={() => {
+                  if (isActive) return;
+                  void navigate({
+                    to: "/$environmentId/$threadId",
+                    params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+                  });
+                }}
+              >
+                <span className="flex items-center justify-center">
+                  {isActive ? <CheckIcon className="size-3 fill-current" /> : null}
+                </span>
+                <span className="min-w-0 truncate">{thread.title}</span>
+              </MenuItem>
+            );
+          })
+        ) : (
+          <MenuItem disabled className="text-muted-foreground">
+            No active threads
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuItem onClick={onNewThreadInProject}>
+          <PlusIcon className="size-3.5" aria-hidden />
+          New thread
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+}

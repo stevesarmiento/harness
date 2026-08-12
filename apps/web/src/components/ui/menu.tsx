@@ -7,6 +7,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
+type MenuHandle<Payload> = MenuPrimitive.Handle<Payload>;
 
 const Menu = MenuPrimitive.Root;
 
@@ -28,6 +29,7 @@ function MenuPopup({
   alignOffset,
   side = "bottom",
   anchor,
+  keepMounted,
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props["align"];
@@ -35,9 +37,10 @@ function MenuPopup({
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
   side?: MenuPrimitive.Positioner.Props["side"];
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
+  keepMounted?: MenuPrimitive.Portal.Props["keepMounted"];
 }) {
   return (
-    <MenuPrimitive.Portal>
+    <MenuPrimitive.Portal keepMounted={keepMounted}>
       <MenuPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
@@ -268,6 +271,7 @@ function MenuSubPopup({
 
 export {
   MenuCreateHandle,
+  type MenuHandle,
   MenuCreateHandle as DropdownMenuCreateHandle,
   Menu,
   Menu as DropdownMenu,

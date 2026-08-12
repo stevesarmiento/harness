@@ -15,6 +15,7 @@ import {
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
+  resolveSidebarProjectReorder,
   resolveSidebarStageBadgeLabel,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
@@ -50,6 +51,36 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("resolveSidebarProjectReorder", () => {
+  const projects = [
+    {
+      projectKey: "logical-a",
+      memberProjects: [{ physicalProjectKey: "local:a" }, { physicalProjectKey: "remote:a" }],
+    },
+    {
+      projectKey: "logical-b",
+      memberProjects: [{ physicalProjectKey: "local:b" }],
+    },
+    {
+      projectKey: "logical-c",
+      memberProjects: [{ physicalProjectKey: "local:c" }],
+    },
+  ];
+
+  it("uses the displayed project order and moves grouped members together", () => {
+    expect(resolveSidebarProjectReorder(projects, "logical-a", "logical-c")).toEqual({
+      currentProjectOrder: ["local:a", "remote:a", "local:b", "local:c"],
+      draggedProjectKeys: ["local:a", "remote:a"],
+      targetProjectKeys: ["local:c"],
+    });
+  });
+
+  it("ignores invalid and unchanged drops", () => {
+    expect(resolveSidebarProjectReorder(projects, "logical-a", "logical-a")).toBeNull();
+    expect(resolveSidebarProjectReorder(projects, "missing", "logical-c")).toBeNull();
+  });
+});
 
 describe("shouldNavigateAfterProjectRemoval", () => {
   const projectThreads = [{ environmentId: "environment-local", id: "thread-1" }];
@@ -639,7 +670,13 @@ describe("resolveSidebarThreadStatus", () => {
     updatedAt: "2026-03-09T10:00:00.000Z",
   };
 
-  const idle = { hasPendingApprovals: false, hasPendingUserInput: false };
+  const idle = {
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    hasActionableProposedPlan: false,
+    interactionMode: "default" as const,
+    latestTurn: null,
+  };
 
   it("prioritizes approval over a running session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, hasPendingApprovals: true, session })).toBe(
@@ -694,6 +731,51 @@ describe("resolveSidebarThreadStatus", () => {
 
   it("defaults to ready with no session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, session: null })).toBe("ready");
+  });
+
+  it("reports plan-ready for a settled plan-mode turn with an actionable plan", () => {
+    const planReady = {
+      ...idle,
+      hasActionableProposedPlan: true,
+      interactionMode: "plan" as const,
+      latestTurn: makeLatestTurn(),
+      session: null,
+    };
+    expect(resolveSidebarThreadStatus(planReady)).toBe("plan-ready");
+    expect(resolveSidebarThreadStatus({ ...planReady, hasActionableProposedPlan: false })).toBe(
+      "ready",
+    );
+    expect(resolveSidebarThreadStatus({ ...planReady, interactionMode: "default" })).toBe("ready");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        latestTurn: makeLatestTurn({ completedAt: null }),
+      }),
+    ).toBe("ready");
+  });
+
+  it("plan-ready loses to a running session but outranks background liveness", () => {
+    const planReady = {
+      ...idle,
+      hasActionableProposedPlan: true,
+      interactionMode: "plan" as const,
+      latestTurn: makeLatestTurn(),
+    };
+    expect(resolveSidebarThreadStatus({ ...planReady, session })).toBe("working");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        session: null,
+        backgroundLiveness: "working" as const,
+      }),
+    ).toBe("plan-ready");
+    expect(
+      resolveSidebarThreadStatus({
+        ...planReady,
+        session: null,
+        backgroundLiveness: "monitoring" as const,
+      }),
+    ).toBe("plan-ready");
   });
 });
 
@@ -1037,7 +1119,7 @@ describe("resolveThreadStatusPill", () => {
           hasPendingUserInput: true,
         },
       }),
-    ).toMatchObject({ label: "Pending Approval", pulse: false });
+    ).toMatchObject({ label: "Pending Approval", glyph: "circle-alert", pulse: false });
   });
 
   it("shows awaiting input when plan mode is blocked on user answers", () => {
@@ -1048,7 +1130,7 @@ describe("resolveThreadStatusPill", () => {
           hasPendingUserInput: true,
         },
       }),
-    ).toMatchObject({ label: "Awaiting Input", pulse: false });
+    ).toMatchObject({ label: "Awaiting Input", glyph: "circle-question-mark", pulse: false });
   });
 
   it("falls back to working when the thread is actively running without blockers", () => {
@@ -1056,7 +1138,7 @@ describe("resolveThreadStatusPill", () => {
       resolveThreadStatusPill({
         thread: baseThread,
       }),
-    ).toMatchObject({ label: "Working", pulse: true });
+    ).toMatchObject({ label: "Working", glyph: "grid", pulse: true });
   });
 
   it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
@@ -1073,7 +1155,7 @@ describe("resolveThreadStatusPill", () => {
           },
         },
       }),
-    ).toMatchObject({ label: "Plan Ready", pulse: false });
+    ).toMatchObject({ label: "Plan Ready", glyph: "file-text", pulse: false });
   });
 
   it("does not manufacture completed state without a client visit marker", () => {
@@ -1107,29 +1189,31 @@ describe("resolveThreadStatusPill", () => {
           },
         },
       }),
-    ).toMatchObject({ label: "Completed", pulse: false });
+    ).toMatchObject({ label: "Completed", glyph: "check-check", pulse: false });
   });
 });
 
 describe("resolveThreadRowClassName", () => {
-  it("uses the active sidebar surface when a thread is both selected and active", () => {
+  it("uses the darker selected palette when a thread is both selected and active", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
-    expect(className).toContain("bg-sidebar-row-active");
-    expect(className).toContain("text-sidebar-foreground");
-    expect(className).not.toContain("bg-primary");
+    expect(className).toContain("bg-primary/22");
+    expect(className).toContain("hover:bg-primary/26");
+    expect(className).toContain("dark:bg-primary/30");
+    expect(className).not.toContain("bg-accent/85");
   });
 
   it("uses selected hover colors for selected threads", () => {
     const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
-    expect(className).toContain("bg-sidebar-row-selected");
-    expect(className).toContain("hover:bg-sidebar-row-active");
-    expect(className).not.toContain("bg-primary");
+    expect(className).toContain("bg-primary/15");
+    expect(className).toContain("hover:bg-primary/19");
+    expect(className).toContain("dark:bg-primary/22");
+    expect(className).not.toContain("hover:bg-accent");
   });
 
-  it("uses the active sidebar surface for active-only threads", () => {
+  it("keeps the accent palette for active-only threads", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
-    expect(className).toContain("bg-sidebar-row-active");
-    expect(className).toContain("hover:bg-sidebar-row-active");
+    expect(className).toContain("bg-accent/85");
+    expect(className).toContain("hover:bg-accent");
   });
 });
 
@@ -1143,24 +1227,24 @@ describe("resolveProjectStatusIndicator", () => {
       resolveProjectStatusIndicator([
         {
           label: "Completed",
-          colorClass: "text-emerald-600",
-          dotClass: "bg-emerald-500",
+          toneClass: "text-emerald-600",
+          glyph: "check-check",
           pulse: false,
         },
         {
           label: "Pending Approval",
-          colorClass: "text-amber-600",
-          dotClass: "bg-amber-500",
+          toneClass: "text-amber-600",
+          glyph: "circle-alert",
           pulse: false,
         },
         {
           label: "Working",
-          colorClass: "text-sky-600",
-          dotClass: "bg-sky-500",
+          toneClass: "text-sky-600",
+          glyph: "grid",
           pulse: true,
         },
       ]),
-    ).toMatchObject({ label: "Pending Approval", dotClass: "bg-amber-500" });
+    ).toMatchObject({ label: "Pending Approval", glyph: "circle-alert" });
   });
 
   it("prefers plan-ready over completed when no stronger action is needed", () => {
@@ -1168,18 +1252,18 @@ describe("resolveProjectStatusIndicator", () => {
       resolveProjectStatusIndicator([
         {
           label: "Completed",
-          colorClass: "text-emerald-600",
-          dotClass: "bg-emerald-500",
+          toneClass: "text-emerald-600",
+          glyph: "check-check",
           pulse: false,
         },
         {
           label: "Plan Ready",
-          colorClass: "text-violet-600",
-          dotClass: "bg-violet-500",
+          toneClass: "text-violet-600",
+          glyph: "file-text",
           pulse: false,
         },
       ]),
-    ).toMatchObject({ label: "Plan Ready", dotClass: "bg-violet-500" });
+    ).toMatchObject({ label: "Plan Ready", glyph: "file-text" });
   });
 });
 

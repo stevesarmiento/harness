@@ -3,7 +3,12 @@ import { defineConfig } from "vite-plus";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
-const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
+// Launch Electron only for the actual dev task (`vp pack --watch` with the
+// dev flag). Requiring watch mode keeps release builds from booting the dev
+// app when T3CODE_DESKTOP_DEV/VITE_DEV_SERVER_URL leak into the environment
+// (e.g. cutting a release from a terminal spawned by the dev desktop app).
+const shouldLaunchElectronAfterPack =
+  process.env.T3CODE_DESKTOP_DEV === "1" && process.argv.includes("--watch");
 const publicConfigDefine = {
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",

@@ -23,6 +23,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import {
   filterPullRequestsByInvolvement,
@@ -53,16 +54,24 @@ import { PullRequestListEmptyState } from "../components/pullRequest/PullRequest
 import { PullRequestListGhost } from "../components/pullRequest/PullRequestGhosts";
 import { PullRequestRow } from "../components/pullRequest/PullRequestRow";
 import { PullRequestsUnavailableState } from "../components/pullRequest/PullRequestsUnavailableState";
-import { RightPanelTabs, type PullRequestTabStatus } from "../components/RightPanelTabs";
 import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../components/WorkspaceBreadcrumb";
+  RightPanelTabs,
+  RightPanelTabStrip,
+  type PullRequestTabStatus,
+} from "../components/RightPanelTabs";
 import { PanelLayoutControls } from "../components/chat/PanelLayoutControls";
 import { Button } from "../components/ui/button";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../components/ui/menu";
-import { SidebarInset } from "../components/ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
+import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
+import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
+import { isElectron } from "../env";
+import { useInlinePanelWidth } from "../components/preview/PreviewPanelShell";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../components/ThreadBreadcrumb";
+import {
+  IconArrowTriangleheadPull as PullRequestsTitleIcon,
+  IconChevronRight as SurfaceCrumbSeparatorIcon,
+} from "symbols-react";
 import { useLiveRefresh } from "../hooks/useLiveRefresh";
 import {
   pullRequestSurfaceId,
@@ -80,7 +89,6 @@ import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { cn } from "~/lib/utils";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 
 export interface PullRequestsSearch {
   readonly involvement: PullRequestInvolvement;
@@ -917,11 +925,6 @@ function PullRequestsRouteView() {
       onToggleRightPanel={toggleRightPanel}
     />
   );
-  const openPanelControls = (
-    <div className="workspace-titlebar-controls right-2 z-50 gap-1 [-webkit-app-region:no-drag] wco:right-[var(--workspace-controls-right)]">
-      {panelToggleControls}
-    </div>
-  );
   // The rows carried over from the last filters can also narrow to nothing one step further on,
   // where involvement is applied against the viewers of the answer they came from. "Nothing under
   // these filters" is a claim, and it is the wrong one to make about a question still in flight,
@@ -1055,7 +1058,15 @@ function PullRequestsRouteView() {
       onProject={(projectId) => updateListScope({ projectId })}
     />
   );
+  const [headerActionsElement, setHeaderActionsElement] = useState<HTMLDivElement | null>(null);
+  // Parent-owned panel width, ChatView-style, so the header tab strip and the
+  // inline panel stay width-synced and the panel needs no internal tab bar.
+  const prPanelResizable = useInlinePanelWidth({
+    storageKey: "t3code:pull-request-panel-width",
+    defaultWidth: typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2),
+  });
   const columnProps = {
+    headerActionsElement,
     refreshing,
     onRefresh: () => void refreshFromHost(),
     searchValue: search.q ?? "",
@@ -1068,8 +1079,10 @@ function PullRequestsRouteView() {
     onHost: (host: string | undefined) => updateListScope({ host }),
     searchInput,
     filtersMenu,
+    // No surfaces -> no toggle: on this route the panel only ever hosts pull
+    // requests, so with nothing open the button would have nothing to show.
     rightPanelControl:
-      !pullRequestsSupported || rightPanelState.isOpen ? null : panelToggleControls,
+      pullRequestsSupported && rightPanelState.surfaces.length > 0 ? panelToggleControls : null,
     rightPanelOpen: rightPanelState.isOpen,
     listBody,
   };
@@ -1109,75 +1122,153 @@ function PullRequestsRouteView() {
   };
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
-      <div className="relative flex min-h-0 flex-1">
-        {pullRequestsSupported && rightPanelState.isOpen ? openPanelControls : null}
-        <PullRequestsColumn {...columnProps} />
-
-        {rightPanelState.isOpen && activePullRequestSurface && pullRequestEnvironmentId !== null ? (
-          <RightPanelTabs
-            mode="inline"
-            widthStorageKey="t3code:pull-request-panel-width"
-            // Default to roughly half the viewport: the PR list needs more
-            // room than a chat, so the 540px chat-preview default squashes
-            // it. SSR has no window, so fall back to a reasonable width.
-            defaultWidth={typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2)}
-            surfaces={rightPanelState.surfaces}
-            activeSurfaceId={activePullRequestSurface.id}
-            pendingSurfaceIds={EMPTY_PENDING_SURFACES}
-            previewSessions={EMPTY_PREVIEW_SESSIONS}
-            terminalLabelsById={EMPTY_TERMINAL_LABELS}
-            onActivate={(surface) => {
-              if (surface.kind === "pull-request") activateSurface(surface);
-            }}
-            onCloseSurface={(surface) => {
-              if (surface.kind === "pull-request") closeSurface(surface);
-            }}
-            onCloseOtherSurfaces={(surface) => {
-              if (surface.kind === "pull-request") closeOtherSurfaces(surface);
-            }}
-            onCloseSurfacesToRight={(surface) => {
-              if (surface.kind === "pull-request") closeSurfacesToRight(surface);
-            }}
-            onCloseAllSurfaces={closeAllSurfaces}
-            onCopyFilePath={() => undefined}
-            onAddBrowser={() => undefined}
-            onAddTerminal={() => undefined}
-            onAddDiff={() => undefined}
-            onAddFiles={() => undefined}
-            onAddPullRequest={() => undefined}
-            onAddAgents={() => undefined}
-            browserAvailable={false}
-            terminalAvailable={false}
-            diffAvailable={false}
-            filesAvailable={false}
-            pullRequestAvailable={false}
-            agentsAvailable={false}
-            liveAgentCount={0}
-            pullRequestStatuses={pullRequestTabStatuses}
-          >
-            <PullRequestDetailPanel
-              key={activePullRequestSurface.id}
-              environmentId={pullRequestEnvironmentId}
-              reference={{
-                projectId: activePullRequestSurface.projectId as ProjectId,
-                repository: activePullRequestSurface.repository,
-                number: activePullRequestSurface.number,
-              }}
-              refreshToken={detailRefreshToken}
-              // Merging, closing or reopening changes the row this panel was opened from, so
-              // the list behind it is out of date the moment the host takes the action.
-              onActed={() => {
-                refreshList();
-                baselineQuery.refresh();
-                authoredQuery.refresh();
-                reviewingQuery.refresh();
-              }}
-              onStateChange={handlePullRequestTabStatusChange}
-              chromeVariant="collapse"
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground md:h-auto">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Top bar — sits on the window chrome above the inset card, like every Forma page. */}
+        <header
+          className={cn(
+            "workspace-topbar border-b border-border/70 bg-background md:border-b-0 md:bg-transparent",
+            "pl-[calc(env(safe-area-inset-left)+0.625rem)] pr-[calc(env(safe-area-inset-right)+0.625rem)] md:pl-0 [--workspace-topbar-height:40px]",
+            isElectron &&
+              "drag-region relative [--workspace-topbar-height:39px] wco:pr-[var(--workspace-native-controls-inset)]",
+          )}
+        >
+          <div className="flex min-w-0 w-full items-center gap-2">
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <DesktopSidebarReopenButton className="md:ml-0" />
+            <WorkspaceHeaderTitle
+              icon={
+                <PullRequestsTitleIcon
+                  className="size-3.5 shrink-0 fill-current opacity-50"
+                  aria-hidden
+                />
+              }
+            >
+              Pull Requests
+            </WorkspaceHeaderTitle>
+            {/* Open PR surfaces render as pills in this topbar — the same treatment
+                the thread header gives its right-panel surfaces. */}
+            {rightPanelState.isOpen && rightPanelState.surfaces.length > 0 ? (
+              <>
+                <SurfaceCrumbSeparatorIcon
+                  className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                  aria-hidden
+                />
+                <RightPanelTabStrip
+                  surfaces={rightPanelState.surfaces}
+                  activeSurfaceId={activePullRequestSurface?.id ?? null}
+                  pendingSurfaceIds={EMPTY_PENDING_SURFACES}
+                  previewSessions={EMPTY_PREVIEW_SESSIONS}
+                  terminalLabelsById={EMPTY_TERMINAL_LABELS}
+                  onActivate={(surface) => {
+                    if (surface.kind === "pull-request") activateSurface(surface);
+                  }}
+                  onCloseSurface={(surface) => {
+                    if (surface.kind === "pull-request") closeSurface(surface);
+                  }}
+                  onCloseOtherSurfaces={(surface) => {
+                    if (surface.kind === "pull-request") closeOtherSurfaces(surface);
+                  }}
+                  onCloseSurfacesToRight={(surface) => {
+                    if (surface.kind === "pull-request") closeSurfacesToRight(surface);
+                  }}
+                  onCloseAllSurfaces={closeAllSurfaces}
+                  onCopyFilePath={() => undefined}
+                  onAddBrowser={() => undefined}
+                  onAddTerminal={() => undefined}
+                  onAddDiff={() => undefined}
+                  onAddFiles={() => undefined}
+                  onAddPullRequest={() => undefined}
+                  onAddAgents={() => undefined}
+                  browserAvailable={false}
+                  terminalAvailable={false}
+                  diffAvailable={false}
+                  filesAvailable={false}
+                  pullRequestAvailable={false}
+                  agentsAvailable={false}
+                  liveAgentCount={0}
+                  pullRequestStatuses={pullRequestTabStatuses}
+                  className="h-full min-w-0 shrink border-b-0 bg-transparent p-0 [-webkit-app-region:no-drag]"
+                />
+              </>
+            ) : null}
+            {/* The column portals its live controls (filters, search, refresh, panel
+                toggle) here so the page keeps a single Forma header row. */}
+            <div
+              ref={setHeaderActionsElement}
+              className="ms-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5 [-webkit-app-region:no-drag]"
             />
-          </RightPanelTabs>
-        ) : null}
+          </div>
+        </header>
+        <SidebarInsetCard className="flex-row">
+          <PullRequestsColumn {...columnProps} />
+
+          {rightPanelState.isOpen &&
+          activePullRequestSurface &&
+          pullRequestEnvironmentId !== null ? (
+            <RightPanelTabs
+              mode="inline"
+              hideTabBar
+              inlineResizable={prPanelResizable}
+              surfaces={rightPanelState.surfaces}
+              activeSurfaceId={activePullRequestSurface.id}
+              pendingSurfaceIds={EMPTY_PENDING_SURFACES}
+              previewSessions={EMPTY_PREVIEW_SESSIONS}
+              terminalLabelsById={EMPTY_TERMINAL_LABELS}
+              onActivate={(surface) => {
+                if (surface.kind === "pull-request") activateSurface(surface);
+              }}
+              onCloseSurface={(surface) => {
+                if (surface.kind === "pull-request") closeSurface(surface);
+              }}
+              onCloseOtherSurfaces={(surface) => {
+                if (surface.kind === "pull-request") closeOtherSurfaces(surface);
+              }}
+              onCloseSurfacesToRight={(surface) => {
+                if (surface.kind === "pull-request") closeSurfacesToRight(surface);
+              }}
+              onCloseAllSurfaces={closeAllSurfaces}
+              onCopyFilePath={() => undefined}
+              onAddBrowser={() => undefined}
+              onAddTerminal={() => undefined}
+              onAddDiff={() => undefined}
+              onAddFiles={() => undefined}
+              onAddPullRequest={() => undefined}
+              onAddAgents={() => undefined}
+              browserAvailable={false}
+              terminalAvailable={false}
+              diffAvailable={false}
+              filesAvailable={false}
+              pullRequestAvailable={false}
+              agentsAvailable={false}
+              liveAgentCount={0}
+              pullRequestStatuses={pullRequestTabStatuses}
+            >
+              {activePullRequestSurface ? (
+                <PullRequestDetailPanel
+                  key={activePullRequestSurface.id}
+                  environmentId={pullRequestEnvironmentId}
+                  reference={{
+                    projectId: activePullRequestSurface.projectId as ProjectId,
+                    repository: activePullRequestSurface.repository,
+                    number: activePullRequestSurface.number,
+                  }}
+                  refreshToken={detailRefreshToken}
+                  // Merging, closing or reopening changes the row this panel was opened from, so
+                  // the list behind it is out of date the moment the host takes the action.
+                  onActed={() => {
+                    refreshList();
+                    baselineQuery.refresh();
+                    authoredQuery.refresh();
+                    reviewingQuery.refresh();
+                  }}
+                  onStateChange={handlePullRequestTabStatusChange}
+                  chromeVariant="collapse"
+                />
+              ) : null}
+            </RightPanelTabs>
+          ) : null}
+        </SidebarInsetCard>
       </div>
     </SidebarInset>
   );
@@ -1320,8 +1411,9 @@ function PullRequestsColumn({
   searchInput,
   filtersMenu,
   rightPanelControl,
-  rightPanelOpen,
+  rightPanelOpen: _rightPanelOpen,
   listBody,
+  headerActionsElement,
 }: {
   refreshing: boolean;
   onRefresh: () => void;
@@ -1338,6 +1430,7 @@ function PullRequestsColumn({
   rightPanelControl: ReactNode;
   rightPanelOpen: boolean;
   listBody: ReactNode;
+  headerActionsElement: HTMLDivElement | null;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const markerRef = useRef<HTMLDivElement | null>(null);
@@ -1398,80 +1491,58 @@ function PullRequestsColumn({
     // Painted flat like the chat column: the inset underneath carries the chrome grain, and a
     // content surface that lets it show reads as a different background than every thread.
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-      <header
-        className={cn(
-          "workspace-topbar drag-region gap-1.5 px-3 sm:px-5",
-          // A closed right panel leaves this column full-width, so its header runs
-          // underneath the native window controls on Windows; reserve the inset the
-          // way Settings and the chat view do. While the panel is open the column
-          // ends at the panel's left edge and the absolute controls strip (already
-          // WCO-aware) owns the top-right corner.
-          !rightPanelOpen && "wco:pr-[var(--workspace-native-controls-inset)]",
-          COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-        )}
-      >
-        {condensed ? (
-          <WorkspaceBreadcrumb ariaLabel="Pull request scope">
-            {/* The page name remains the foreground anchor in both states; the live filters are
-                its compact scope, grouped as the second crumb rather than pretending each menu
-                is a separate page in the hierarchy. */}
-            <WorkspaceBreadcrumbItem current>
-              <h1 className="truncate">Pull Requests</h1>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator />
-            <WorkspaceBreadcrumbItem className="gap-1.5 overflow-hidden">
-              <CompactFilterMenu
-                label="Filter by state"
-                value={state}
-                options={STATE_TABS}
-                onChange={onState}
-              />
-              <CompactFilterMenu
-                label="Filter by involvement"
-                value={involvement}
-                options={INVOLVEMENT_TABS}
-                onChange={onInvolvement}
-              />
-              {hostMenuOptions.length > 2 ? (
-                <CompactFilterMenu
-                  label="Filter by host"
-                  value={host ?? ""}
-                  options={hostMenuOptions}
-                  onChange={(next) => onHost(next === "" ? undefined : next)}
+      {headerActionsElement
+        ? createPortal(
+            <>
+              {condensed ? (
+                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                  <CompactFilterMenu
+                    label="Filter by state"
+                    value={state}
+                    options={STATE_TABS}
+                    onChange={onState}
+                  />
+                  <CompactFilterMenu
+                    label="Filter by involvement"
+                    value={involvement}
+                    options={INVOLVEMENT_TABS}
+                    onChange={onInvolvement}
+                  />
+                  {hostMenuOptions.length > 2 ? (
+                    <CompactFilterMenu
+                      label="Filter by host"
+                      value={host ?? ""}
+                      options={hostMenuOptions}
+                      onChange={(next) => onHost(next === "" ? undefined : next)}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {condensed ? (
+                <ExpandableSearch
+                  searchInput={searchInput}
+                  searchValue={searchValue}
+                  open={searchOpen}
+                  onOpenChange={setSearchOpen}
+                  focusToken={searchFocusToken}
+                  onFocusWithin={(focused) => {
+                    topbarSearchFocusedRef.current = focused;
+                  }}
                 />
               ) : null}
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        ) : (
-          <WorkspaceBreadcrumb ariaLabel="Pull requests breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1 className="truncate">Pull Requests</h1>
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        )}
-        <div className="min-w-0 flex-1" />
-        {condensed ? (
-          <ExpandableSearch
-            searchInput={searchInput}
-            searchValue={searchValue}
-            open={searchOpen}
-            onOpenChange={setSearchOpen}
-            focusToken={searchFocusToken}
-            onFocusWithin={(focused) => {
-              topbarSearchFocusedRef.current = focused;
-            }}
-          />
-        ) : null}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Refresh pull requests"
-          onClick={onRefresh}
-        >
-          <RefreshCwIcon className={cn("size-4", refreshing && "animate-spin")} />
-        </Button>
-        {rightPanelControl}
-      </header>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Refresh pull requests"
+                onClick={onRefresh}
+              >
+                <RefreshCwIcon className={cn("size-4", refreshing && "animate-spin")} />
+              </Button>
+              {rightPanelControl}
+            </>,
+            headerActionsElement,
+          )
+        : null}
 
       <div
         ref={scrollRef}

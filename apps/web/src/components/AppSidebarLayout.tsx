@@ -11,15 +11,14 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { isElectron } from "../env";
 import { getLocalStorageItem } from "../hooks/useLocalStorage";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
+import { resolveShortcutCommand } from "../keybindings";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useLegacySidebarEnabled } from "../hooks/useSettings";
+import { useLegacySidebarEnabled } from "../hooks/useSettings";
 import LegacyThreadSidebar from "./LegacySidebar";
 import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
-import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
   resolveInitialThreadSidebarWidth,
@@ -28,15 +27,7 @@ import {
   THREAD_SIDEBAR_MIN_WIDTH,
   THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
 } from "./threadSidebarWidth";
-import {
-  Sidebar,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-  useSidebar,
-  useSidebarVisibility,
-} from "./ui/sidebar";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Sidebar, SidebarProvider, SidebarRail, useSidebar } from "./ui/sidebar";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
@@ -61,15 +52,9 @@ function readInitialThreadSidebarWidth(): number {
   }
 }
 
-function SidebarControl() {
+function SidebarToggleKeybinding() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar } = useSidebar();
-  const isSidebarVisible = useSidebarVisibility();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const stageBackdropVariant = useSidebarStageBackdropVariant(
-    environmentIdentificationMode === "artwork",
-  );
-  const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -92,31 +77,7 @@ function SidebarControl() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
-  return (
-    <div
-      className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 flex h-[var(--workspace-topbar-height)] items-center"
-      data-sidebar-control=""
-    >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <SidebarTrigger
-              className={cn(
-                "pointer-events-auto",
-                isSidebarVisible &&
-                  stageBackdropVariant &&
-                  "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
-              )}
-              aria-label="Toggle main sidebar"
-            />
-          }
-        />
-        <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
-        </TooltipPopup>
-      </Tooltip>
-    </div>
-  );
+  return null;
 }
 
 // Settings swaps the thread sidebar out of the tree. Keep the lightweight
@@ -134,6 +95,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // sidebar is active.
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  const useSidebarV2Theme = !legacySidebarEnabled && !isOnSettings;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
   // Subscribed rather than read once: the clamp must track live window size,
@@ -192,13 +154,26 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, [navigate, pathname]);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+    <SidebarProvider
+      className="h-dvh! min-h-0!"
+      // data-shell-theme (not data-sidebar-version) scopes only the chrome
+      // token; the sidebar-version blocks repaint --background/--card and
+      // would blacken the whole content area if placed on the wrapper.
+      data-shell-theme={useSidebarV2Theme ? "v2" : "v1"}
+      defaultOpen
+      style={sidebarProviderStyle}
+    >
       <ProjectProjectionRetention />
       <Sidebar
         side="left"
         collapsible="offcanvas"
         data-app-sidebar=""
-        className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+        variant="inset"
+        className={cn(
+          "bg-sidebar text-sidebar-foreground",
+          !useSidebarV2Theme && "forma-sidebar-v1",
+        )}
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
@@ -222,7 +197,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         <SidebarRail />
       </Sidebar>
       {children}
-      <SidebarControl />
+      <SidebarToggleKeybinding />
     </SidebarProvider>
   );
 }

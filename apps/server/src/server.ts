@@ -25,6 +25,7 @@ import { pullRequestHttpApiLayer } from "./pullRequest/http.ts";
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
+import { CheckpointDiffBlobRepositoryLive } from "./persistence/Layers/CheckpointDiffBlobs.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
@@ -47,6 +48,11 @@ import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
+import { ComponentPreviewManagerLive } from "./componentPreview/Layers/ComponentPreviewManager.ts";
+import {
+  componentPreviewAssetProxyRouteLayer,
+  componentPreviewProxyRouteLayer,
+} from "./componentPreview/http.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as GitManager from "./git/GitManager.ts";
@@ -79,6 +85,8 @@ import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import { ProjectAgentInventoryLive } from "./project/ProjectAgentInventory.ts";
+import * as ThreadExtensionService from "./threadExtensions/ThreadExtensionService.ts";
 import { ObservabilityLive } from "./observability/Layers/Observability.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import { authHttpApiLayer, environmentAuthenticatedAuthLayer } from "./auth/http.ts";
@@ -111,7 +119,7 @@ import {
   makePersistedServerRuntimeState,
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
-import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
+import { orchestrationEventsRouteLayer, orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -261,7 +269,14 @@ const ProviderLayerLive = ProviderServiceLive.pipe(
   Layer.provideMerge(ProviderSessionDirectoryLayerLive),
 );
 
-const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
+const PersistenceLayerLive = CheckpointDiffBlobRepositoryLive.pipe(
+  Layer.provideMerge(SqlitePersistenceLayerLive),
+);
+
+const ThreadExtensionLayerLive = ThreadExtensionService.layer.pipe(
+  Layer.provide(OrchestrationLayerLive),
+  Layer.provide(PersistenceLayerLive),
+);
 
 const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProjectConfig.layer),
@@ -278,6 +293,7 @@ const SourceControlProviderRegistryLayerLive = SourceControlProviderRegistry.lay
 const GitManagerLayerLive = GitManager.layer.pipe(
   Layer.provideMerge(ProjectSetupScriptRunner.layer),
   Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(GitHubCli.layer),
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
   Layer.provideMerge(TextGeneration.layer),
 );
@@ -329,17 +345,24 @@ const PreviewLayerLive = Layer.empty.pipe(
   Layer.provideMerge(PortScannerLayerLive),
 );
 
-const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(Layer.provide(WorkspacePaths.layer));
+const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(
+  Layer.provide(WorkspacePaths.layer),
+  // Required by the protected-paths safety guard so the Settings → Safety
+  // toggle is observed. Without it the guard fails safe (always enabled).
+  Layer.provide(ServerSettingsLayerLive),
+);
 
 const WorkspaceFileSystemLayerLive = WorkspaceFileSystem.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
   Layer.provide(WorkspaceEntriesLayerLive),
+  Layer.provide(ServerSettingsLayerLive),
 );
 
 const WorkspaceLayerLive = Layer.mergeAll(
   WorkspacePaths.layer,
   WorkspaceEntriesLayerLive,
   WorkspaceFileSystemLayerLive,
+  ProjectAgentInventoryLive,
 );
 
 const ProjectFaviconResolverLayerLive = ProjectFaviconResolver.layer.pipe(
@@ -396,7 +419,14 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // keeps a single Live for all opencode consumers.
   Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
   Layer.provideMerge(WorkspaceLayerLive),
-  Layer.provideMerge(ProjectFaviconResolverLayerLive),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      ProjectFaviconResolverLayerLive,
+      // Fork: component preview harness (distinct from the webview PreviewLayerLive).
+      ComponentPreviewManagerLive.pipe(Layer.provide(OrchestrationLayerLive)),
+      ThreadExtensionLayerLive,
+    ),
+  ),
   Layer.provideMerge(RepositoryIdentityResolver.layer),
   Layer.provideMerge(ServerEnvironment.layer),
   Layer.provideMerge(AuthLayerLive),
@@ -448,8 +478,12 @@ export const makeRoutesLayer = Layer.mergeAll(
       Layer.provide(serverEnvironmentHttpApiLayer),
       Layer.provide(environmentAuthenticatedAuthLayer),
     ),
+    orchestrationEventsRouteLayer,
     otlpTracesProxyRouteLayer,
     assetRouteLayer,
+    // Fork: component preview harness proxy routes.
+    componentPreviewProxyRouteLayer,
+    componentPreviewAssetProxyRouteLayer,
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
   ),

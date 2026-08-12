@@ -499,12 +499,11 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
           args: [
             "pr",
             "list",
-            "--head",
-            input.headSelector,
+            ...(input.headSelector ? ["--head", input.headSelector] : []),
             "--state",
             "open",
             "--limit",
-            String(input.limit ?? 1),
+            String(input.limit ?? (input.headSelector ? 1 : 20)),
             "--json",
             "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
           ],
@@ -648,6 +647,7 @@ function makeManager(input?: {
   );
 
   const managerLayer = Layer.mergeAll(
+    Layer.succeed(GitHubCli.GitHubCli, gitHubCli),
     Layer.succeed(TextGeneration.TextGeneration, textGeneration),
     Layer.mock(ProviderRegistry.ProviderRegistry)({
       getProviders: Effect.succeed([]),

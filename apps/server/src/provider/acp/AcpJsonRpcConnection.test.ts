@@ -52,7 +52,7 @@ describe("AcpSessionRuntime", () => {
               parameterizedModelPicker: true,
             },
           },
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           authMethodId: "test",
           requestLogger: (event) =>
             Effect.sync(() => {
@@ -260,7 +260,7 @@ describe("AcpSessionRuntime", () => {
             },
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           authMethodId: "test",
         }),
       ),
@@ -321,7 +321,7 @@ describe("AcpSessionRuntime", () => {
             },
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           authMethodId: "test",
         }),
       ),
@@ -359,7 +359,7 @@ describe("AcpSessionRuntime", () => {
             },
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           authMethodId: "test",
         }),
       ),
@@ -408,7 +408,7 @@ describe("AcpSessionRuntime", () => {
             args: mockAgentArgs,
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           requestLogger: (event) =>
             Effect.sync(() => {
               requestEvents.push(event);
@@ -443,7 +443,7 @@ describe("AcpSessionRuntime", () => {
             args: mockAgentArgs,
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           requestLogger: (event) =>
             Effect.sync(() => {
               requestEvents.push(event);
@@ -486,7 +486,7 @@ describe("AcpSessionRuntime", () => {
             args: mockAgentArgs,
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
           protocolLogging: {
             logIncoming: true,
             logOutgoing: true,
@@ -646,7 +646,7 @@ describe("AcpSessionRuntime", () => {
             },
           },
           cwd: process.cwd(),
-          clientInfo: { name: "t3-test", version: "0.0.0" },
+          clientInfo: { name: "forma-test", version: "0.0.0" },
         }),
       ),
       Effect.scoped,

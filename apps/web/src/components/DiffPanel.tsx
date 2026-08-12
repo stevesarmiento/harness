@@ -14,13 +14,17 @@ import {
   ChevronRightIcon,
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
-  Columns2Icon,
-  PilcrowIcon,
   RefreshCwIcon,
-  Rows3Icon,
   SearchIcon,
-  TextWrapIcon,
 } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import {
+  IconEllipsis as EllipsisIcon,
+  IconParagraphsign as PilcrowIcon,
+  IconRectangleSplit2x1 as Columns2Icon,
+  IconRectangleSplit3x1 as Rows3Icon,
+  IconTextWordSpacing as TextWrapIcon,
+} from "symbols-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { type DraftId } from "../composerDraftStore";
@@ -46,8 +50,7 @@ import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { DiffStatLabel } from "./chat/DiffStatLabel";
 import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/AnnotatableCodeView";
-import { Button } from "./ui/button";
-import { ToggleGroup, Toggle } from "./ui/toggle-group";
+import { HeaderIconActionButton } from "./HeaderIconActionButton";
 import { Switch } from "./ui/switch";
 import {
   Combobox,
@@ -66,6 +69,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  Menu,
+  MenuCheckboxItem,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
@@ -74,8 +83,8 @@ import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
-import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 
+type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
 const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
 
@@ -102,8 +111,7 @@ export default function DiffPanel({
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
   const [initialGitScope] = useState(initialGitScopeProp);
-  const diffRenderMode = useDiffPanelStore((state) => state.diffRenderMode);
-  const setDiffRenderMode = useDiffPanelStore((state) => state.setDiffRenderMode);
+  const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [baseRefQuery, setBaseRefQuery] = useState("");
@@ -314,14 +322,45 @@ export default function DiffPanel({
       return undefined;
     }
 
-    return createGitDiffFileContentsLoader(getDiffFileContents, {
-      environmentId: activeThread.environmentId,
-      cwd: preview.cwd,
-      sourceKind: selectedGitSource.kind,
-      baseRef: selectedGitSource.baseRef,
-      headRef: selectedGitSource.headRef,
-      cacheKey: selectedGitSource.diffHash,
-    });
+    const source = selectedGitSource;
+    return async (fileDiff) => {
+      const newPath = resolveFileDiffPath(fileDiff);
+      const oldPath = fileDiff.prevName
+        ? resolveFileDiffPath({ ...fileDiff, name: fileDiff.prevName })
+        : newPath;
+      const result = await getDiffFileContents({
+        environmentId: activeThread.environmentId,
+        input: {
+          cwd: preview.cwd,
+          sourceKind: source.kind,
+          changeType: fileDiff.type,
+          baseRef: source.baseRef,
+          headRef: source.headRef,
+          oldPath,
+          newPath,
+        },
+      });
+      if (result._tag !== "Success") {
+        throw squashAtomCommandFailure(result);
+      }
+
+      const newFile = {
+        name: newPath,
+        contents: result.value.newContents,
+        cacheKey: `${source.diffHash}:new:${newPath}`,
+      };
+      if (fileDiff.type === "rename-pure") {
+        return { oldFile: null, newFile };
+      }
+      return {
+        oldFile: {
+          name: oldPath,
+          contents: result.value.oldContents,
+          cacheKey: `${source.diffHash}:old:${oldPath}`,
+        },
+        newFile,
+      };
+    };
   }, [
     activeThread,
     branchDiffPreview.data,
@@ -690,14 +729,23 @@ export default function DiffPanel({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      <div className="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">
         {codeViewFiles.length > 0 && (
-          <DiffStatLabel
-            additions={diffLineStat.additions}
-            deletions={diffLineStat.deletions}
-            className="mr-1 text-[11px]"
-            layout="inline"
-          />
+          <div className="text-ui-2xs hidden items-center gap-1.5 rounded-md border border-border/70 bg-background/70 px-2.5 py-1 text-muted-foreground/80 md:flex">
+            <span>
+              {codeViewFiles.length} file{codeViewFiles.length === 1 ? "" : "s"}
+            </span>
+            {diffLineStat.additions > 0 || diffLineStat.deletions > 0 ? (
+              <>
+                <span className="text-muted-foreground/50">•</span>
+                <DiffStatLabel
+                  additions={diffLineStat.additions}
+                  deletions={diffLineStat.deletions}
+                  layout="inline"
+                />
+              </>
+            ) : null}
+          </div>
         )}
         {canRefreshGitDiff && (
           <Tooltip>
@@ -725,10 +773,8 @@ export default function DiffPanel({
           <Tooltip>
             <TooltipTrigger
               render={
-                <Button
+                <HeaderIconActionButton
                   type="button"
-                  size="icon-sm"
-                  variant="ghost"
                   aria-label={allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
                   onClick={toggleDiffFileCollapse}
                 />
@@ -745,66 +791,64 @@ export default function DiffPanel({
             </TooltipPopup>
           </Tooltip>
         )}
-        <ToggleGroup
-          className="shrink-0 gap-1"
-          size="sm"
-          value={[diffRenderMode]}
-          onValueChange={(value) => {
-            const next = value[0];
-            if (next === "stacked" || next === "split") {
-              setDiffRenderMode(next);
-            }
-          }}
-        >
-          <Toggle aria-label="Stacked diff view" value="stacked" variant="ghost">
-            <Rows3Icon className="size-3.5" />
-          </Toggle>
-          <Toggle aria-label="Split diff view" value="split" variant="ghost">
-            <Columns2Icon className="size-3.5" />
-          </Toggle>
-        </ToggleGroup>
-        <Tooltip>
-          <TooltipTrigger
+        <Menu>
+          <MenuTrigger
             render={
-              <Toggle
-                aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
-                variant="ghost"
-                size="sm"
-                pressed={wordWrap}
-                onPressedChange={(pressed) => {
-                  setWordWrap(Boolean(pressed));
-                }}
-              />
+              <HeaderIconActionButton aria-label="Diff view options" title="Diff view options">
+                <EllipsisIcon className="size-3 rotate-90 fill-current" />
+              </HeaderIconActionButton>
             }
-          >
-            <TextWrapIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
-          </TooltipPopup>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                aria-label={
-                  diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
-                }
-                variant="ghost"
-                size="sm"
-                pressed={diffIgnoreWhitespace}
-                onPressedChange={(pressed) => {
-                  setDiffIgnoreWhitespace(Boolean(pressed));
-                }}
-              />
-            }
-          >
-            <PilcrowIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-          </TooltipPopup>
-        </Tooltip>
+          />
+          <MenuPopup align="end" className="w-56">
+            <MenuItem
+              onClick={() => {
+                setDiffRenderMode("stacked");
+              }}
+            >
+              <Rows3Icon className="size-3 fill-current" />
+              Unified view
+              {diffRenderMode === "stacked" ? (
+                <span className="ml-auto text-xs">Selected</span>
+              ) : null}
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setDiffRenderMode("split");
+              }}
+            >
+              <Columns2Icon className="size-3 fill-current" />
+              Split view
+              {diffRenderMode === "split" ? (
+                <span className="ml-auto text-xs">Selected</span>
+              ) : null}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuCheckboxItem
+              checked={wordWrap}
+              onCheckedChange={(checked) => {
+                setWordWrap(Boolean(checked));
+              }}
+              variant="switch"
+            >
+              <span className="inline-flex items-center gap-2">
+                <TextWrapIcon className="size-3 fill-current" />
+                Line wrap
+              </span>
+            </MenuCheckboxItem>
+            <MenuCheckboxItem
+              checked={diffIgnoreWhitespace}
+              onCheckedChange={(checked) => {
+                setDiffIgnoreWhitespace(Boolean(checked));
+              }}
+              variant="switch"
+            >
+              <span className="inline-flex items-center gap-2">
+                <PilcrowIcon className="size-3 fill-current" />
+                Hide whitespace changes
+              </span>
+            </MenuCheckboxItem>
+          </MenuPopup>
+        </Menu>
       </div>
     </>
   );
@@ -862,41 +906,19 @@ export default function DiffPanel({
                 className="min-h-0 flex-1"
                 onClickCapture={(event) => {
                   const composedPath = event.nativeEvent.composedPath?.() ?? [];
-                  for (const node of composedPath) {
-                    if (!(node instanceof HTMLElement)) continue;
-                    // Header controls keep their own actions. In particular, the chevron must
-                    // not also trigger the row handler or the two toggles cancel each other.
-                    if (node instanceof HTMLButtonElement || node instanceof HTMLAnchorElement) {
-                      return;
-                    }
-                  }
                   const title = composedPath.find(
                     (node): node is HTMLElement =>
                       node instanceof HTMLElement && node.hasAttribute("data-title"),
                   );
                   const filePath = title?.textContent?.trim();
-                  // The filename remains the explicit "open in editor" affordance.
-                  if (filePath) {
-                    openDiffFile(filePath);
-                    return;
-                  }
-                  const header = composedPath.find(
-                    (node): node is HTMLElement =>
-                      node instanceof HTMLElement && node.hasAttribute("data-diffs-header"),
-                  );
-                  const headerFilePath = header?.querySelector("[data-title]")?.textContent?.trim();
-                  if (!headerFilePath) return;
-                  const file = codeViewFiles.find(
-                    (candidate) => candidate.filePath === headerFilePath,
-                  );
-                  if (file) toggleDiffFileCollapsed(file.fileKey);
+                  if (filePath) openDiffFile(filePath);
                 }}
               >
                 <AnnotatableCodeView
                   key={collapseScopeKey ?? reviewSectionId}
                   viewerRef={codeViewRef}
                   codeViewKey={codeViewMountKey}
-                  className="h-full min-h-0 overflow-auto"
+                  className="diff-render-surface h-full min-h-0 overflow-auto"
                   files={codeViewFiles}
                   sectionId={reviewSectionId}
                   sectionTitle={reviewSectionTitle}

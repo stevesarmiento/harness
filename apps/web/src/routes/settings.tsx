@@ -1,4 +1,4 @@
-import { RotateCcwIcon } from "lucide-react";
+import { IconArrowCounterclockwise as RotateCcwIcon, IconGearshape } from "symbols-react";
 import {
   Outlet,
   createFileRoute,
@@ -10,12 +10,12 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { useSettingsRestore } from "../components/settings/SettingsPanels";
-import { SettingsBreadcrumb } from "../components/settings/SettingsBreadcrumb";
+import { SETTINGS_DEFAULT_PATH } from "../components/settings/settingsNavigation";
+import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
 import { Button } from "../components/ui/button";
-import { SidebarInset } from "../components/ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
+import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
 import { isElectron } from "../env";
-import { cn } from "~/lib/utils";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 
 function RestoreDefaultsButton({ onRestored }: { onRestored: () => void }) {
   const { changedSettingLabels, restoreDefaults } = useSettingsRestore(onRestored);
@@ -70,48 +70,53 @@ function SettingsContentLayout() {
   }, [navigateBackWithinApp]);
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        {!isElectron && (
-          <header
-            className={cn(
-              "workspace-topbar px-3 transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:px-5",
-              COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-            )}
-          >
-            <div className="flex w-full items-center gap-2">
-              <SettingsBreadcrumb pathname={location.pathname} />
-              {showRestoreDefaults ? (
-                <div className="ms-auto flex items-center gap-2">
-                  <RestoreDefaultsButton onRestored={handleRestored} />
-                </div>
-              ) : null}
-            </div>
-          </header>
-        )}
-
-        {isElectron && (
-          <div
-            className={cn(
-              "drag-region flex h-[52px] shrink-0 items-center px-5 transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]",
-              COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-            )}
-          >
-            <div className="flex w-full items-center gap-2">
-              <SettingsBreadcrumb pathname={location.pathname} />
-              {showRestoreDefaults ? (
-                <div className="ms-auto flex items-center gap-2">
-                  <RestoreDefaultsButton onRestored={handleRestored} />
-                </div>
-              ) : null}
-            </div>
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground isolate md:h-auto">
+      {!isElectron && (
+        <header className="workspace-topbar border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]">
+          <div className="flex min-w-0 w-full items-center gap-2">
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <DesktopSidebarReopenButton className="md:ml-0" />
+            <WorkspaceHeaderTitle
+              icon={
+                <IconGearshape className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              }
+            >
+              Settings
+            </WorkspaceHeaderTitle>
+            {showRestoreDefaults ? (
+              <div className="ms-auto flex items-center gap-2">
+                <RestoreDefaultsButton onRestored={handleRestored} />
+              </div>
+            ) : null}
           </div>
-        )}
+        </header>
+      )}
 
+      {isElectron && (
+        <div className="workspace-topbar drag-region border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:39px] wco:pr-[var(--workspace-native-controls-inset)]">
+          <div className="flex min-w-0 items-center gap-2">
+            <DesktopSidebarReopenButton className="md:ml-0" />
+            <WorkspaceHeaderTitle
+              icon={
+                <IconGearshape className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+              }
+            >
+              Settings
+            </WorkspaceHeaderTitle>
+          </div>
+          {showRestoreDefaults ? (
+            <div className="ms-auto flex items-center gap-2 [-webkit-app-region:no-drag]">
+              <RestoreDefaultsButton onRestored={handleRestored} />
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <SidebarInsetCard>
         <div key={restoreSignal} className="min-h-0 flex flex-1 flex-col">
           <Outlet />
         </div>
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }
@@ -130,7 +135,7 @@ export const Route = createFileRoute("/settings")({
     }
 
     if (location.pathname === "/settings") {
-      throw redirect({ to: "/settings/general", replace: true });
+      throw redirect({ to: SETTINGS_DEFAULT_PATH, replace: true });
     }
   },
   component: SettingsRouteLayout,

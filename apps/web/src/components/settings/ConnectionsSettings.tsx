@@ -4,6 +4,7 @@ import {
   QrCodeIcon,
   RefreshCwIcon,
   TerminalIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { type ReactNode, memo, useCallback, useId, useMemo, useState } from "react";
@@ -104,8 +105,10 @@ import {
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
 } from "~/versionSkew";
-import { hasCloudPublicConfig } from "~/cloud/publicConfig";
+import { hasCloudPublicConfig, resolveCloudPublicConfigState } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
+import { CLERK_UNAVAILABLE_HINT } from "../clerk/T3ConnectSidebarControl.logic";
+import { useT3ConnectClerkAvailability } from "../clerk/useT3ConnectClerkAvailability";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -1592,8 +1595,8 @@ function CloudLinkSwitch({
 }
 
 function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: boolean }) {
+  const clerk = useT3ConnectClerkAvailability();
   const {
-    isSignedIn,
     linkState: primaryCloudLinkState,
     managedTunnelActive,
     publishAgentActivity,
@@ -1603,8 +1606,14 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
 
+  // The switches always REFLECT the local environment link state (readable
+  // over the local session without Clerk); only managing the link requires a
+  // Clerk web session plus relay:write on the environment session.
+  const isSignedIn = clerk === "signed-in";
   const disabledReason = !isSignedIn
-    ? "Sign in to T3 Connect to manage this environment."
+    ? clerk === "unavailable"
+      ? `${CLERK_UNAVAILABLE_HINT}. Manage T3 Connect from the CLI with \`t3 connect\`.`
+      : "Sign in to T3 Connect to manage this environment."
     : !canManageRelay
       ? "Your session does not have permission to manage T3 Connect access."
       : null;
@@ -1685,7 +1694,24 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
 }
 
 function CloudLinkRow({ canManageRelay }: { readonly canManageRelay: boolean }) {
-  return hasCloudPublicConfig() ? <ConfiguredCloudLinkRow canManageRelay={canManageRelay} /> : null;
+  const configState = resolveCloudPublicConfigState();
+  if (configState.configured) {
+    return <ConfiguredCloudLinkRow canManageRelay={canManageRelay} />;
+  }
+  const missingConfiguration = `Missing ${configState.missingKeys.join(", ")}`;
+  return (
+    <SettingsRow
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <TriangleAlertIcon className="size-3.5 text-amber-500" />
+          T3 Connect unavailable
+        </span>
+      }
+      description="This build does not include the complete public configuration required for T3 Connect."
+      status={missingConfiguration}
+      control={<CloudLinkSwitch checked={false} disabled disabledReason={missingConfiguration} />}
+    />
+  );
 }
 
 function EmptyRemoteEnvironments({ cloudEnabled = true }: { readonly cloudEnabled?: boolean }) {

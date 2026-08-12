@@ -51,7 +51,15 @@ should set `T3CODE_CLERK_PUBLISHABLE_KEY`, `T3CODE_CLERK_JWT_TEMPLATE`,
 production builds only need the Clerk publishable key, JWT template name, and relay URL in their EAS
 environment.
 
-When any client-facing public value is absent, cloud UI is omitted. The `t3 connect` command group is
+The headless `t3 connect` CLI needs the relay URL, Clerk publishable key, and CLI OAuth client ID.
+Web and desktop account authentication also need the Clerk JWT-template name. This distinction is
+easy to miss: a three-value CLI configuration can make `t3 connect` appear configured while every
+account-based Connect surface remains unavailable.
+
+When client-facing configuration is incomplete, the sidebar and Connections settings show the
+missing variable names without revealing configured values. Clerk hooks remain unmounted until the
+web configuration is complete. Packaged Forma desktop builds validate all four canonical values and
+fail before packaging when any are absent. The `t3 connect` command group is
 always registered: when the CLI public values are absent, `makeCli` in `apps/server/src/bin.ts`
 registers a hidden fallback `connect` command that reports the missing configuration instead of
 silently vanishing from help. The bundled server still accepts runtime overrides for self-hosted or

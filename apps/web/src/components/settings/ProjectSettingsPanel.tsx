@@ -13,7 +13,6 @@ import {
   selectProjectGroupingSettings,
 } from "../../logicalProject";
 import type {
-  ContextMenuItem,
   ModelSelection,
   ProviderDriverKind,
   SidebarProjectGroupingMode,
@@ -27,13 +26,12 @@ import { useCanGoBack, useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, CopyIcon, PlusIcon, SettingsIcon, Trash2Icon } from "lucide-react";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+  IconCheckmark as CheckIcon,
+  IconChevronDown as CrumbChevronDownIcon,
+  IconChevronRight as CrumbChevronRightIcon,
+  IconCube as CubeIcon,
+} from "symbols-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isElectron } from "../../env";
@@ -82,7 +80,7 @@ import {
   type ProjectScriptEditorRequest,
 } from "../projectScriptEditor";
 import { cn } from "../../lib/utils";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../workspaceTitlebar";
+import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -95,13 +93,10 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { SidebarInset } from "../ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../ui/sidebar";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../WorkspaceBreadcrumb";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
+import { WorkspaceHeaderTitle } from "../WorkspaceHeaderTitle";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -172,29 +167,26 @@ export function ProjectSettingsPage({ projectKey }: { projectKey: string }) {
   }, [navigateBackWithinApp]);
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        {!isElectron && (
-          <header
-            className={cn(
-              "workspace-topbar px-3 transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:px-5",
-              COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-            )}
-          >
-            <ProjectSettingsBreadcrumb projectKey={projectKey} />
-          </header>
-        )}
-        {isElectron && (
-          <div
-            className={cn(
-              "drag-region flex h-[52px] shrink-0 items-center px-5 transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]",
-              COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-            )}
-          >
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground isolate md:h-auto">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Top bar — sits on the window chrome above the inset card, like every Forma page. */}
+        <header
+          className={cn(
+            "workspace-topbar border-b border-border/70 bg-background md:border-b-0 md:bg-transparent",
+            "pl-[calc(env(safe-area-inset-left)+0.625rem)] pr-[calc(env(safe-area-inset-right)+0.625rem)] md:pl-0 [--workspace-topbar-height:40px]",
+            isElectron &&
+              "drag-region relative [--workspace-topbar-height:39px] wco:pr-[var(--workspace-native-controls-inset)]",
+          )}
+        >
+          <div className="flex min-w-0 w-full items-center gap-2">
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <DesktopSidebarReopenButton className="md:ml-0" />
             <ProjectSettingsBreadcrumb projectKey={projectKey} />
           </div>
-        )}
-        <ProjectSettingsPanel projectKey={projectKey} />
+        </header>
+        <SidebarInsetCard>
+          <ProjectSettingsPanel projectKey={projectKey} />
+        </SidebarInsetCard>
       </div>
     </SidebarInset>
   );
@@ -204,52 +196,79 @@ function ProjectSettingsBreadcrumb({ projectKey }: { projectKey: string }) {
   const groups = useSettingsProjectGroups();
   const navigate = useNavigate();
   const selected = groups.find((group) => group.projectKey === projectKey) ?? null;
-  const openProjectMenu = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const api = readLocalApi();
-    if (!api) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const items: ContextMenuItem<string>[] = groups.map((group) => ({
-      id: group.projectKey,
-      label: group.displayName,
-    }));
-    void settlePromise(() =>
-      api.contextMenu.show(items, { x: rect.left, y: rect.bottom + 4 }),
-    ).then((clicked) => {
-      if (clicked._tag === "Failure" || clicked.value === null) return;
-      void navigate({
-        to: "/projects/$projectKey",
-        params: { projectKey: clicked.value },
-        replace: true,
-        hashScrollIntoView: false,
-      });
-    });
-  };
+  const representative = selected
+    ? (selected.memberProjects.find(
+        (member) => member.environmentId === selected.environmentId && member.id === selected.id,
+      ) ?? selected.memberProjects[0])
+    : undefined;
 
   return (
-    <WorkspaceBreadcrumb ariaLabel="Project settings breadcrumb">
-      <WorkspaceBreadcrumbItem>Projects</WorkspaceBreadcrumbItem>
-      <WorkspaceBreadcrumbSeparator />
-      <WorkspaceBreadcrumbItem current>
-        {selected ? (
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-label="Switch project"
-            onClick={openProjectMenu}
-            className="group/project-title inline-flex min-w-0 max-w-64 cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+    <nav
+      aria-label="Project settings breadcrumb"
+      className="flex min-w-0 flex-1 items-center gap-1.5"
+    >
+      <WorkspaceHeaderTitle
+        icon={<CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />}
+      >
+        Projects
+      </WorkspaceHeaderTitle>
+      <CrumbChevronRightIcon className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME} aria-hidden />
+      {selected ? (
+        <Menu>
+          <MenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label="Switch project"
+                // Flat pill matching the thread-header breadcrumb chips.
+                className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                title={selected.displayName}
+              />
+            }
           >
+            {representative ? (
+              <ProjectFavicon
+                environmentId={representative.environmentId}
+                cwd={representative.workspaceRoot}
+                faviconPath={representative.faviconPath ?? null}
+                className="size-3.5 shrink-0"
+              />
+            ) : null}
             <span className="min-w-0 truncate">{selected.displayName}</span>
-            <ChevronDownIcon
-              aria-hidden
-              className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/project-title:opacity-100 group-focus-visible/project-title:opacity-100"
-            />
-          </button>
-        ) : (
-          <span className="truncate text-muted-foreground">Unavailable project</span>
-        )}
-      </WorkspaceBreadcrumbItem>
-    </WorkspaceBreadcrumb>
+            <CrumbChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
+          </MenuTrigger>
+          <MenuPopup align="start" className="w-80 max-w-[calc(100vw-1rem)]">
+            {groups.map((group) => {
+              const isActive = group.projectKey === selected.projectKey;
+              return (
+                <MenuItem
+                  key={group.projectKey}
+                  className={cn("grid grid-cols-[1rem_1fr] gap-2", isActive && "bg-accent/60")}
+                  onClick={() => {
+                    if (isActive) return;
+                    void navigate({
+                      to: "/projects/$projectKey",
+                      params: { projectKey: group.projectKey },
+                      replace: true,
+                      hashScrollIntoView: false,
+                    });
+                  }}
+                >
+                  <span className="flex items-center justify-center">
+                    {isActive ? <CheckIcon className="size-3 fill-current" /> : null}
+                  </span>
+                  <span className="min-w-0 truncate">{group.displayName}</span>
+                </MenuItem>
+              );
+            })}
+          </MenuPopup>
+        </Menu>
+      ) : (
+        <span className="truncate text-xs font-medium text-muted-foreground">
+          Unavailable project
+        </span>
+      )}
+    </nav>
   );
 }
 

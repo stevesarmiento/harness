@@ -5,13 +5,13 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { type TerminalSessionState } from "@t3tools/client-runtime/state/terminal";
 import {
-  Plus,
-  SquareSplitHorizontal,
-  SquareSplitVertical,
-  TerminalSquare,
-  Trash2,
-  XIcon,
-} from "lucide-react";
+  IconPlus as Plus,
+  IconSquareSplit2x1 as SquareSplitHorizontal,
+  IconSquareSplit1x2 as SquareSplitVertical,
+  IconAppleTerminalOnRectangle as TerminalSquare,
+  IconTrash as Trash2,
+  IconXmark as XIcon,
+} from "symbols-react";
 import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
@@ -29,9 +29,15 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import {
+  getCodeTerminalFontSize,
+  readStoredInterfaceAppearanceSettings,
+  subscribeToInterfaceAppearanceChanges,
+} from "~/interfaceAppearance";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import {
@@ -39,6 +45,7 @@ import {
   type GhosttyTerminalSurfaceOptions,
 } from "~/terminal/ghostty/surface";
 import { type GhosttyColor, type GhosttyTheme } from "~/terminal/ghostty/core";
+import { generateTheme, readThemeSettingsFromDocument } from "../theme";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { isTerminalLinkActivation, resolvePathLinkTarget } from "../terminal-links";
 import {
@@ -139,10 +146,6 @@ function normalizeComputedColor(value: string | null | undefined, fallback: stri
   return value ?? fallback;
 }
 
-function readThemeColor(styles: CSSStyleDeclaration, variable: string, fallback: string): string {
-  return normalizeComputedColor(styles.getPropertyValue(variable), fallback);
-}
-
 /** The surface treats an omitted family or size as "use the built-in default". */
 function terminalFontOptions(family: string, size: number): { family?: string; size: number } {
   const trimmed = family.trim();
@@ -151,15 +154,17 @@ function terminalFontOptions(family: string, size: number): { family?: string; s
 
 export function terminalThemeFromApp(mountElement?: HTMLElement | null): GhosttyTheme {
   const isDark = document.documentElement.classList.contains("dark");
-  const fallbackBackground = isDark ? "rgb(14, 18, 24)" : "rgb(255, 255, 255)";
-  const fallbackForeground = isDark ? "rgb(237, 241, 247)" : "rgb(28, 33, 41)";
+  // Fork: derive the terminal chrome from the active Forma theme (custom
+  // hue/saturation, high contrast) instead of fixed light/dark constants.
+  const themeMetadata = generateTheme(readThemeSettingsFromDocument(), { systemDark: isDark });
+  const fallbackBackground = themeMetadata.chromeColor;
+  const fallbackForeground = themeMetadata.foregroundColor;
   const drawerSurface =
     mountElement?.closest(".thread-terminal-drawer") ??
     document.querySelector(".thread-terminal-drawer") ??
     document.body;
   const drawerStyles = getComputedStyle(drawerSurface);
   const bodyStyles = getComputedStyle(document.body);
-  const themeStyles = getComputedStyle(document.documentElement);
   const background = normalizeComputedColor(
     drawerStyles.backgroundColor,
     normalizeComputedColor(bodyStyles.backgroundColor, fallbackBackground),
@@ -168,32 +173,25 @@ export function terminalThemeFromApp(mountElement?: HTMLElement | null): Ghostty
     drawerStyles.color,
     normalizeComputedColor(bodyStyles.color, fallbackForeground),
   );
-  const terminalBackground = readThemeColor(themeStyles, "--terminal-background", background);
-  const terminalForeground = readThemeColor(themeStyles, "--terminal-foreground", foreground);
-  const terminalCursor = readThemeColor(
-    themeStyles,
-    "--terminal-cursor",
-    isDark ? "rgb(180, 203, 255)" : "rgb(38, 56, 78)",
-  );
-  const terminalSelection = readThemeColor(
-    themeStyles,
-    "--terminal-selection-background",
-    isDark ? "rgba(180, 203, 255, 0.25)" : "rgba(37, 63, 99, 0.2)",
-  );
+
   return {
     background: parseTerminalColor(
-      terminalBackground,
+      background,
       isDark ? { r: 14, g: 18, b: 24 } : { r: 255, g: 255, b: 255 },
     ),
     foreground: parseTerminalColor(
-      terminalForeground,
+      foreground,
       isDark ? { r: 237, g: 241, b: 247 } : { r: 28, g: 33, b: 41 },
     ),
     cursor: parseTerminalColor(
-      terminalCursor,
+      themeMetadata.terminalPalette.cursor,
       isDark ? { r: 180, g: 203, b: 255 } : { r: 38, g: 56, b: 78 },
     ),
-    selectionBackground: terminalSelection,
+    // Forma theme selection overlay; the text color underneath is left
+    // unchanged for contrast in both themes.
+    selectionBackground:
+      themeMetadata.terminalPalette.selectionBackground ??
+      (isDark ? "rgba(180, 203, 255, 0.25)" : "rgba(37, 63, 99, 0.2)"),
   };
 }
 
@@ -314,6 +312,8 @@ export function TerminalViewport({
     serverConfig?.availableEditors ?? [],
   );
   const openTerminalPath = useEffectEvent((target: string) => openInPreferredEditor(target));
+  // Fork note: terminal fonts are settings-driven now (fonts unification with
+  // upstream #5103); the old interfaceAppearance localStorage sizing is gone.
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -1324,7 +1324,7 @@ export default function ThreadTerminalDrawer({
               onClick={onSplitTerminalAction}
               label={splitTerminalActionLabel}
             >
-              <SquareSplitHorizontal className="size-3.25" />
+              <SquareSplitHorizontal className="size-3.25 fill-current" />
             </TerminalActionButton>
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
@@ -1336,7 +1336,7 @@ export default function ThreadTerminalDrawer({
               onClick={onSplitTerminalVerticalAction}
               label={splitTerminalVerticalActionLabel}
             >
-              <SquareSplitVertical className="size-3.25" />
+              <SquareSplitVertical className="size-3.25 fill-current" />
             </TerminalActionButton>
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
@@ -1344,7 +1344,7 @@ export default function ThreadTerminalDrawer({
               onClick={onNewTerminalAction}
               label={newTerminalActionLabel}
             >
-              <Plus className="size-3.25" />
+              <Plus className="size-3.25 fill-current" />
             </TerminalActionButton>
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
@@ -1352,7 +1352,7 @@ export default function ThreadTerminalDrawer({
               onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
               label={closeTerminalActionLabel}
             >
-              <Trash2 className="size-3.25" />
+              <Trash2 className="size-3.25 fill-current" />
             </TerminalActionButton>
           </div>
         </div>
@@ -1360,7 +1360,7 @@ export default function ThreadTerminalDrawer({
 
       <div className="min-h-0 w-full flex-1">
         <div className={`flex h-full min-h-0 ${hasTerminalSidebar ? "gap-1.5" : ""}`}>
-          <div className="min-w-0 flex-1">
+          <div className={`min-w-0 flex-1 ${hasTerminalSidebar ? "order-2" : ""}`}>
             {isSplitView ? (
               <div
                 className="grid h-full w-full min-w-0 gap-0 overflow-hidden"
@@ -1450,7 +1450,7 @@ export default function ThreadTerminalDrawer({
           </div>
 
           {hasTerminalSidebar && (
-            <aside className="flex w-36 min-w-36 flex-col border border-border/70 bg-muted/10">
+            <aside className="order-1 flex w-36 min-w-36 flex-col border border-border/70 bg-muted/10">
               <div className="flex h-[22px] items-stretch justify-end border-b border-border/70">
                 <div className="inline-flex h-full items-stretch">
                   <TerminalActionButton
@@ -1462,7 +1462,7 @@ export default function ThreadTerminalDrawer({
                     onClick={onSplitTerminalAction}
                     label={splitTerminalActionLabel}
                   >
-                    <SquareSplitHorizontal className="size-3.25" />
+                    <SquareSplitHorizontal className="size-3.25 fill-current" />
                   </TerminalActionButton>
                   <TerminalActionButton
                     className={`inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors ${
@@ -1473,21 +1473,21 @@ export default function ThreadTerminalDrawer({
                     onClick={onSplitTerminalVerticalAction}
                     label={splitTerminalVerticalActionLabel}
                   >
-                    <SquareSplitVertical className="size-3.25" />
+                    <SquareSplitVertical className="size-3.25 fill-current" />
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
                     onClick={onNewTerminalAction}
                     label={newTerminalActionLabel}
                   >
-                    <Plus className="size-3.25" />
+                    <Plus className="size-3.25 fill-current" />
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
                     onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
                     label={closeTerminalActionLabel}
                   >
-                    <Trash2 className="size-3.25" />
+                    <Trash2 className="size-3.25 fill-current" />
                   </TerminalActionButton>
                 </div>
               </div>
@@ -1505,7 +1505,7 @@ export default function ThreadTerminalDrawer({
                       {showGroupHeaders && (
                         <button
                           type="button"
-                          className={`flex w-full items-center rounded px-1 py-0.5 text-[10px] uppercase tracking-[0.08em] ${
+                          className={`text-ui-2xs flex w-full items-center rounded px-1 py-0.5 uppercase tracking-[0.08em] ${
                             isGroupActive
                               ? "bg-accent/70 text-foreground"
                               : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -1527,21 +1527,21 @@ export default function ThreadTerminalDrawer({
                           return (
                             <div
                               key={terminalId}
-                              className={`group flex items-center gap-1 rounded px-1 py-0.5 text-[11px] ${
+                              className={`text-code-compact group flex items-center gap-1 rounded px-1 py-0.5 ${
                                 isActive
                                   ? "bg-accent text-foreground"
                                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                               }`}
                             >
                               {showGroupHeaders && (
-                                <span className="text-[10px] text-muted-foreground/80">└</span>
+                                <span className="text-ui-2xs text-muted-foreground/80">└</span>
                               )}
                               <button
                                 type="button"
                                 className="flex min-w-0 flex-1 items-center gap-1 text-left"
                                 onClick={() => onActiveTerminalChange(terminalId)}
                               >
-                                <TerminalSquare className="size-3 shrink-0" />
+                                <TerminalSquare className="size-3 shrink-0 fill-current" />
                                 <span className="truncate">
                                   {terminalLabelById.get(terminalId) ?? "Terminal"}
                                 </span>
@@ -1559,7 +1559,7 @@ export default function ThreadTerminalDrawer({
                                       />
                                     }
                                   >
-                                    <XIcon className="size-2.5" />
+                                    <XIcon className="size-2.5 fill-current" />
                                   </PopoverTrigger>
                                   <PopoverPopup
                                     tooltipStyle

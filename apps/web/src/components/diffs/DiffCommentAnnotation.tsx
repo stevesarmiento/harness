@@ -21,6 +21,11 @@ interface DiffCommentAnnotationProps {
   onCancel: () => void;
   onComment: (text: string) => void;
   onDelete?: () => void;
+  /**
+   * Attach the selected lines to the chat composer as a code context chip
+   * (no comment text required). Omitted when no composer is available.
+   */
+  onAddToChat?: (() => void) | undefined;
   placeholder?: string;
   submitLabel?: string;
   pending?: boolean;
@@ -36,6 +41,7 @@ export function DiffCommentAnnotation({
   onCancel,
   onComment,
   onDelete,
+  onAddToChat,
   placeholder = "Add a comment…",
   submitLabel = "Comment",
   pending = false,
@@ -103,6 +109,16 @@ export function DiffCommentAnnotation({
       />
       <div className="mt-1.5 flex items-center gap-1">
         <span className="mr-auto text-[10px] text-muted-foreground/70">⌘/Ctrl Enter to send</span>
+        {onAddToChat ? (
+          <Button
+            className="text-muted-foreground hover:text-foreground"
+            variant="ghost"
+            size="xs"
+            onClick={onAddToChat}
+          >
+            Add to chat
+          </Button>
+        ) : null}
         <Button
           className="text-muted-foreground hover:text-foreground"
           variant="ghost"

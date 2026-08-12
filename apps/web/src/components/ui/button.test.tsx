@@ -15,7 +15,8 @@ describe("button geometry tokens", () => {
     expect(html).toContain("rounded-[var(--control-radius)]");
     expect(html).toContain("[--control-icon-color:var(--muted-foreground)]");
     expect(html).toContain("text-[var(--control-icon-color)]");
-    expect(html).not.toContain("opacity-80");
+    // Fork: Forma keeps the icon opacity ramp alongside the semantic icon color.
+    expect(html).toContain("opacity-80");
   });
 
   it("keeps compact icon buttons square at every breakpoint", () => {

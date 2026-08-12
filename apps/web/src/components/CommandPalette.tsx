@@ -27,19 +27,15 @@ import {
 } from "@t3tools/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
+import { FileSearchIcon, TextSearchIcon } from "lucide-react";
 import {
-  ArrowLeftIcon,
-  CornerLeftUpIcon,
-  FileSearchIcon,
-  FolderIcon,
-  FolderPlusIcon,
-  LinkIcon,
-  MessageSquareIcon,
-  PaletteIcon,
-  SettingsIcon,
-  SquarePenIcon,
-  TextSearchIcon,
-} from "lucide-react";
+  IconArrowLeft as ArrowLeftIcon,
+  IconArrowshapeTurnUpBackward as CornerLeftUpIcon,
+  IconBubbleLeftAndTextBubbleRight as ThreadIcon,
+  IconCube as CubeIcon,
+  IconFolder as FolderIcon,
+  IconFolderBadgePlus as FolderPlusIcon,
+} from "symbols-react";
 import {
   useCallback,
   useDeferredValue,
@@ -58,7 +54,6 @@ import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useClientSettings } from "../hooks/useSettings";
-import { useTheme } from "../hooks/useTheme";
 import { readLocalApi } from "../localApi";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment } from "../state/filesystem";
@@ -119,11 +114,19 @@ import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sideb
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import { CommandPaletteResults } from "./CommandPaletteResults";
-import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon } from "./Icons";
+import { AzureDevOpsIcon, BitbucketIcon, GitLabIcon } from "./Icons";
+import {
+  AddProjectFolderIcon,
+  AddProjectIcon,
+  GitHubRepoIcon,
+  GitUrlIcon,
+  HouseIcon,
+  NewThreadIcon,
+  SettingsHexIcon,
+} from "./icons/custom";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
-import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { ThreadRowLeadingStatus, ThreadRowTrailingStatus } from "./ThreadStatusIndicators";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../state/server";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
@@ -261,7 +264,7 @@ function remoteProjectSourceProvider(
 function remoteProjectSourceIcon(source: AddProjectRemoteSource, className: string): ReactNode {
   switch (source) {
     case "github":
-      return <GitHubIcon className={className} />;
+      return <GitHubRepoIcon className={className} />;
     case "gitlab":
       return <GitLabIcon className={className} />;
     case "bitbucket":
@@ -269,7 +272,7 @@ function remoteProjectSourceIcon(source: AddProjectRemoteSource, className: stri
     case "azure-devops":
       return <AzureDevOpsIcon className={className} />;
     case "url":
-      return <LinkIcon className={className} />;
+      return <GitUrlIcon className={className} />;
   }
 }
 
@@ -388,9 +391,9 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   );
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
+  const openProjectSwitcher = useCallback(() => dispatch({ _tag: "OpenProjectSwitcher" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const { theme, themeHalves, resolvedTheme } = useTheme();
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
   const routeTarget = useParams({
     strict: false,
@@ -433,16 +436,6 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           previewOpen,
         },
       });
-      if (command === "themeEditor.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleThemeEditorForTheme({
-          theme,
-          themeHalves,
-          initialAppearance: resolvedTheme,
-        });
-        return;
-      }
       const mode = overlayModeForCommand(command);
       if (mode === null) {
         return;
@@ -453,7 +446,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, previewOpen, resolvedTheme, terminalOpen, theme, themeHalves, toggleMode]);
+  }, [keybindings, previewOpen, terminalOpen, toggleMode]);
 
   useEffect(
     () =>
@@ -462,11 +455,13 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           openNewThreadIn();
         } else if (detail.open === "add-project") {
           openAddProject();
+        } else if (detail.open === "switch-project") {
+          openProjectSwitcher();
         } else {
           setOpen(true);
         }
       }),
-    [openAddProject, openNewThreadIn, setOpen],
+    [openAddProject, openNewThreadIn, openProjectSwitcher, setOpen],
   );
 
   return (
@@ -582,7 +577,6 @@ function OpenCommandPaletteDialog(props: {
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const { theme, themeHalves, resolvedTheme } = useTheme();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
@@ -997,7 +991,7 @@ function OpenCommandPaletteDialog(props: {
         ...(activeThreadId ? { activeThreadId } : {}),
         projectTitleById,
         sortOrder: clientSettings.sidebarThreadSortOrder,
-        icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+        icon: <ThreadIcon className={ITEM_ICON_CLASS} />,
         renderLeadingContent: (thread) => <ThreadRowLeadingStatus thread={thread} />,
         renderTrailingContent: (thread) => <ThreadRowTrailingStatus thread={thread} />,
         getContentMatch: (thread) => {
@@ -1141,7 +1135,7 @@ function OpenCommandPaletteDialog(props: {
           searchTerms: ["local", "folder", "directory", "browse"],
           title: "Local folder",
           description: "Browse a folder on disk",
-          icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
+          icon: <AddProjectFolderIcon className="size-4 text-muted-foreground/80" />,
           keepOpen: true,
           run: async () => {
             await startAddProjectBrowse(environmentId);
@@ -1241,7 +1235,7 @@ function OpenCommandPaletteDialog(props: {
       setAddProjectEnvironmentId(environmentId);
       setAddProjectCloneFlow(null);
       pushPaletteView({
-        addonIcon: <FolderPlusIcon className={ADDON_ICON_CLASS} />,
+        addonIcon: <AddProjectIcon className="size-5 fill-current" />,
         groups: buildAddProjectSourceGroups(
           environmentId,
           buildAddProjectRemoteSourceReadiness(
@@ -1293,7 +1287,7 @@ function OpenCommandPaletteDialog(props: {
   const openAddProjectFlow = useCallback(() => {
     if (addProjectEnvironmentOptions.length > 1 || defaultAddProjectEnvironmentId === null) {
       pushPaletteView({
-        addonIcon: <FolderPlusIcon className={ADDON_ICON_CLASS} />,
+        addonIcon: <AddProjectIcon className="size-5 fill-current" />,
         groups: addProjectEnvironmentGroups,
       });
       return;
@@ -1348,7 +1342,7 @@ function OpenCommandPaletteDialog(props: {
         ]
       : projectThreadItems;
     pushPaletteView({
-      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
+      addonIcon: <NewThreadIcon className={ADDON_ICON_CLASS} />,
       groups: [
         {
           value: "projects",
@@ -1367,6 +1361,27 @@ function OpenCommandPaletteDialog(props: {
     pushPaletteView,
   ]);
 
+  useLayoutEffect(() => {
+    if (openIntent?.kind !== "switch-project" || projectSearchItems.length === 0) {
+      return;
+    }
+    clearOpenIntent();
+    browseNavigation.invalidate();
+    setAddProjectCloneFlow(null);
+    setViewStack([]);
+    setQuery("");
+    pushPaletteView({
+      addonIcon: <CubeIcon className={ADDON_ICON_CLASS} />,
+      groups: [
+        {
+          value: "projects",
+          label: "Projects",
+          items: projectSearchItems,
+        },
+      ],
+    });
+  }, [browseNavigation, clearOpenIntent, openIntent, projectSearchItems, pushPaletteView]);
+
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
   if (projects.length > 0) {
@@ -1384,7 +1399,7 @@ function OpenCommandPaletteDialog(props: {
             New thread in <span className="font-semibold">{activeProjectTitle}</span>
           </>
         ),
-        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+        icon: <NewThreadIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "chat.new",
         run: async () => {
           await startNewThreadFromContext({
@@ -1402,8 +1417,8 @@ function OpenCommandPaletteDialog(props: {
       value: "action:new-thread-in",
       searchTerms: ["new thread", "project", "pick", "choose", "select"],
       title: "New thread in...",
-      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
+      icon: <NewThreadIcon className={ITEM_ICON_CLASS} />,
+      addonIcon: <NewThreadIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
     });
   }
@@ -1457,7 +1472,7 @@ function OpenCommandPaletteDialog(props: {
     ],
     title: "Add project",
     disabled: defaultAddProjectEnvironmentId === null,
-    icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
+    icon: <AddProjectIcon className="size-4 fill-muted-foreground/80" />,
     keepOpen: true,
     run: async () => {
       openAddProjectFlow();
@@ -1471,7 +1486,7 @@ function OpenCommandPaletteDialog(props: {
       searchTerms: ["add project", "open", "wsl", "linux", "folder", "directory"],
       title: "Open WSL folder",
       description: wslAddProjectEnvironmentOption.label,
-      icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
+      icon: <AddProjectFolderIcon className="size-4 text-muted-foreground/80" />,
       keepOpen: true,
       run: async () => {
         await startAddProjectBrowse(wslAddProjectEnvironmentOption.environmentId);
@@ -1481,17 +1496,12 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
-    value: "action:theme-editor",
-    searchTerms: ["theme", "appearance", "colors", "palette", "customize"],
-    title: "Toggle theme editor",
-    icon: <PaletteIcon className={ITEM_ICON_CLASS} />,
-    shortcutCommand: "themeEditor.toggle",
+    value: "action:home",
+    searchTerms: ["home", "overview", "start", "dashboard"],
+    title: "Go to Home",
+    icon: <HouseIcon className="size-4 text-muted-foreground/80" />,
     run: async () => {
-      toggleThemeEditorForTheme({
-        theme,
-        themeHalves,
-        initialAppearance: resolvedTheme,
-      });
+      await navigate({ to: "/" });
     },
   });
 
@@ -1500,7 +1510,7 @@ function OpenCommandPaletteDialog(props: {
     value: "action:settings",
     searchTerms: ["settings", "preferences", "configuration", "keybindings"],
     title: "Open settings",
-    icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
+    icon: <SettingsHexIcon className="size-4 text-muted-foreground/80" />,
     run: async () => {
       await navigate({ to: "/settings" });
     },
@@ -2319,12 +2329,12 @@ function OpenCommandPaletteDialog(props: {
                   aria-label="Back"
                   onClick={popView}
                 >
-                  <ArrowLeftIcon />
+                  <ArrowLeftIcon className="fill-current" />
                 </button>
               ),
             }
           : isBrowsing
-            ? { startAddon: <FolderPlusIcon /> }
+            ? { startAddon: <FolderPlusIcon className="fill-current" /> }
             : {}),
         onKeyDown: handleKeyDown,
       }}
