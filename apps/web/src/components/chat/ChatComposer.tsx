@@ -91,6 +91,9 @@ import {
 import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
 // Fork: Forma composer controls
+// Fork: Forma "+" actions menu in the composer footer.
+import { ComposerAddActionsMenu } from "./ComposerAddActionsMenu";
+import { MenuCreateHandle } from "../ui/menu";
 import { ComposerInteractionModePill } from "./ComposerInteractionModePill";
 import {
   ComposerTasksBadge,
@@ -102,7 +105,6 @@ import {
 import { ComposerActivityRow } from "./ComposerActivityStatus";
 import type { ThreadSyncPhase } from "../../threadSync";
 import { ComposerBanner } from "./ComposerBanner";
-import { ComposerSurface } from "./ComposerSurface";
 import {
   ComposerBannerStack,
   type ComposerBannerStackContent,
@@ -1727,6 +1729,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  // Fork: Forma "+" actions menu in the composer footer.
+  const [composerAddActionsMenuHandle] = useState(() => MenuCreateHandle<FormaInteractionMode>());
+  const composerAddActionsTriggerId = useId();
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerFooterControlsRef = useRef<HTMLDivElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
@@ -3759,6 +3764,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     size: "xs",
     hidden: composerControlsHidden || restingHiddenBlockCount > 1,
   });
+  // Fork: Forma "+" actions menu — opens attachments, the skills picker, and
+  // the stash, and doubles as the interaction-mode menu behind the pill.
+  const toggleComposerAddActionsMenu = useCallback(() => {
+    if (composerAddActionsMenuHandle.isOpen) {
+      composerAddActionsMenuHandle.close();
+      return;
+    }
+    composerAddActionsMenuHandle.open(composerAddActionsTriggerId);
+  }, [composerAddActionsMenuHandle, composerAddActionsTriggerId]);
   const restingBlockDefs = [
     ...(providerTraitsPicker
       ? [
@@ -3782,7 +3796,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             content: (
               <ComposerInteractionModePill
                 interactionMode={interactionMode}
-                onClick={toggleInteractionMode}
+                onClick={toggleComposerAddActionsMenu}
               />
             ),
           },
@@ -3792,6 +3806,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hiddenRestingBlockIds = restingBlockDefs
     .slice(restingBlockDefs.length - restingHiddenBlockCount)
     .map((def) => def.id);
+  // Fork: opening a skill picker inserts the "$" trigger at the caret.
+  const openComposerSkillPicker = () => {
+    const snapshot = composerEditorRef.current?.readSnapshot();
+    const value = snapshot?.value ?? promptRef.current;
+    const cursor = snapshot?.expandedCursor ?? expandCollapsedComposerCursor(value, composerCursor);
+    const previousCharacter = value[cursor - 1] ?? "";
+    const trigger = previousCharacter.length > 0 && !/\s/.test(previousCharacter) ? " $" : "$";
+    applyPromptReplacement(cursor, cursor, trigger);
+  };
   const composerControls = noProviderAvailable ? (
     <Button
       type="button"
@@ -3816,6 +3839,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           size="xs"
           className="@max-[400px]/composer-surface:hidden"
           data-resting-controls-separator="true"
+        />
+      ) : null}
+      {/* Fork: Forma "+" actions menu leads the footer controls. */}
+      {!composerControlsInStrip ? (
+        <ComposerAddActionsMenu
+          menuHandle={composerAddActionsMenuHandle}
+          triggerId={composerAddActionsTriggerId}
+          interactionMode={interactionMode}
+          supportedInteractionModes={supportedInteractionModes}
+          showInteractionModeActions={!isComposerFooterCompact && planModeUiEnabled}
+          imageDisabled={!showComposerAttachAction}
+          skillDisabled={allComposerSkills.length === 0}
+          stashCount={stashQueue.length}
+          onSelectMode={handleInteractionModeChange}
+          onSelectImage={() => attachmentInputRef.current?.click()}
+          onSelectSkill={openComposerSkillPicker}
+          onOpenStash={() => setIsStashMenuOpen(true)}
         />
       ) : null}
       <ProviderModelPicker
@@ -4928,17 +4968,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ) : null}
       </ComposerBanner.Dock>
       <div className="relative">
-        <ComposerSurface.Main
+        {/* Fork: Forma composer shell — gradient ring + squircle glass surface
+            instead of upstream's ComposerSurface. */}
+        <div
           ref={composerMainSurfaceRef}
-          className={composerProviderState.composerFrameClassName}
+          data-chat-composer-main-surface="true"
+          className={cn(
+            "group rounded-[22px] p-px transition-colors duration-(--motion-duration-fast) ease-(--motion-ease-standard) motion-reduce:transition-none",
+            composerProviderState.composerFrameClassName,
+          )}
         >
           <div
             ref={composerSurfaceRef}
             data-chat-composer-surface="true"
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "rounded-[20px] transition-[background-color] duration-200",
-              isDragOverComposer ? "bg-accent/45 ring-1 ring-primary/70" : null,
+              "chat-composer-surface rounded-[40px] [corner-shape:squircle] border backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-(--motion-duration-fast) ease-(--motion-ease-standard) motion-reduce:transition-none",
+              isDragOverComposer ? "border-primary/70! bg-accent/30!" : null,
               projectSelectionRequired ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
             )}
@@ -5463,14 +5509,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               message={providerInputSubmissionError ?? composerSubmissionError}
             />
 
+            {/* Fork: Forma footer separator line. */}
+            {isComposerCollapsedMobile || isComposerApprovalState ? null : (
+              <div
+                aria-hidden
+                className="pointer-events-none h-[2px] w-full shrink-0 border-t [background-color:color-mix(in_srgb,var(--composer-footer-separator-background-color)_var(--composer-footer-separator-background-opacity),transparent)] [border-top-color:color-mix(in_srgb,var(--composer-footer-separator-border-color)_var(--composer-footer-separator-border-opacity),transparent)]"
+                data-chat-composer-footer-separator
+              />
+            )}
+
             {/* Bottom toolbar */}
             {isComposerCollapsedMobile || isComposerApprovalState ? null : (
               <div
                 data-chat-composer-footer="true"
                 data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
                 className={cn(
-                  "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:px-4 sm:pb-4",
-                  pendingUserInputs.length > 0 && "pt-2",
+                  // Fork: Forma footer spacing under the separator line.
+                  "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-2.5 pt-2.5 pb-2.5 sm:px-3 sm:pt-3 sm:pb-3",
                   isComposerFooterCompact ? "gap-1.5" : "gap-2 sm:gap-0",
                   showMobilePendingAnswerActions && "hidden sm:flex",
                   isComposerResting &&
@@ -5570,7 +5625,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </div>
             )}
           </div>
-        </ComposerSurface.Main>
+        </div>
       </div>
     </form>
   );
