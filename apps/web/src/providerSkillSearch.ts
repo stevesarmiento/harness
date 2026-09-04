@@ -1,19 +1,23 @@
 import type { ServerLocalAgentSkill, ServerProviderSkill } from "@t3tools/contracts";
 import {
+  dedupeProviderSkillsByName,
+  formatProviderSkillDisplayName,
+  isProviderSkillUserInvocable,
+} from "@t3tools/client-runtime/providerSkills";
+import {
   insertRankedSearchResult,
   normalizeSearchQuery,
   scoreQueryMatch,
 } from "@t3tools/shared/searchRanking";
 
-import { formatProviderSkillDisplayName } from "./providerSkillPresentation";
-
+// Fork: searches span provider skills and project-local agent skills.
 type SearchableSkill = ServerLocalAgentSkill | ServerProviderSkill;
 
 function isLocalSkill(skill: SearchableSkill): skill is ServerLocalAgentSkill {
   return "source" in skill && skill.source === "local-agents";
 }
 
-function scoreProviderSkill(skill: SearchableSkill, query: string): number | null {
+export function scoreProviderSkill(skill: SearchableSkill, query: string): number | null {
   const normalizedName = skill.name.toLowerCase();
   const normalizedLabel = formatProviderSkillDisplayName(skill).toLowerCase();
   const normalizedShortDescription = skill.shortDescription?.toLowerCase() ?? "";
@@ -77,7 +81,7 @@ export function searchProviderSkills(
   query: string,
   limit = Number.POSITIVE_INFINITY,
 ): SearchableSkill[] {
-  const enabledSkills = skills.filter((skill) => skill.enabled);
+  const enabledSkills = dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
   const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\$+/ });
 
   if (!normalizedQuery) {
@@ -101,6 +105,7 @@ export function searchProviderSkills(
       {
         item: skill,
         score,
+        // Fork: local-agent skills sort ahead of provider skills at equal score.
         tieBreaker: `${isLocalSkill(skill) ? "0" : "1"}\u0000${formatProviderSkillDisplayName(skill).toLowerCase()}\u0000${skill.name}`,
       },
       limit,

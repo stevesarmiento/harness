@@ -77,6 +77,53 @@ Also of note from that sync: upstream centralized diff styling in
 diff palette now lives there as a `/* Fork: ... */` block instead of
 `DiffPanel`'s old `DIFF_PANEL_UNSAFE_CSS` option.
 
+## Theme-as-file (#8569, v0.0.38 era) — same policy as #5226
+
+An environment publishing themes as a file, plus its follow-ups. The web UI
+side is excised: it is built on the excised `themePalette` engine
+(`hooks/useDefaultTheme.ts`, `useEnvironmentTheme.ts`, the
+`EnvironmentThemeSync` bridge in `__root.tsx`). The protocol data plane is
+KEPT — `environmentThemes` is a server capability woven through
+`packages/contracts` (rpc/server/environment), `packages/client-runtime`
+(`serverConfigProjection`), `packages/shared`
+(`themePalettes.ts`/`themePreview.ts`), and
+`apps/server/src/environmentTheme.ts` + `cli/theme.ts` — and the released
+upstream mobile app consumes it, so stripping it would fork the protocol.
+The web client advertises the capability but never renders published themes.
+Also rejected in the same sync: Open VSX theme search (#5654,
+`openVsxThemes.ts`, `ThemeSearchSection.tsx`), OKLCH theme palettes (#6036),
+and the `clerkAppearance.test.ts` themePalette contrast test (the
+CSS-variable `clerkAppearance.ts` component itself is kept).
+
+**Resolution policy:** delete the web hook/UI files on sight and the
+`__root.tsx` sync bridge; keep server/contracts/client-runtime/shared theme
+plumbing on the upstream side; keep the `defaultTheme`/`defaultThemeSetAt`
+contract keys.
+
+## Resting/collapsing composer (#7855 family, v0.0.38 era)
+
+Upstream's composer collapses to a resting state on blur and scroll
+(#7855, #9469, #9482, #9490, #9492, #9498, #9499, #9541, #9553, plus the
+`composerCollapseOnBlur`/`composerCollapseOnScroll` settings). This is a
+layout rewrite of the protected Forma composer footer — skipped wholesale.
+The two settings keys stay in `packages/contracts` (inert in web) for
+protocol parity.
+
+## Settings reorganization (#9354, v0.0.38 era)
+
+Upstream reorganized settings into General / Appearance / Keybindings /
+Integrations / Archived pages. The Forma settings IA is authoritative
+(Interface / Threads / Notifications / Providers / Safety / Source Control /
+Connections / Advanced, default `/settings/interface`, no General page,
+Legacy features under Advanced; registry in
+`apps/web/src/components/settings/settingsNavigation.ts`).
+
+**Resolution policy:** reject upstream's page structure; graft genuinely new
+settings _content_ (rows, whole new surfaces like Integrations) into the
+matching Forma sections and register them in `settingsNavigation.ts` /
+`settingsSearch.ts`. The settings search-by-detail engine (#8831) is
+adopted with the fork's section registry.
+
 ## Mobile workspace exclusion (standing fork policy)
 
 `apps/mobile` is excluded from the pnpm workspace (`!apps/mobile`), so

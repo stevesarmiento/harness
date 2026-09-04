@@ -1,5 +1,6 @@
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
-import { resolvePathLinkTarget, splitPathAndPosition } from "./terminal-links";
+import { splitFilePathPosition } from "@t3tools/client-runtime/markdown-links";
+import { resolvePathLinkTarget } from "./terminal-links";
 
 export interface WorkspaceEditorTarget {
   relativePath: string;
@@ -47,7 +48,7 @@ export function resolveWorkspaceEditorTarget(
   }
 
   const resolvedTarget = resolvePathLinkTarget(pathWithPosition.trim(), normalizedWorkspaceRoot);
-  const { path, line, column } = splitPathAndPosition(resolvedTarget);
+  const { path, line, column } = splitFilePathPosition(resolvedTarget);
   const normalizedAbsolutePath = normalizeAbsolutePath(path);
   if (normalizedAbsolutePath.length === 0 || normalizedAbsolutePath === normalizedWorkspaceRoot) {
     return null;
@@ -79,12 +80,9 @@ export function resolveWorkspaceEditorTarget(
     return null;
   }
 
-  const parsedLine = line ? Number.parseInt(line, 10) : Number.NaN;
-  const parsedColumn = column ? Number.parseInt(column, 10) : Number.NaN;
-
   return {
     relativePath,
-    ...(Number.isFinite(parsedLine) ? { line: parsedLine } : {}),
-    ...(Number.isFinite(parsedColumn) ? { column: parsedColumn } : {}),
+    ...(line !== undefined && Number.isFinite(line) ? { line } : {}),
+    ...(column !== undefined && Number.isFinite(column) ? { column } : {}),
   };
 }

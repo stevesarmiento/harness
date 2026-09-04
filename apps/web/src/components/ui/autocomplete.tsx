@@ -101,7 +101,8 @@ function AutocompletePopup({
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className={cn("z-50 select-none", FLOATING_SURFACE_POSITIONER_MOTION_CLASS_NAME)}
+        // Fork: floating-surface motion class
+        className={cn("z-[130] select-none", FLOATING_SURFACE_POSITIONER_MOTION_CLASS_NAME)}
         data-slot="autocomplete-positioner"
         side={side}
         sideOffset={sideOffset}

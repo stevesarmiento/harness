@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback } from "react";
 
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { usePanelAnimationSettings } from "../panelAnimations";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { RightPanelSheet } from "./RightPanelSheet";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
@@ -19,6 +20,7 @@ export function WorkspacePanelHost(props: {
   children: (mode: "sheet" | "sidebar") => ReactNode;
 }) {
   const shouldUseSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
+  const { durationMs: panelAnimationDurationMs } = usePanelAnimationSettings();
   const shouldAcceptInlineSidebarWidth = useCallback(
     ({ nextWidth, wrapper }: { nextWidth: number; wrapper: HTMLElement }) => {
       const composerForm = document.querySelector<HTMLElement>("[data-chat-composer-form='true']");
@@ -67,7 +69,11 @@ export function WorkspacePanelHost(props: {
 
   if (shouldUseSheet) {
     return (
-      <RightPanelSheet open={props.open} onClose={props.onClose}>
+      <RightPanelSheet
+        open={props.open}
+        onClose={props.onClose}
+        animationDurationMs={panelAnimationDurationMs}
+      >
         {props.renderPanelContent ? props.children("sheet") : null}
       </RightPanelSheet>
     );

@@ -7,6 +7,7 @@ import {
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { openCommandPalette } from "../commandPaletteBus";
 import { isElectron } from "../env";
+// Fork: full home-page rewrite; upstream's WorkspacePageHeader refactor is superseded by the fork header below.
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useClientSettings } from "../hooks/useSettings";
 import { useProjects, useThreadShells } from "../state/entities";
@@ -135,6 +136,7 @@ function ThreadListRow({
                   <ProjectFavicon
                     environmentId={item.thread.environmentId}
                     cwd={item.project?.workspaceRoot ?? item.thread.worktreePath ?? ""}
+                    projectName={resolveThreadProjectLabel(item)}
                     className="size-3 shrink-0"
                   />
                 }
@@ -191,6 +193,7 @@ function ProjectListRow({
           <ProjectFavicon
             environmentId={item.project.environmentId}
             cwd={item.project.workspaceRoot}
+            projectName={item.project.title}
             className="size-4 rounded-sm"
           />
         </span>

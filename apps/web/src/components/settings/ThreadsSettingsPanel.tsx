@@ -4,6 +4,7 @@ import {
 } from "@t3tools/contracts/settings";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import { UnpinConfirmationSettingsRow } from "./SettingsPanels";
 import { formatThreadCleanupWindowLabel } from "../../lib/threadCleanup";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -169,6 +170,8 @@ export function ThreadsSettingsPanel() {
             </Select>
           }
         />
+
+        <UnpinConfirmationSettingsRow />
 
         <SettingsRow
           title="Archive confirmation"

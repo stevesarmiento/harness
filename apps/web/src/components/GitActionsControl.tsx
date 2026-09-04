@@ -22,6 +22,7 @@ import type {
 import { useNavigate } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
+  type MouseEvent,
   forwardRef,
   useCallback,
   useEffect,
@@ -35,8 +36,8 @@ import { flushSync } from "react-dom";
 import {
   CheckIcon,
   ChevronDownIcon,
+  CloudDownloadIcon,
   CloudUploadIcon,
-  ExternalLinkIcon,
   GitBranchPlusIcon,
   GitCommitIcon,
   InfoIcon,
@@ -63,6 +64,7 @@ import {
   resolveThreadBranchUpdate,
 } from "./GitActionsControl.logic";
 import { AnimatedHeight } from "./AnimatedHeight";
+import { StartTruncatedPath } from "./StartTruncatedPath";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -100,9 +102,10 @@ import { vcsEnvironment } from "~/state/vcs";
 import { randomUUID } from "~/lib/utils";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
-import { readLocalApi } from "~/localApi";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
-import { openPullRequestLink } from "~/lib/openPullRequestLink";
+import { useOpenLink } from "~/browser/useOpenLink";
+import { useOpenPrLink } from "~/lib/openPullRequestLink";
+// Fork: keybinding-driven git actions and top-bar styling.
 import { topBarButtonLabelClassName, topBarGroupSeparatorClassName } from "./topBarActionStyles";
 import { isGitActionKeybindingCommand } from "../gitActionCommands";
 import { shortcutLabelForCommand } from "~/keybindings";
@@ -382,7 +385,7 @@ function GitQuickActionIcon({
   const iconClassName = "size-3.5";
   if (quickAction.kind === "open_pr") return <SourceControlIcon className={iconClassName} />;
   if (quickAction.kind === "open_publish") return <CloudUploadIcon className={iconClassName} />;
-  if (quickAction.kind === "run_pull") return <InfoIcon className={iconClassName} />;
+  if (quickAction.kind === "run_pull") return <CloudDownloadIcon className={iconClassName} />;
   if (quickAction.kind === "run_action") {
     if (quickAction.action === "commit") return <GitCommitIcon className={iconClassName} />;
     if (quickAction.action === "push" || quickAction.action === "commit_push") {
@@ -391,6 +394,7 @@ function GitQuickActionIcon({
     return <SourceControlIcon className={iconClassName} />;
   }
   if (quickAction.label === "Commit") return <GitCommitIcon className={iconClassName} />;
+  if (quickAction.label === "Push") return <CloudUploadIcon className={iconClassName} />;
   return <InfoIcon className={iconClassName} />;
 }
 
@@ -398,10 +402,13 @@ interface PublishRepositoryDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly environmentId: ScopedThreadRef["environmentId"] | null;
+  /** Thread the dialog was opened from, so the new repository can open beside it. */
+  readonly threadRef: ScopedThreadRef | null;
   readonly gitCwd: string;
 }
 
 function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
+  const openLink = useOpenLink(props.threadRef);
   const navigate = useNavigate();
   const sourceControlDiscovery = useEnvironmentQuery(
     props.environmentId === null
@@ -925,12 +932,9 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                       size="sm"
                       className="w-full"
                       onClick={() => {
-                        const api = readLocalApi();
-                        if (!api) return;
-                        void api.shell.openExternal(publishResult.repository.url);
+                        void openLink(publishResult.repository.url).catch(() => undefined);
                       }}
                     >
-                      <ExternalLinkIcon className="size-3.5" aria-hidden />
                       Open on {publishProviderLabel}
                     </Button>
                   </>
@@ -1024,6 +1028,8 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
       () => (activeThreadRef ? { threadRef: activeThreadRef } : undefined),
       [activeThreadRef],
     );
+    const openPrLink = useOpenPrLink(activeThreadRef ?? undefined);
+    const openLink = useOpenLink(activeThreadRef);
     const activeDraftThread = useComposerDraftStore((store) =>
       draftId
         ? store.getDraftSession(draftId)
@@ -1258,15 +1264,6 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
         onOpenPullRequest(openPr.number);
         return;
       }
-      const api = readLocalApi();
-      if (!api) {
-        toastManager.add({
-          type: "error",
-          title: "Link opening is unavailable.",
-          data: threadToastData,
-        });
-        return;
-      }
       const prUrl = openPr?.url ?? null;
       if (!prUrl) {
         toastManager.add({
@@ -1276,7 +1273,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
         });
         return;
       }
-      void openPullRequestLink(api.shell, prUrl).catch((err: unknown) => {
+      void openLink(prUrl).catch((err: unknown) => {
         console.error(err);
         toastManager.add(
           stackedThreadToast({
@@ -1287,7 +1284,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
           }),
         );
       });
-    }, [gitStatusForActions, onOpenPullRequest, threadToastData]);
+    }, [gitStatusForActions, onOpenPullRequest, openLink, threadToastData]);
 
     runGitActionWithToast = useEffectEvent(
       async ({
@@ -1471,7 +1468,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
         const toastCta = actionResult.toast.cta;
         let toastActionProps: {
           children: string;
-          onClick: () => void;
+          onClick: (event: MouseEvent<HTMLButtonElement>) => void;
         } | null = null;
         if (toastCta.kind === "run_action") {
           toastActionProps = {
@@ -1486,11 +1483,9 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
         } else if (toastCta.kind === "open_pr") {
           toastActionProps = {
             children: toastCta.label,
-            onClick: () => {
-              const api = readLocalApi();
-              if (!api) return;
+            onClick: (event) => {
               closeResultToast();
-              void api.shell.openExternal(toastCta.url);
+              openPrLink(event, toastCta.url);
             },
           };
         }
@@ -2000,14 +1995,13 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
                                 )}
                                 <button
                                   type="button"
-                                  className="flex flex-1 items-center justify-between gap-3 text-left truncate"
+                                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                                   onClick={() => openChangedFileInEditor(file.path)}
                                 >
-                                  <span
-                                    className={`truncate${isExcluded ? " text-muted-foreground" : ""}`}
-                                  >
-                                    {file.path}
-                                  </span>
+                                  <StartTruncatedPath
+                                    path={file.path}
+                                    className={`flex-1${isExcluded ? " text-muted-foreground" : ""}`}
+                                  />
                                   <span className="shrink-0">
                                     {isExcluded ? (
                                       <span className="text-muted-foreground">Excluded</span>
@@ -2080,6 +2074,7 @@ const GitActionsControl = forwardRef<GitActionsControlHandle, GitActionsControlP
           open={isPublishDialogOpen}
           onOpenChange={setIsPublishDialogOpen}
           environmentId={activeEnvironmentId}
+          threadRef={activeThreadRef}
           gitCwd={gitCwd}
         />
 

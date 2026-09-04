@@ -1,5 +1,10 @@
 import type { ComponentType } from "react";
-import { GitPullRequestIcon as SourceControlIcon, ShieldIcon } from "lucide-react";
+import {
+  BlocksIcon as IntegrationsIcon,
+  GitPullRequestIcon as SourceControlIcon,
+  KeyboardIcon as KeybindingsIcon,
+  ShieldIcon,
+} from "lucide-react";
 import {
   IconWifi as ConnectionsIcon,
   IconSwatchpalette as InterfaceIcon,
@@ -20,9 +25,11 @@ export type SettingsRestoreScope =
 
 export type SettingsSectionPath =
   | "/settings/interface"
+  | "/settings/keybindings"
   | "/settings/threads"
   | "/settings/notifications"
   | "/settings/providers"
+  | "/settings/integrations"
   | "/settings/safety"
   | "/settings/source-control"
   | "/settings/connections"
@@ -50,6 +57,15 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
     restoreScope: "interface",
   },
   {
+    // Upstream #8532 surfaces keybinding rows on a dedicated page; it sits
+    // next to Interface because bindings are an input/interface concern.
+    label: "Keybindings",
+    to: "/settings/keybindings",
+    icon: KeybindingsIcon,
+    iconUsesFill: false,
+    restoreScope: null,
+  },
+  {
     label: "Threads",
     to: "/settings/threads",
     icon: ThreadsIcon,
@@ -69,6 +85,14 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
     icon: ProvidersIcon,
     iconUsesFill: true,
     restoreScope: "providers",
+  },
+  {
+    // Upstream's Integrations page (browser defaults, profiles, link target).
+    label: "Integrations",
+    to: "/settings/integrations",
+    icon: IntegrationsIcon,
+    iconUsesFill: false,
+    restoreScope: null,
   },
   {
     label: "Safety",

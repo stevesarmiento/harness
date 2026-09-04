@@ -9,7 +9,8 @@
 import {
   IsoDateTime,
   ModelSelection,
-  ProjectComponentPreviewWorkspaceRecord,
+  ProjectComponentPreviewWorkspaceRecord, // Fork: component preview harness
+  ProjectIconOverride,
   ProjectId,
   ProjectScript,
   ThreadEnvMode,
@@ -27,7 +28,9 @@ export const ProjectionProject = Schema.Struct({
   workspaceRoot: Schema.String,
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
+  autoPull: Schema.Boolean,
   faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
+  projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.Array(ProjectScript),
   // Fork: component preview harness workspace records.
   componentPreviewWorkspaceRecords: Schema.Array(ProjectComponentPreviewWorkspaceRecord),

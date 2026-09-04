@@ -25,7 +25,7 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
   readonly updatedAt: string;
 };
 
-/** Map a provider driver kind to a user-facing display name. */
+// Fork: provider display name for the context-window indicator.
 export function formatProviderDisplayName(provider: string | null | undefined): string {
   if (!provider) return "This agent";
   switch (provider) {
@@ -88,6 +88,7 @@ export function deriveLatestContextWindowSnapshot(
       toolUses: asFiniteNumber(payload?.toolUses),
       durationMs: asFiniteNumber(payload?.durationMs),
       compactsAutomatically: asBoolean(payload?.compactsAutomatically) ?? false,
+      autoCompactThreshold: asFiniteNumber(payload?.autoCompactThreshold),
       updatedAt: activity.createdAt,
     };
   }

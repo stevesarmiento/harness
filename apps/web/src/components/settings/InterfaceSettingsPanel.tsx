@@ -40,7 +40,12 @@ import {
 import { cn, isMacPlatform } from "../../lib/utils";
 import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
 import { Button } from "../ui/button";
-import { TypographySection } from "./SettingsPanels";
+import {
+  AppearanceContrastSettingsRow,
+  PanelAnimationsSettingsRow,
+  ProactivePanelsSettingsRow,
+  TypographySection,
+} from "./SettingsPanels";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
@@ -311,6 +316,10 @@ export function InterfaceSettingsPanel() {
       <TypographySection />
 
       <SettingsSection title="Display">
+        <AppearanceContrastSettingsRow />
+
+        <PanelAnimationsSettingsRow />
+
         <SettingsRow
           title="Time format"
           description="System default follows your browser or OS clock preference."
@@ -379,6 +388,8 @@ export function InterfaceSettingsPanel() {
             />
           }
         />
+
+        <ProactivePanelsSettingsRow />
       </SettingsSection>
     </SettingsPageContainer>
   );

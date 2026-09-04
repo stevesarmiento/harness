@@ -17,7 +17,12 @@ import { shellEnvironment } from "../../state/shell";
 import { usePrimaryEnvironment } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { AboutVersionSection, LegacyFeaturesSection } from "./SettingsPanels";
+import {
+  AboutVersionSection,
+  ContinueThreadsAfterServerUpdateSettingsRow,
+  LegacyFeaturesSection,
+  QuitConfirmationSettingsRow,
+} from "./SettingsPanels";
 import { formatDiagnosticsDescription } from "./SettingsPanels.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
@@ -198,7 +203,15 @@ export function AdvancedSettingsPanel() {
             description="Current version of the application."
           />
         )}
+
+        <ContinueThreadsAfterServerUpdateSettingsRow />
       </SettingsSection>
+
+      {isElectron ? (
+        <SettingsSection title="Desktop">
+          <QuitConfirmationSettingsRow />
+        </SettingsSection>
+      ) : null}
 
       <LegacyFeaturesSection />
     </SettingsPageContainer>

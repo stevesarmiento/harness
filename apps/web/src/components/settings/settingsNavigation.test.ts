@@ -11,9 +11,11 @@ describe("Forma settings navigation", () => {
     expect(SETTINGS_DEFAULT_PATH).toBe("/settings/interface");
     expect(SETTINGS_NAV_ITEMS.map((item) => item.label)).toEqual([
       "Interface",
+      "Keybindings",
       "Threads",
       "Notifications",
       "Providers",
+      "Integrations",
       "Safety",
       "Source Control",
       "Connections",

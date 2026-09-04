@@ -5,6 +5,7 @@ import { NoActiveThreadState } from "../components/NoActiveThreadState";
 import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
+// Fork: Forma workspace-overview landing and page shell.
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
 import { LogomarkForma } from "../components/LogomarkForma";
 import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";

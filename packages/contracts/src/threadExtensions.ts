@@ -63,7 +63,8 @@ export const ThreadExtensionEnqueueTurnInput = Schema.Struct({
   message: Schema.Struct({
     messageId: MessageId,
     text: Schema.String,
-    attachments: Schema.Array(UploadChatAttachment),
+    // Matches the turn.start union so queued turns carry file attachments too.
+    attachments: Schema.Array(Schema.Union([UploadChatAttachment, ChatAttachment])),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),

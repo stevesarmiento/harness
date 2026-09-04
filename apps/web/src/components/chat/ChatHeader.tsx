@@ -25,6 +25,7 @@ import type { DraftId } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
 import { sortThreads } from "~/lib/threadSort";
 import { cn } from "~/lib/utils";
+import { useRemoteOpenState, type RemoteOpenMode } from "~/remoteOpen";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadShells } from "~/state/entities";
 import { buildThreadRouteParams } from "~/threadRoutes";
@@ -41,6 +42,10 @@ import { SidebarTrigger } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ChatHeaderActionsMenu } from "./ChatHeaderActionsMenu";
 
+// Fork: the Forma header keeps its compact pill breadcrumb (project pill +
+// ThreadTitleMenu switcher) and folds all right-side controls into
+// ChatHeaderActionsMenu, so upstream's inline rename, title action menu, and
+// responsive header-actions fade do not apply here.
 interface ChatHeaderProps {
   routeKind: "server" | "draft";
   activeThreadEnvironmentId: EnvironmentId;
@@ -87,12 +92,19 @@ export function shouldShowOpenInPicker(input: {
   readonly activeProjectName: string | undefined;
   readonly activeThreadEnvironmentId: EnvironmentId;
   readonly primaryEnvironmentId: EnvironmentId | null;
+  readonly remoteOpenMode: RemoteOpenMode;
 }): boolean {
-  return (
-    Boolean(input.activeProjectName) &&
+  if (!input.activeProjectName) return false;
+  if (
     input.primaryEnvironmentId !== null &&
     input.activeThreadEnvironmentId === input.primaryEnvironmentId
-  );
+  ) {
+    return true;
+  }
+  // Remote environments get the picker in deep-link mode (or its explicit
+  // "no SSH route" state). Non-primary local backends (e.g. WSL) keep it
+  // hidden, matching pre-remote behavior.
+  return input.remoteOpenMode !== "local-exec";
 }
 
 export function selectHeaderThreads(
@@ -149,10 +161,12 @@ export const ChatHeader = memo(function ChatHeader({
   onDeleteThread,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const remoteOpenState = useRemoteOpenState(activeThreadEnvironmentId);
   const showOpenIn = shouldShowOpenInPicker({
     activeProjectName,
     activeThreadEnvironmentId,
     primaryEnvironmentId,
+    remoteOpenMode: remoteOpenState.mode,
   });
 
   return (

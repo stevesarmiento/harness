@@ -6,7 +6,7 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   deriveProjectGroupingOverrideKey,
@@ -14,6 +14,7 @@ import {
 } from "../../logicalProject";
 import type {
   ModelSelection,
+  ProjectIconOverride,
   ProviderDriverKind,
   SidebarProjectGroupingMode,
   T3ProjectFileScript,
@@ -31,12 +32,13 @@ import {
   IconChevronRight as CrumbChevronRightIcon,
   IconCube as CubeIcon,
 } from "symbols-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isElectron } from "../../env";
 import {
   useClientSettings,
+  useEnvironmentSettings,
   useUpdateClientSettings,
   usePrimarySettings,
 } from "../../hooks/useSettings";
@@ -44,6 +46,7 @@ import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useT3ProjectFileState } from "../../hooks/useT3ProjectFileScripts";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { keybindingValueForCommand } from "../../lib/projectScriptKeybindings";
+import { releaseProjectDraftUploads } from "../../lib/composerDraftUploads";
 import { readLocalApi } from "../../localApi";
 import {
   buildProjectScript,
@@ -66,7 +69,7 @@ import {
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { projectEnvironment } from "../../state/projects";
-import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
@@ -94,16 +97,29 @@ import {
 } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../ui/sidebar";
+import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
 import { WorkspaceHeaderTitle } from "../WorkspaceHeaderTitle";
 import {
+  SETTINGS_PICKER_TRIGGER_CLASSNAME,
   SettingResetButton,
   SettingsPageContainer,
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
-import { ProjectFaviconPickerDialog } from "./ProjectFaviconPickerDialog";
+import {
+  canPickExternalProjectFavicon,
+  ProjectFaviconPickerDialog,
+} from "./ProjectFaviconPickerDialog";
+import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
+
+const ProjectIconPickerDialog = lazy(() =>
+  import("./ProjectIconPickerDialog").then((module) => ({
+    default: module.ProjectIconPickerDialog,
+  })),
+);
 
 export const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
   repository: "Group by repository",
@@ -230,6 +246,7 @@ function ProjectSettingsBreadcrumb({ projectKey }: { projectKey: string }) {
               <ProjectFavicon
                 environmentId={representative.environmentId}
                 cwd={representative.workspaceRoot}
+                projectName={selected.displayName}
                 faviconPath={representative.faviconPath ?? null}
                 className="size-3.5 shrink-0"
               />
@@ -322,10 +339,21 @@ export function ProjectSettingsPanel({ projectKey }: { projectKey: string }) {
 
 function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
   const navigate = useNavigate();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const representative =
+    group.memberProjects.find(
+      (member) => member.environmentId === group.environmentId && member.id === group.id,
+    ) ?? group.memberProjects[0]!;
   const settings = usePrimarySettings();
+  // Provider instances and model options belong to the environment that runs
+  // the project's threads. The hosted app has no primary environment, so
+  // reading them from there would show "No providers available" everywhere.
+  const projectSettings = useEnvironmentSettings(representative.environmentId);
+  const serverProviders =
+    useAtomValue(serverEnvironment.providersValueAtom(representative.environmentId)) ??
+    EMPTY_SERVER_PROVIDERS;
   const updateClientSettings = useUpdateClientSettings();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const serverProviders = useAtomValue(primaryServerProvidersAtom);
   const threads = useThreadShells();
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const deleteProject = useAtomCommand(projectEnvironment.delete, { reportFailure: false });
@@ -335,6 +363,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
   const removeKeybinding = useAtomCommand(serverEnvironment.removeKeybinding, {
     reportFailure: false,
   });
+  const projectNameEditedRef = useRef(false);
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({ type: "success", title: "Path copied", description: path });
@@ -350,11 +379,17 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
     },
   });
 
-  const representative =
-    group.memberProjects.find(
-      (member) => member.environmentId === group.environmentId && member.id === group.id,
-    ) ?? group.memberProjects[0]!;
   const faviconPath = representative.faviconPath ?? null;
+  const projectIcon = representative.projectIcon ?? null;
+  const pickProjectFavicon =
+    typeof window !== "undefined" &&
+    group.memberProjects.every(
+      (member) =>
+        member.environmentId === primaryEnvironmentId &&
+        canPickExternalProjectFavicon(member.workspaceRoot, navigator.platform),
+    )
+      ? window.desktopBridge?.pickProjectFavicon
+      : undefined;
 
   const threadCountByMember = useMemo(() => {
     const counts = new Map<string, number>();
@@ -384,7 +419,9 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         title: string;
         defaultModelSelection: ModelSelection | null;
         defaultThreadEnvMode: ThreadEnvMode | null;
+        autoPull: boolean;
         faviconPath: string | null;
+        projectIcon: ProjectIconOverride | null;
       }>,
       failureTitle: string,
     ): Promise<AtomCommandResult<void, unknown>> => {
@@ -414,36 +451,52 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
   );
 
   const renameGroup = useCallback(
-    async (nextTitle: string) => {
+    async (nextTitle: string, wasEdited: boolean) => {
       const title = nextTitle.trim();
       if (!title) {
         toastManager.add({ type: "warning", title: "Project title cannot be empty" });
         return;
       }
-      if (title === group.displayName) return;
-      if (group.memberProjects.every((member) => member.title === title)) return;
+      if (
+        !projectGroupTitleNeedsUpdate(
+          group.memberProjects.map((member) => member.title),
+          title,
+          wasEdited,
+        )
+      ) {
+        return;
+      }
       await updateAllMembers({ title }, "Failed to rename project");
     },
-    [group.displayName, group.memberProjects, updateAllMembers],
+    [group.memberProjects, updateAllMembers],
   );
 
   // ----- default model -----
   const storedSelection = representative.defaultModelSelection;
   const resolvedSelection = resolveDefaultProviderModelSelection(serverProviders, storedSelection);
+  const resolvedInstanceId = resolvedSelection?.instanceId ?? null;
+  const resolvedModel = resolvedSelection?.model ?? null;
   const instanceEntries = useMemo(
     () =>
       sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
+        applyProviderInstanceSettings(
+          deriveProviderInstanceEntries(serverProviders),
+          projectSettings,
+        ),
       ),
-    [serverProviders, settings],
+    [serverProviders, projectSettings],
   );
   const modelOptionsByInstance = useMemo(
-    () => getCustomModelOptionsByInstance(settings, serverProviders),
-    [serverProviders, settings],
+    () =>
+      getCustomModelOptionsByInstance(
+        projectSettings,
+        serverProviders,
+        resolvedInstanceId,
+        resolvedModel,
+      ),
+    [resolvedInstanceId, resolvedModel, serverProviders, projectSettings],
   );
-  const activeEntry = instanceEntries.find(
-    (entry) => entry.instanceId === resolvedSelection?.instanceId,
-  );
+  const activeEntry = instanceEntries.find((entry) => entry.instanceId === resolvedInstanceId);
   const setDefaultModel = useCallback(
     (selection: ModelSelection | null) =>
       void updateAllMembers({ defaultModelSelection: selection }, "Failed to update default model"),
@@ -461,17 +514,25 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
     [updateAllMembers],
   );
 
-  // ----- favicon -----
+  const autoPull = representative.autoPull ?? false;
+  const setAutoPull = useCallback(
+    (enabled: boolean) =>
+      void updateAllMembers({ autoPull: enabled }, "Failed to update automatic pull setting"),
+    [updateAllMembers],
+  );
+
+  // ----- project icon -----
   const [faviconPickerOpen, setFaviconPickerOpen] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [isSavingFavicon, setIsSavingFavicon] = useState(false);
   const savingFaviconRef = useRef(false);
-  const setFaviconPath = useCallback(
-    async (faviconPath: string | null) => {
+  const setProjectIcon = useCallback(
+    async (input: { faviconPath: string | null; projectIcon: ProjectIconOverride | null }) => {
       if (savingFaviconRef.current) return;
       savingFaviconRef.current = true;
       setIsSavingFavicon(true);
       try {
-        await updateAllMembers({ faviconPath }, "Failed to update project icon");
+        await updateAllMembers(input, "Failed to update project icon");
       } finally {
         savingFaviconRef.current = false;
         setIsSavingFavicon(false);
@@ -712,8 +773,10 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                 ]
               : [`This removes ${members.length} grouped project entries.`]),
             ...(projectThreads.length > 0
-              ? ["This permanently clears conversation history for those threads."]
-              : []),
+              ? [
+                  "This permanently clears conversation history for those threads and any archived threads.",
+                ]
+              : ["This permanently clears any archived conversation history."]),
             isWholeGroup
               ? "This removes only the project entries, not the files on disk."
               : "Other entries in this grouped project are unaffected.",
@@ -735,7 +798,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             environmentId: member.environmentId,
             input: {
               projectId: member.id,
-              ...(memberThreads.length > 0 ? { force: true } : {}),
+              force: true,
             },
           }),
           () => undefined,
@@ -745,6 +808,10 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           return;
         }
         const projectRef = scopeProjectRef(member.environmentId, member.id);
+        releaseProjectDraftUploads(
+          projectRef,
+          memberThreads.map((thread) => scopeThreadRef(thread.environmentId, thread.id)),
+        );
         const projectDraftThread = draftStore.getDraftThreadByProjectRef(projectRef);
         if (projectDraftThread) {
           draftStore.clearDraftThread(projectDraftThread.draftId);
@@ -777,7 +844,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
 
   return (
     <>
-      <SettingsPageContainer>
+      <SettingsPageContainer width="wide" className="gap-8">
         <SettingsSection title="Project">
           <SettingsRow
             title="Name"
@@ -785,11 +852,17 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             control={
               <Input
                 key={`${group.projectKey}:${group.displayName}`}
+                size="sm"
                 className="w-full sm:w-64"
                 aria-label="Project name"
                 defaultValue={group.displayName}
+                onChange={() => {
+                  projectNameEditedRef.current = true;
+                }}
                 onBlur={(event) => {
-                  void renameGroup(event.currentTarget.value);
+                  const wasEdited = projectNameEditedRef.current;
+                  projectNameEditedRef.current = false;
+                  void renameGroup(event.currentTarget.value, wasEdited);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();
@@ -799,13 +872,19 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
           <SettingsRow
             title="Project icon"
-            description={faviconPath ?? "Automatic"}
+            description={
+              projectIcon?.kind === "lucide"
+                ? `${projectIcon.name} · ${projectIcon.color}`
+                : projectIcon?.kind === "emoji"
+                  ? projectIcon.emoji
+                  : (faviconPath ?? "Automatic")
+            }
             resetAction={
-              faviconPath !== null ? (
+              faviconPath !== null || projectIcon !== null ? (
                 <SettingResetButton
                   label="project icon"
                   disabled={isSavingFavicon}
-                  onClick={() => void setFaviconPath(null)}
+                  onClick={() => void setProjectIcon({ faviconPath: null, projectIcon: null })}
                 />
               ) : null
             }
@@ -814,11 +893,23 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                 <ProjectFavicon
                   environmentId={representative.environmentId}
                   cwd={representative.workspaceRoot}
+                  projectName={representative.title}
                   faviconPath={faviconPath}
+                  projectIcon={projectIcon}
                   className="size-6"
                 />
                 <Button
-                  size="xs"
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  aria-label="Choose a project icon"
+                  disabled={isSavingFavicon}
+                  onClick={() => setIconPickerOpen(true)}
+                >
+                  Choose icon
+                </Button>
+                <Button
+                  size="sm"
                   variant="outline"
                   type="button"
                   aria-label="Choose a project icon file"
@@ -830,9 +921,6 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               </div>
             }
           />
-        </SettingsSection>
-
-        <SettingsSection title="New threads">
           <SettingsRow
             title="Model"
             description="New threads in this project start with this model. Applies to every checkout in this group."
@@ -854,7 +942,13 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                     instanceEntries={instanceEntries}
                     modelOptionsByInstance={modelOptionsByInstance}
                     triggerVariant="outline"
-                    triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                    triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+                    onOpenProviderSetup={(instanceId) => {
+                      void navigate({
+                        to: "/settings/providers",
+                        search: { environmentId: representative.environmentId, instanceId },
+                      });
+                    }}
                     onInstanceModelChange={(instanceId, model) => {
                       setDefaultModel(createModelSelection(instanceId, model));
                     }}
@@ -867,8 +961,9 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                     onPromptChange={() => {}}
                     modelOptions={resolvedSelection.options ?? []}
                     allowPromptInjectedEffort={false}
+                    planModeEnabled={projectSettings.planModeEnabled}
                     triggerVariant="outline"
-                    triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                    triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
                     onModelOptionsChange={(nextOptions) => {
                       setDefaultModel(
                         createModelSelection(
@@ -907,7 +1002,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                   }
                 }}
               >
-                <SelectTrigger aria-label="New-thread workspace">
+                <SelectTrigger size="sm" aria-label="New-thread workspace">
                   <SelectValue>
                     {storedEnvMode === null
                       ? group.memberProjects.length > 1
@@ -928,6 +1023,17 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               </Select>
             }
           />
+          <SettingsRow
+            title="Automatically pull"
+            description="Keeps the default branch current in the background when the checkout has no local changes or commits."
+            control={
+              <Switch
+                checked={autoPull}
+                aria-label="Automatically pull the default branch"
+                onCheckedChange={setAutoPull}
+              />
+            }
+          />
         </SettingsSection>
 
         <SettingsSection
@@ -937,7 +1043,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               value={selectedCheckout.physicalProjectKey}
               onValueChange={(value) => setSelectedCheckoutKey(String(value))}
             >
-              <SelectTrigger className="max-w-64" aria-label="Selected checkout">
+              <SelectTrigger size="sm" className="max-w-64" aria-label="Selected checkout">
                 <SelectValue>{selectedCheckoutLabel}</SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -956,22 +1062,28 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         >
           <div className="px-3 py-2 sm:px-4">
             <div className="flex min-w-0 items-center rounded-lg bg-muted/30 p-1 text-base text-muted-foreground sm:text-sm">
-              <button
-                aria-label="Copy checkout path"
-                className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left outline-none hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                title="Copy path"
-                type="button"
-                onClick={() =>
-                  copyPathToClipboard(selectedCheckout.workspaceRoot, {
-                    path: selectedCheckout.workspaceRoot,
-                  })
-                }
-              >
-                <code className="min-w-0 flex-1 truncate font-mono">
-                  {selectedCheckout.workspaceRoot}
-                </code>
-                <CopyIcon className="size-4 shrink-0 opacity-60 group-hover:opacity-100" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      aria-label="Copy checkout path"
+                      className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left outline-none hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                      type="button"
+                      onClick={() =>
+                        copyPathToClipboard(selectedCheckout.workspaceRoot, {
+                          path: selectedCheckout.workspaceRoot,
+                        })
+                      }
+                    >
+                      <code className="min-w-0 flex-1 truncate font-mono">
+                        {selectedCheckout.workspaceRoot}
+                      </code>
+                      <CopyIcon className="size-4 shrink-0 opacity-60 group-hover:opacity-100" />
+                    </button>
+                  }
+                />
+                <TooltipPopup side="top">Copy path</TooltipPopup>
+              </Tooltip>
               <div className="shrink-0 border-l border-border/60 px-2 tabular-nums">
                 {selectedCheckoutThreadCount === 1
                   ? "1 thread"
@@ -996,7 +1108,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                   }
                 }}
               >
-                <SelectTrigger aria-label={`Grouping rule for ${selectedCheckoutLabel}`}>
+                <SelectTrigger size="sm" aria-label={`Grouping rule for ${selectedCheckoutLabel}`}>
                   <SelectValue>
                     {selectedCheckoutGrouping === "inherit"
                       ? `Default (${PROJECT_GROUPING_MODE_LABELS[projectGroupingSettings.sidebarProjectGroupingMode]})`
@@ -1026,7 +1138,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
               description="Removes this checkout and its threads from the project group. Files on disk are not touched."
               control={
                 <Button
-                  size="xs"
+                  size="sm"
                   variant="destructive-outline"
                   onClick={() => void removeMembers([selectedCheckout])}
                 >
@@ -1112,10 +1224,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                         icon={script.icon}
                         className="size-4 shrink-0 text-muted-foreground"
                       />
-                      <span className="max-w-40 shrink-0 truncate">{script.name}</span>
-                      <code className="min-w-0 flex-1 truncate font-mono font-normal text-muted-foreground">
-                        {script.command}
-                      </code>
+                      <span className="min-w-0 truncate">{script.name}</span>
                       {script.runOnWorktreeCreate ? (
                         <span className="shrink-0 rounded-sm border border-border/60 px-1.5 py-px text-[11px] font-normal text-muted-foreground">
                           setup
@@ -1127,6 +1236,9 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                         </span>
                       ) : null}
                     </span>
+                  }
+                  description={
+                    <code className="block max-w-full truncate font-mono">{script.command}</code>
                   }
                   control={
                     <>
@@ -1172,6 +1284,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             }
             control={
               <Button
+                size="sm"
                 variant="destructive-outline"
                 onClick={() => void removeMembers(group.memberProjects)}
               >
@@ -1195,10 +1308,23 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         cwd={representative.workspaceRoot}
         environmentId={representative.environmentId}
         onOpenChange={setFaviconPickerOpen}
-        onSelect={(path) => void setFaviconPath(path)}
+        {...(pickProjectFavicon
+          ? { onPickExternal: () => pickProjectFavicon(representative.workspaceRoot) }
+          : {})}
+        onSelect={(path) => void setProjectIcon({ faviconPath: path, projectIcon: null })}
         open={faviconPickerOpen}
         projectName={group.displayName}
       />
+      {iconPickerOpen ? (
+        <Suspense fallback={null}>
+          <ProjectIconPickerDialog
+            current={projectIcon}
+            open
+            onOpenChange={setIconPickerOpen}
+            onSelect={(icon) => void setProjectIcon({ faviconPath: null, projectIcon: icon })}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

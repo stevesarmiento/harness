@@ -1,12 +1,16 @@
 import { memo, type PointerEventHandler } from "react";
+// Fork: Forma send/stop controls use symbols-react + Button variants
 import {
   IconChevronDown as ChevronDownIcon,
   IconChevronLeft as ChevronLeftIcon,
 } from "symbols-react";
+import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 
 import { cn } from "~/lib/utils";
+import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { composerFloatingLayerProps } from "./composerEventScope";
 
 interface PendingActionState {
   questionIndex: number;
@@ -16,6 +20,7 @@ interface PendingActionState {
   isComplete: boolean;
 }
 
+// Fork: queued sends while a turn runs
 export type ComposerQueueStatus = "idle" | "queued" | "paused";
 
 interface ComposerPrimaryActionsProps {
@@ -32,9 +37,12 @@ interface ComposerPrimaryActionsProps {
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
+  /** Enter-to-send is disabled on mobile viewports, where stop would otherwise
+   * be the only primary action and a running turn could not be steered. */
+  showSendWhileRunning?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
-  onImplementPlanInNewThread: () => void;
+  onImplementPlanInNewThread: () => void | Promise<void>;
 }
 
 export const formatPendingPrimaryActionLabel = (input: {
@@ -178,6 +186,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isPreparingWorktree,
   hasSendableContent,
   preserveComposerFocusOnPointerDown = false,
+  showSendWhileRunning = false,
   onPreviousPendingQuestion,
   onInterrupt,
   onImplementPlanInNewThread,
@@ -185,10 +194,30 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
     : undefined;
+  const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  const stageBackdropVariant = useSidebarStageBackdropVariant(
+    environmentIdentificationMode === "artwork",
+  );
+
+  // Fork: Forma stop button styling; upstream behavior (steer a running turn).
+  const renderStopGenerationButton = (insidePendingAction: boolean) => (
+    <Button
+      type="button"
+      size={insidePendingAction ? "icon-sm" : "icon"}
+      variant="destructive-outline"
+      className="rounded-full"
+      {...pointerFocusProps}
+      onClick={onInterrupt}
+      aria-label="Stop generation"
+    >
+      <ComposerStopIcon />
+    </Button>
+  );
 
   if (pendingAction) {
     return (
       <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
+        {isRunning ? renderStopGenerationButton(true) : null}
         {pendingAction.questionIndex > 0 ? (
           compact ? (
             <Button
@@ -280,8 +309,11 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           >
             <ChevronDownIcon className="size-2.5" />
           </MenuTrigger>
-          <MenuPopup align="end" side="top">
-            <MenuItem disabled={planActionsDisabled} onClick={onImplementPlanInNewThread}>
+          <MenuPopup align="end" side="top" {...composerFloatingLayerProps}>
+            <MenuItem
+              disabled={planActionsDisabled}
+              onClick={() => void onImplementPlanInNewThread()}
+            >
               Implement in a new thread
             </MenuItem>
           </MenuPopup>
@@ -301,19 +333,28 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     hasSendableContent,
   });
   const canInterrupt = action.kind === "interrupt";
+  const showStageArt = stageBackdropVariant && !canInterrupt;
 
-  return (
+  const primaryButton = (
     <Button
       type={canInterrupt ? "button" : "submit"}
       size="icon"
       variant={canInterrupt ? "destructive-outline" : "default"}
-      className="rounded-full"
+      className={cn(
+        "rounded-full",
+        showStageArt && "relative isolate overflow-hidden bg-transparent text-white",
+      )}
       {...pointerFocusProps}
       disabled={action.disabled}
       aria-label={action.label}
       title={action.label}
       onClick={canInterrupt ? onInterrupt : undefined}
     >
+      {showStageArt ? (
+        <span className="absolute inset-0 -z-10" aria-hidden="true">
+          <StageBackdropButtonArt variant={stageBackdropVariant} />
+        </span>
+      ) : null}
       {action.kind === "busy" ? (
         <ComposerSpinnerIcon />
       ) : canInterrupt ? (
@@ -323,4 +364,17 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       )}
     </Button>
   );
+
+  // Mobile viewports disable Enter-to-send, so a running turn keeps both the
+  // stop control and the queue/send button reachable.
+  if (isRunning && showSendWhileRunning && hasSendableContent) {
+    return (
+      <>
+        {renderStopGenerationButton(false)}
+        {primaryButton}
+      </>
+    );
+  }
+
+  return primaryButton;
 });

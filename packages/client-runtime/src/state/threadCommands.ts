@@ -6,7 +6,7 @@ import {
   createAtomCommandScheduler,
   createEnvironmentCommand,
   createEnvironmentRpcCommand,
-  createEnvironmentRpcSubscriptionAtomFamily,
+  createEnvironmentRpcSubscriptionAtomFamily, // Fork: thread extensions subscription
 } from "./runtime.ts";
 import {
   type ArchiveThreadInput,
@@ -246,6 +246,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     stopSession: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:stop-session",
       execute: (input: StopThreadSessionInput) => stopThreadSession(input),
+      scheduler,
+      concurrency,
+    }),
+    uploadFeedback: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:upload-feedback",
+      tag: WS_METHODS.providerUploadFeedback,
       scheduler,
       concurrency,
     }),

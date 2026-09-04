@@ -8,8 +8,8 @@ Forma is a minimal web GUI for coding agents (currently Codex and Claude, more c
 > Forma currently supports Codex and Claude.
 > Install and authenticate at least one provider before use:
 >
-> - Codex: install [Codex CLI](https://github.com/openai/codex) and run `codex login`
-> - Claude: install Claude Code and run `claude auth login`
+> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
+> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
 
 ### Run without installing
 
@@ -35,9 +35,19 @@ brew install --cask forma
 
 #### Arch Linux (AUR)
 
+Stable:
+
 ```bash
 yay -S forma-bin
 ```
+
+Nightly:
+
+```bash
+yay -S t3code-nightly-bin
+```
+
+The AUR packaging is maintained in this repository under [`packaging/aur`](./packaging/aur).
 
 ## Some notes
 
@@ -73,6 +83,8 @@ mise install
 bun install .
 ```
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR.
+
+Have a feature request? Start an [Ideas discussion](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
 
 Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
