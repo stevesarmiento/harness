@@ -47,7 +47,12 @@ vi.mock("../ui/select", () => ({
   SelectTrigger: "div",
   SelectValue: "div",
 }));
-vi.mock("../ui/sidebar", () => ({ SidebarInset: "div" }));
+vi.mock("../ui/sidebar", () => ({
+  SidebarInset: "div",
+  SidebarInsetCard: "div",
+  SidebarTrigger: "button",
+  useSidebar: () => ({ isMobile: false, open: true }),
+}));
 vi.mock("../ui/toggle-group", () => ({ Toggle: "button", ToggleGroup: "div" }));
 vi.mock("../WorkspaceBreadcrumb", () => ({
   WorkspaceBreadcrumb: "div",

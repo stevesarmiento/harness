@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - pure path/filesystem helpers for the preview harness.
-import path from "node:path";
+import * as NodePath from "node:path";
 
 export interface AliasEntry {
   readonly find: string;
@@ -34,14 +34,14 @@ function resolveTargetPath(targetPattern: string, options: AliasResolutionOption
     return null;
   }
 
-  if (path.isAbsolute(normalizedTarget)) {
-    return path.normalize(normalizedTarget);
+  if (NodePath.isAbsolute(normalizedTarget)) {
+    return NodePath.normalize(normalizedTarget);
   }
 
   const baseDir = options.baseUrl?.trim()
-    ? path.resolve(options.configDir, options.baseUrl)
+    ? NodePath.resolve(options.configDir, options.baseUrl)
     : options.configDir;
-  return path.resolve(baseDir, normalizedTarget);
+  return NodePath.resolve(baseDir, normalizedTarget);
 }
 
 export function aliasEntriesFromTsconfigPaths(

@@ -1406,25 +1406,6 @@ function turnStatusFromResult(result: SDKResultMessage): ProviderRuntimeTurnStat
   return "failed";
 }
 
-function errorMessageFromResult(result: SDKResultMessage): string | undefined {
-  if ("errors" in result && Array.isArray(result.errors)) {
-    const first = result.errors.find((error) => typeof error === "string" && error.length > 0);
-    if (first) {
-      return first;
-    }
-  }
-
-  if ("result" in result && typeof result.result === "string" && result.result.length > 0) {
-    return result.result;
-  }
-
-  if ("error" in result && typeof result.error === "string" && result.error.length > 0) {
-    return result.error;
-  }
-
-  return undefined;
-}
-
 function streamKindFromDeltaType(deltaType: string): ClaudeTextStreamKind {
   return deltaType.includes("thinking") ? "reasoning_text" : "assistant_text";
 }

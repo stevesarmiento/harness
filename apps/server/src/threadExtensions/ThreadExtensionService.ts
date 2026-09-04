@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import { statSync } from "node:fs";
-import { basename } from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import Mime from "@effect/platform-node/Mime";
 import {
@@ -228,9 +228,9 @@ export const make: Effect.Effect<
             return {
               type: "image" as const,
               id: attachmentId,
-              name: basename(filePath),
+              name: NodePath.basename(filePath),
               mimeType,
-              sizeBytes: statSync(filePath).size,
+              sizeBytes: NodeFS.statSync(filePath).size,
             } satisfies ChatAttachment;
           },
           catch: (cause) =>

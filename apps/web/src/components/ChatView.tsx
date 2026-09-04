@@ -8233,7 +8233,6 @@ function ChatViewContent(props: ChatViewProps) {
                     <button
                       type="button"
                       aria-label="Scroll to end"
-                      title="Scroll to end"
                       onPointerDown={(event) => event.preventDefault()}
                       onClick={() => {
                         composerRef.current?.restoreAfterTimelineReachedEnd();

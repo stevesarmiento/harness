@@ -9,7 +9,7 @@
  *
  * @module WorkspaceFileSystem
  */
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 
@@ -46,7 +46,7 @@ const PROJECT_READ_FILE_MAX_BYTES = 1024 * 1024;
 const FILE_HASH_CHUNK_BYTES = 64 * 1024;
 
 async function hashOpenFile(handle: NodeFSP.FileHandle): Promise<string> {
-  const hash = createHash("sha256");
+  const hash = NodeCrypto.createHash("sha256");
   const buffer = Buffer.allocUnsafe(FILE_HASH_CHUNK_BYTES);
   let position = 0;
   while (true) {
@@ -59,7 +59,7 @@ async function hashOpenFile(handle: NodeFSP.FileHandle): Promise<string> {
 }
 
 function hashString(contents: string): string {
-  return createHash("sha256").update(Buffer.from(contents, "utf8")).digest("hex");
+  return NodeCrypto.createHash("sha256").update(Buffer.from(contents, "utf8")).digest("hex");
 }
 
 function hasNodeErrorCode(cause: unknown, code: string): boolean {
@@ -495,7 +495,9 @@ export const make = Effect.gen(function* () {
           }),
       });
       const actualVersion =
-        currentBytes === null ? null : createHash("sha256").update(currentBytes).digest("hex");
+        currentBytes === null
+          ? null
+          : NodeCrypto.createHash("sha256").update(currentBytes).digest("hex");
       if (input.expectedVersion !== actualVersion) {
         return yield* new ProjectFileVersionConflictError({
           cwd: input.cwd,

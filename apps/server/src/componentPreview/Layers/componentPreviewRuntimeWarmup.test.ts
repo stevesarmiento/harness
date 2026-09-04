@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - pure path/filesystem helpers for the preview harness.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -32,16 +32,24 @@ describe("preview runtime warmup", () => {
   });
 
   it("changes cache dirs when dependency fingerprints change", () => {
-    const projectRoot = mkdtempSync(path.join(os.tmpdir(), "t3-component-preview-project-"));
-    const workspaceRoot = path.join(projectRoot, "apps", "web");
+    const projectRoot = NodeFS.mkdtempSync(
+      NodePath.join(NodeOS.tmpdir(), "t3-component-preview-project-"),
+    );
+    const workspaceRoot = NodePath.join(projectRoot, "apps", "web");
     try {
-      writeFileSync(path.join(projectRoot, "package.json"), '{"dependencies":{"react":"1.0.0"}}');
+      NodeFS.writeFileSync(
+        NodePath.join(projectRoot, "package.json"),
+        '{"dependencies":{"react":"1.0.0"}}',
+      );
       const first = buildPreviewRuntimeCacheDir({
         projectRoot,
         workspaceRoot,
       });
 
-      writeFileSync(path.join(projectRoot, "package.json"), '{"dependencies":{"react":"2.0.0"}}');
+      NodeFS.writeFileSync(
+        NodePath.join(projectRoot, "package.json"),
+        '{"dependencies":{"react":"2.0.0"}}',
+      );
       const second = buildPreviewRuntimeCacheDir({
         projectRoot,
         workspaceRoot,
@@ -49,7 +57,7 @@ describe("preview runtime warmup", () => {
 
       expect(first).not.toBe(second);
     } finally {
-      rmSync(projectRoot, { recursive: true, force: true });
+      NodeFS.rmSync(projectRoot, { recursive: true, force: true });
     }
   });
 
@@ -69,14 +77,14 @@ describe("preview runtime warmup", () => {
 
     expect(plan.warmupFiles).toEqual(
       expect.arrayContaining([
-        path.resolve("/tmp/runtime/src/main.tsx"),
-        path.resolve("/tmp/runtime/src/optimizer-entry.ts"),
-        path.resolve("/repo/apps/server/src/componentPreview/harness/runtime.tsx"),
-        path.resolve("/repo/.t3/preview/wrapper.tsx"),
-        path.resolve("/repo/.t3/preview/mocks.ts"),
-        path.resolve("/repo/apps/web/src/Button.preview.tsx"),
-        path.resolve("/repo/apps/web/src/Button.preview.mocks.ts"),
-        path.resolve("/repo/apps/web/src/Button.analytics.mock.ts"),
+        NodePath.resolve("/tmp/runtime/src/main.tsx"),
+        NodePath.resolve("/tmp/runtime/src/optimizer-entry.ts"),
+        NodePath.resolve("/repo/apps/server/src/componentPreview/harness/runtime.tsx"),
+        NodePath.resolve("/repo/.t3/preview/wrapper.tsx"),
+        NodePath.resolve("/repo/.t3/preview/mocks.ts"),
+        NodePath.resolve("/repo/apps/web/src/Button.preview.tsx"),
+        NodePath.resolve("/repo/apps/web/src/Button.preview.mocks.ts"),
+        NodePath.resolve("/repo/apps/web/src/Button.analytics.mock.ts"),
       ]),
     );
     expect(plan.optimizeDepsEntries).toEqual(["src/optimizer-entry.ts"]);
@@ -105,7 +113,9 @@ describe("preview runtime warmup", () => {
       moduleMocks: {},
     });
 
-    expect(plan.warmupFiles).toContain(path.resolve("/repo/apps/web/src/Button.preview.mocks.ts"));
+    expect(plan.warmupFiles).toContain(
+      NodePath.resolve("/repo/apps/web/src/Button.preview.mocks.ts"),
+    );
     expect(plan.readinessPaths).toContain("/@fs/repo/apps/web/src/Button.preview.mocks.ts?import");
   });
 

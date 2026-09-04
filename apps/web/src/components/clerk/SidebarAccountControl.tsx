@@ -35,6 +35,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { SidebarMenuButton, useSidebar } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MobileClientsUserProfilePage } from "./MobileClientsUserProfilePage";
 import {
   CLERK_UNAVAILABLE_HINT,
@@ -251,65 +252,79 @@ function SidebarAccountRow({
   return (
     <div className="flex items-center justify-between gap-1" data-testid="sidebar-account-row">
       {account ? (
-        <div
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-sidebar-row-hover"
-          data-testid="sidebar-account-profile"
-          onClick={forwardToClerkTrigger}
-          ref={profileRef}
-          title={statusTitle}
-        >
-          <span className="relative inline-flex shrink-0">
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "size-7",
-                  userButtonTrigger: "rounded-full",
-                },
-              }}
-            >
-              <UserButton.UserProfilePage
-                label="Mobile clients"
-                labelIcon={<SmartphoneIcon className="size-4" />}
-                url="mobile-clients"
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-sidebar-row-hover"
+                data-testid="sidebar-account-profile"
+                onClick={forwardToClerkTrigger}
+                ref={profileRef}
+              />
+            }
+          >
+            <span className="relative inline-flex shrink-0">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "size-7",
+                    userButtonTrigger: "rounded-full",
+                  },
+                }}
               >
-                <MobileClientsUserProfilePage />
-              </UserButton.UserProfilePage>
-            </UserButton>
-            <SidebarAccountStatusDot tone={connect.tone} />
-          </span>
-          <span className="min-w-0 flex-1 leading-tight">
-            <span className="block truncate font-medium text-sidebar-foreground/90 text-xs">
-              {account.name}
+                <UserButton.UserProfilePage
+                  label="Mobile clients"
+                  labelIcon={<SmartphoneIcon className="size-4" />}
+                  url="mobile-clients"
+                >
+                  <MobileClientsUserProfilePage />
+                </UserButton.UserProfilePage>
+              </UserButton>
+              <SidebarAccountStatusDot tone={connect.tone} />
             </span>
-            {account.email && account.email !== account.name ? (
-              <span className="block truncate text-muted-foreground text-ui-2xs">
-                {account.email}
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate font-medium text-sidebar-foreground/90 text-xs">
+                {account.name}
               </span>
-            ) : null}
-          </span>
-        </div>
-      ) : (
-        <button
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left",
-            onSignIn ? "cursor-pointer hover:bg-sidebar-row-hover" : "cursor-default opacity-70",
-          )}
-          data-testid="sidebar-account-sign-in"
-          disabled={!onSignIn}
-          onClick={onSignIn ?? undefined}
-          title={statusTitle}
-          type="button"
-        >
-          <span className="relative inline-flex shrink-0">
-            <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <UserRoundIcon className="size-4" />
+              {account.email && account.email !== account.name ? (
+                <span className="block truncate text-muted-foreground text-ui-2xs">
+                  {account.email}
+                </span>
+              ) : null}
             </span>
-            <SidebarAccountStatusDot tone={connect.tone} />
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">
-            {onSignIn ? "Sign in" : "Not signed in"}
-          </span>
-        </button>
+          </TooltipTrigger>
+          <TooltipPopup>{statusTitle}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left",
+                  onSignIn
+                    ? "cursor-pointer hover:bg-sidebar-row-hover"
+                    : "cursor-default opacity-70",
+                )}
+                data-testid="sidebar-account-sign-in"
+                disabled={!onSignIn}
+                onClick={onSignIn ?? undefined}
+                type="button"
+              />
+            }
+          >
+            <span className="relative inline-flex shrink-0">
+              <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <UserRoundIcon className="size-4" />
+              </span>
+              <SidebarAccountStatusDot tone={connect.tone} />
+            </span>
+            <span className="min-w-0 truncate text-muted-foreground text-xs">
+              {onSignIn ? "Sign in" : "Not signed in"}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup>{statusTitle}</TooltipPopup>
+        </Tooltip>
       )}
       <Menu>
         <MenuTrigger

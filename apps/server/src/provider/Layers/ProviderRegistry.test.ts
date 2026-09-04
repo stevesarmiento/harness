@@ -1455,7 +1455,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             assert.deepStrictEqual(
               recoveredProviders.find((provider) => provider.instanceId === codexInstanceId),
-              codexProvider,
+              // Fork: snapshots carry the tri-state interaction mode support.
+              { ...codexProvider, supportedInteractionModes: ["default", "ask", "plan"] },
             );
 
             yield* Ref.set(catalogSnapshot, changedCatalogProvider);
@@ -1467,7 +1468,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             assert.deepStrictEqual(
               changedProviders.find((provider) => provider.instanceId === codexInstanceId),
-              codexProvider,
+              // Fork: snapshots carry the tri-state interaction mode support.
+              { ...codexProvider, supportedInteractionModes: ["default", "ask", "plan"] },
             );
           }).pipe(Effect.provide(runtimeServices));
 

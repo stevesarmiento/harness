@@ -104,10 +104,13 @@ contract keys.
 
 Upstream's composer collapses to a resting state on blur and scroll
 (#7855, #9469, #9482, #9490, #9492, #9498, #9499, #9541, #9553, plus the
-`composerCollapseOnBlur`/`composerCollapseOnScroll` settings). This is a
-layout rewrite of the protected Forma composer footer — skipped wholesale.
-The two settings keys stay in `packages/contracts` (inert in web) for
-protocol parity.
+`composerCollapseOnBlur`/`composerCollapseOnScroll` settings). Skipped as
+the default experience: the machinery survived the v0.0.38 merge inside
+`ChatComposer.tsx` (it was interwoven with the adopted attachment/citation
+systems), but the fork flips both settings' decode defaults to `false` in
+`packages/contracts/src/settings.ts` (`// Fork:` marked), so the Forma
+composer never collapses unless the user opts in. Re-check those defaults
+after every sync.
 
 ## Settings reorganization (#9354, v0.0.38 era)
 

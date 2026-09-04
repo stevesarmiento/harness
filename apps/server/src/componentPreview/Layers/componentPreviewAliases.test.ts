@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - pure path/filesystem helpers for the preview harness.
-import path from "node:path";
+import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -18,8 +18,8 @@ describe("aliasEntriesFromTsconfigPaths", () => {
         },
       ),
     ).toEqual([
-      { find: "~", replacement: path.resolve("/repo/apps/web", "./src") },
-      { find: "@", replacement: path.resolve("/repo/apps/web", "./src") },
+      { find: "~", replacement: NodePath.resolve("/repo/apps/web", "./src") },
+      { find: "@", replacement: NodePath.resolve("/repo/apps/web", "./src") },
     ]);
   });
 
@@ -37,7 +37,7 @@ describe("aliasEntriesFromTsconfigPaths", () => {
     ).toEqual([
       {
         find: "@components",
-        replacement: path.resolve("/repo/apps/web", "./src/components"),
+        replacement: NodePath.resolve("/repo/apps/web", "./src/components"),
       },
     ]);
   });

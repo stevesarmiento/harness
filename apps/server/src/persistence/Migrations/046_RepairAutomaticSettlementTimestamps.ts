@@ -10,6 +10,17 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
+  // Fork: legacy Forma databases gain the settled_at column only when
+  // migration 941 restores upstream 033's effects, which runs after this one.
+  // Those databases predate server auto-settlement entirely, so there is
+  // nothing to repair — skip instead of failing on the missing column.
+  const columns = yield* sql<{ readonly name: string }>`
+    PRAGMA table_info(projection_threads)
+  `;
+  if (!columns.some((column) => column.name === "settled_at")) {
+    return;
+  }
+
   yield* sql`
     WITH activity_timestamps AS (
       SELECT thread_id, created_at AS activity_at

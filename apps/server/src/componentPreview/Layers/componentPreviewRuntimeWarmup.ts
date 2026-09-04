@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - pure path/filesystem helpers for the preview harness.
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 export interface PreviewRuntimeWarmupInput {
   readonly projectRoot: string;
@@ -23,7 +23,7 @@ export interface PreviewRuntimeWarmupPlan {
 }
 
 function normalizeFsPath(filePath: string): string {
-  return path.resolve(filePath).replaceAll("\\", "/");
+  return NodePath.resolve(filePath).replaceAll("\\", "/");
 }
 
 function normalizeProjectPath(relativePath: string): string {
@@ -50,21 +50,24 @@ const DEPENDENCY_FINGERPRINT_FILES = [
   "yarn.lock",
 ] as const;
 
-function updateHashWithDependencyFile(hash: ReturnType<typeof createHash>, filePath: string): void {
-  if (!existsSync(filePath)) {
+function updateHashWithDependencyFile(
+  hash: ReturnType<typeof NodeCrypto.createHash>,
+  filePath: string,
+): void {
+  if (!NodeFS.existsSync(filePath)) {
     return;
   }
   hash.update("\0file:");
   hash.update(normalizeFsPath(filePath));
   hash.update("\0");
-  hash.update(readFileSync(filePath));
+  hash.update(NodeFS.readFileSync(filePath));
 }
 
 export function buildPreviewRuntimeCacheDir(input: {
   readonly projectRoot: string;
   readonly workspaceRoot: string;
 }): string {
-  const hash = createHash("sha256")
+  const hash = NodeCrypto.createHash("sha256")
     .update(PREVIEW_RUNTIME_CACHE_VERSION)
     .update("\0project:")
     .update(normalizeFsPath(input.projectRoot))
@@ -72,11 +75,11 @@ export function buildPreviewRuntimeCacheDir(input: {
     .update(normalizeFsPath(input.workspaceRoot));
   for (const root of [input.projectRoot, input.workspaceRoot]) {
     for (const fileName of DEPENDENCY_FINGERPRINT_FILES) {
-      updateHashWithDependencyFile(hash, path.join(root, fileName));
+      updateHashWithDependencyFile(hash, NodePath.join(root, fileName));
     }
   }
   const digest = hash.digest("hex").slice(0, 16);
-  return path.join(os.tmpdir(), "t3-component-preview-harness-cache", digest);
+  return NodePath.join(NodeOS.tmpdir(), "t3-component-preview-harness-cache", digest);
 }
 
 export function resolvePreviewComponentPath(input: {
@@ -86,20 +89,20 @@ export function resolvePreviewComponentPath(input: {
   readonly previewComponentRelativePath: string | null;
 }): string {
   if (!input.previewComponentRelativePath) {
-    return path.join(input.projectRoot, normalizeProjectPath(input.componentRelativePath));
+    return NodePath.join(input.projectRoot, normalizeProjectPath(input.componentRelativePath));
   }
   const normalizedComponentPath = input.previewComponentRelativePath.replaceAll("\\", "/");
   if (normalizedComponentPath.startsWith(".")) {
-    return path.resolve(path.dirname(input.previewFilePath), normalizedComponentPath);
+    return NodePath.resolve(NodePath.dirname(input.previewFilePath), normalizedComponentPath);
   }
-  return path.join(input.projectRoot, normalizeProjectPath(normalizedComponentPath));
+  return NodePath.join(input.projectRoot, normalizeProjectPath(normalizedComponentPath));
 }
 
 export function buildPreviewRuntimeWarmupPlan(
   input: PreviewRuntimeWarmupInput,
 ): PreviewRuntimeWarmupPlan {
-  const projectPreviewRoot = path.join(input.projectRoot, ".t3", "preview");
-  const previewFilePath = path.join(input.projectRoot, input.previewFileRelativePath);
+  const projectPreviewRoot = NodePath.join(input.projectRoot, ".t3", "preview");
+  const previewFilePath = NodePath.join(input.projectRoot, input.previewFileRelativePath);
   const componentFilePath = resolvePreviewComponentPath({
     projectRoot: input.projectRoot,
     previewFilePath,
@@ -107,16 +110,16 @@ export function buildPreviewRuntimeWarmupPlan(
     previewComponentRelativePath: input.previewComponentRelativePath,
   });
   const mockFilePaths = Object.values(input.moduleMocks).map((relativePath) =>
-    path.join(input.projectRoot, normalizeProjectPath(relativePath)),
+    NodePath.join(input.projectRoot, normalizeProjectPath(relativePath)),
   );
-  const optimizerEntryPath = path.join(input.runtimeDir, PREVIEW_OPTIMIZER_ENTRY_RELATIVE_PATH);
+  const optimizerEntryPath = NodePath.join(input.runtimeDir, PREVIEW_OPTIMIZER_ENTRY_RELATIVE_PATH);
 
   const absoluteWarmupFiles = dedupeStrings([
-    path.join(input.runtimeDir, "src", "main.tsx"),
+    NodePath.join(input.runtimeDir, "src", "main.tsx"),
     optimizerEntryPath,
     input.harnessRuntimeModulePath,
-    path.join(projectPreviewRoot, "wrapper.tsx"),
-    path.join(projectPreviewRoot, "mocks.ts"),
+    NodePath.join(projectPreviewRoot, "wrapper.tsx"),
+    NodePath.join(projectPreviewRoot, "mocks.ts"),
     previewFilePath,
     componentFilePath,
     ...mockFilePaths,
@@ -126,8 +129,8 @@ export function buildPreviewRuntimeWarmupPlan(
     "/preview.html",
     "/src/main.tsx",
     `${normalizeViteFsPath(previewFilePath)}?import`,
-    `${normalizeViteFsPath(path.join(projectPreviewRoot, "wrapper.tsx"))}?import`,
-    `${normalizeViteFsPath(path.join(projectPreviewRoot, "mocks.ts"))}?import`,
+    `${normalizeViteFsPath(NodePath.join(projectPreviewRoot, "wrapper.tsx"))}?import`,
+    `${normalizeViteFsPath(NodePath.join(projectPreviewRoot, "mocks.ts"))}?import`,
     `${normalizeViteFsPath(componentFilePath)}?import`,
     ...mockFilePaths.map((mockFilePath) => `${normalizeViteFsPath(mockFilePath)}?import`),
   ]);

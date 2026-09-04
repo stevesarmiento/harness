@@ -285,7 +285,8 @@ describe("desktop update UI helpers", () => {
         downloadedVersion: "1.1.0",
       }),
     ).toBe(
-      "Install update 1.1.0 and restart T3 Code?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
+      // Fork: Forma rebrand.
+      "Install update 1.1.0 and restart Forma?\n\nAny running tasks will be interrupted. Make sure you're ready before continuing.",
     );
   });
 });

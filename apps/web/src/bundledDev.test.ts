@@ -29,7 +29,15 @@ it("initializes React refresh before a shared UI chunk runs in bundled dev", asy
   try {
     await NodeFSP.mkdir(NodePath.join(root, "src/lib"), { recursive: true });
     await NodeFSP.writeFile(NodePath.join(root, "package.json"), '{"type":"module"}');
-    for (const file of ["index.html", "src/bootstrap.ts", "src/lib/bootError.ts"]) {
+    // Fork: index.html also boots the Forma theme modules.
+    for (const file of [
+      "index.html",
+      "src/bootstrap.ts",
+      "src/lib/bootError.ts",
+      "src/themeBootstrap.ts",
+      "src/interfaceAppearance.ts",
+      "src/theme.ts",
+    ]) {
       await NodeFSP.copyFile(new URL(`../${file}`, import.meta.url), NodePath.join(root, file));
     }
     await NodeFSP.writeFile(

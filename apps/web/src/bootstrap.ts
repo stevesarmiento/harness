@@ -1,3 +1,6 @@
+// Fork: apply the persisted Forma theme before anything else so the first
+// paint matches the user's preferences (previously a separate html entry).
+import "./themeBootstrap";
 import { showBootError } from "./lib/bootError";
 
 // Bundled dev can move UI code into shared chunks. Load it only after this

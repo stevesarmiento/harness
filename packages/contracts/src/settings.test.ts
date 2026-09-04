@@ -253,14 +253,15 @@ describe("ClientSettings context window meter", () => {
 });
 
 describe("ClientSettings composer collapse", () => {
-  it("collapses on blur and scroll by default and accepts opting out of each", () => {
+  // Fork: the Forma composer never collapses unless the user opts in.
+  it("keeps the composer expanded by default and accepts opting in to each trigger", () => {
     const defaults = decodeClientSettings({});
-    expect(defaults.composerCollapseOnBlur).toBe(true);
-    expect(defaults.composerCollapseOnScroll).toBe(true);
+    expect(defaults.composerCollapseOnBlur).toBe(false);
+    expect(defaults.composerCollapseOnScroll).toBe(false);
 
-    const blurOff = decodeClientSettings({ composerCollapseOnBlur: false });
-    expect(blurOff.composerCollapseOnBlur).toBe(false);
-    expect(blurOff.composerCollapseOnScroll).toBe(true);
+    const blurOn = decodeClientSettings({ composerCollapseOnBlur: true });
+    expect(blurOn.composerCollapseOnBlur).toBe(true);
+    expect(blurOn.composerCollapseOnScroll).toBe(false);
 
     expect(
       decodeClientSettingsPatch({ composerCollapseOnScroll: false }).composerCollapseOnScroll,

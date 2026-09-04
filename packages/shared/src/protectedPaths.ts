@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - platform-specific path joining (win32/posix) needs node:path directly.
-import nodePath from "node:path";
+import * as NodePath from "node:path";
 
 const DARWIN_HOME_DIRECTORY_NAMES = [
   "Music",
@@ -57,7 +57,7 @@ export function getProtectedAbsolutePaths(
   platform: NodeJS.Platform,
   homeDir: string,
 ): readonly string[] {
-  const path = platform === "win32" ? nodePath.win32 : nodePath.posix;
+  const path = platform === "win32" ? NodePath.win32 : NodePath.posix;
   if (platform === "darwin") {
     return [
       ...DARWIN_HOME_DIRECTORY_NAMES.map((name) => path.resolve(homeDir, name)),
@@ -72,7 +72,7 @@ export function getProtectedAbsolutePaths(
 }
 
 function normalizeAbsolutePath(input: string, platform: NodeJS.Platform): string {
-  const path = platform === "win32" ? nodePath.win32 : nodePath.posix;
+  const path = platform === "win32" ? NodePath.win32 : NodePath.posix;
   const resolved = path.resolve(input);
   if (resolved.length > 1) return resolved.replace(/[\\/]+$/, "");
   return resolved;

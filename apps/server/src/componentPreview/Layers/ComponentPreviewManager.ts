@@ -14,16 +14,16 @@
  *
  * @module ComponentPreviewManagerLive
  */
-import { spawn, type ChildProcessByStdio } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { promises as fsPromises } from "node:fs";
-import { createRequire } from "node:module";
-import net from "node:net";
-import os from "node:os";
-import path from "node:path";
-import type { Readable } from "node:stream";
-import { fileURLToPath } from "node:url";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeModule from "node:module";
+import * as NodeNet from "node:net";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import type * as NodeStream from "node:stream";
+import * as NodeURL from "node:url";
 
 import {
   CommandId,
@@ -114,7 +114,11 @@ interface RuntimeRecord {
   readonly port: number;
   readonly baseUrl: string;
   readonly iframeBasePath: string;
-  readonly child: ChildProcessByStdio<null, Readable, Readable>;
+  readonly child: NodeChildProcess.ChildProcessByStdio<
+    null,
+    NodeStream.Readable,
+    NodeStream.Readable
+  >;
   readonly logs: string[];
   readonly readinessPaths: readonly string[];
   readonly startedAt: string;
@@ -150,11 +154,11 @@ const BOOTSTRAP_FILE_PATHS = [
 
 function resolveHarnessAssetPath(relativePath: string): string {
   const candidates = [
-    fileURLToPath(new URL(`../harness/${relativePath}`, import.meta.url)),
-    fileURLToPath(new URL(`./harness/${relativePath}`, import.meta.url)),
+    NodeURL.fileURLToPath(new URL(`../harness/${relativePath}`, import.meta.url)),
+    NodeURL.fileURLToPath(new URL(`./harness/${relativePath}`, import.meta.url)),
   ];
   for (const candidate of candidates) {
-    if (existsSync(candidate)) {
+    if (NodeFS.existsSync(candidate)) {
       return candidate;
     }
   }
@@ -187,7 +191,7 @@ function asProjectRelativePath(relativePath: string) {
 }
 
 function displayNameForPath(relativePath: string): string {
-  const basename = path.basename(relativePath).replace(/\.[^.]+$/, "");
+  const basename = NodePath.basename(relativePath).replace(/\.[^.]+$/, "");
   return basename.replace(/[-_]+/g, " ").trim() || basename;
 }
 
@@ -196,12 +200,12 @@ function isComponentPath(relativePath: string): boolean {
   if (normalized.endsWith(".d.ts")) return false;
   if (/\.(stories|story|preview)\.[^.]+$/i.test(normalized)) return false;
   if (/(\.test|\.spec)\.[^.]+$/i.test(normalized)) return false;
-  return COMPONENT_EXTENSIONS.has(path.extname(normalized));
+  return COMPONENT_EXTENSIONS.has(NodePath.extname(normalized));
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
   try {
-    await fsPromises.access(targetPath);
+    await NodeFSP.access(targetPath);
     return true;
   } catch {
     return false;
@@ -210,7 +214,7 @@ async function pathExists(targetPath: string): Promise<boolean> {
 
 async function readJsonFile<T>(filePath: string): Promise<T | null> {
   try {
-    const contents = await fsPromises.readFile(filePath, "utf8");
+    const contents = await NodeFSP.readFile(filePath, "utf8");
     return JSON.parse(contents) as T;
   } catch {
     return null;
@@ -219,7 +223,7 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 
 async function readTextFile(filePath: string): Promise<string | null> {
   try {
-    return await fsPromises.readFile(filePath, "utf8");
+    return await NodeFSP.readFile(filePath, "utf8");
   } catch {
     return null;
   }
@@ -228,11 +232,11 @@ async function readTextFile(filePath: string): Promise<string | null> {
 async function listRelativeFiles(root: string): Promise<string[]> {
   const results: string[] = [];
   async function walk(currentDir: string): Promise<void> {
-    const entries = await fsPromises.readdir(currentDir, { withFileTypes: true });
+    const entries = await NodeFSP.readdir(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name.startsWith(".DS_Store")) continue;
-      const absolutePath = path.join(currentDir, entry.name);
-      const relativePath = normalizeProjectPath(path.relative(root, absolutePath));
+      const absolutePath = NodePath.join(currentDir, entry.name);
+      const relativePath = normalizeProjectPath(NodePath.relative(root, absolutePath));
       if (entry.isDirectory()) {
         if (IGNORED_DIRS.has(entry.name)) continue;
         await walk(absolutePath);
@@ -261,14 +265,14 @@ async function resolveWorkspaceRootRelativePath(
   projectRoot: string,
   relativePath: string,
 ): Promise<string> {
-  const absoluteTargetPath = path.join(projectRoot, relativePath);
-  let currentDir = path.dirname(absoluteTargetPath);
-  const normalizedProjectRoot = path.resolve(projectRoot);
+  const absoluteTargetPath = NodePath.join(projectRoot, relativePath);
+  let currentDir = NodePath.dirname(absoluteTargetPath);
+  const normalizedProjectRoot = NodePath.resolve(projectRoot);
   while (currentDir.startsWith(normalizedProjectRoot)) {
-    if (await pathExists(path.join(currentDir, "package.json"))) {
-      return normalizeProjectPath(path.relative(projectRoot, currentDir));
+    if (await pathExists(NodePath.join(currentDir, "package.json"))) {
+      return normalizeProjectPath(NodePath.relative(projectRoot, currentDir));
     }
-    const nextDir = path.dirname(currentDir);
+    const nextDir = NodePath.dirname(currentDir);
     if (nextDir === currentDir) {
       break;
     }
@@ -281,9 +285,9 @@ async function resolveWorkspacePackageJson(
   projectRoot: string,
   workspaceRootRelativePath: string,
 ): Promise<PackageJsonRecord | null> {
-  const workspaceRoot = path.join(projectRoot, workspaceRootRelativePath);
+  const workspaceRoot = NodePath.join(projectRoot, workspaceRootRelativePath);
   const directPackage = await readJsonFile<PackageJsonRecord>(
-    path.join(workspaceRoot, "package.json"),
+    NodePath.join(workspaceRoot, "package.json"),
   );
   if (directPackage) {
     return directPackage;
@@ -291,7 +295,7 @@ async function resolveWorkspacePackageJson(
   if (workspaceRootRelativePath.length === 0) {
     return directPackage;
   }
-  return await readJsonFile<PackageJsonRecord>(path.join(projectRoot, "package.json"));
+  return await readJsonFile<PackageJsonRecord>(NodePath.join(projectRoot, "package.json"));
 }
 
 async function detectProjectFramework(
@@ -308,7 +312,7 @@ async function detectProjectFramework(
     );
   }
   const rootPackageJson = await readJsonFile<PackageJsonRecord>(
-    path.join(projectRoot, "package.json"),
+    NodePath.join(projectRoot, "package.json"),
   );
   const rootFramework = resolveFrameworkFromPackage(rootPackageJson);
   if (rootFramework !== "unsupported") {
@@ -319,7 +323,7 @@ async function detectProjectFramework(
     (file) => file.endsWith("/package.json") || file === "package.json",
   );
   for (const packageJsonPath of packageJsonPaths) {
-    const pkg = await readJsonFile<PackageJsonRecord>(path.join(projectRoot, packageJsonPath));
+    const pkg = await readJsonFile<PackageJsonRecord>(NodePath.join(projectRoot, packageJsonPath));
     const framework = resolveFrameworkFromPackage(pkg);
     if (framework !== "unsupported") {
       return framework;
@@ -330,7 +334,7 @@ async function detectProjectFramework(
 
 async function hasBootstrapFiles(projectRoot: string): Promise<boolean> {
   for (const relativePath of BOOTSTRAP_FILE_PATHS) {
-    if (!(await pathExists(path.join(projectRoot, relativePath)))) {
+    if (!(await pathExists(NodePath.join(projectRoot, relativePath)))) {
       return false;
     }
   }
@@ -339,7 +343,7 @@ async function hasBootstrapFiles(projectRoot: string): Promise<boolean> {
 
 function previewFilePathForComponent(componentRelativePath: string): string {
   const normalized = normalizeProjectPath(componentRelativePath);
-  const extension = path.extname(normalized);
+  const extension = NodePath.extname(normalized);
   const stem = normalized.slice(0, normalized.length - extension.length);
   return `${stem}.preview.tsx`;
 }
@@ -379,15 +383,15 @@ function upsertWorkspaceRecord(
 }
 
 function normalizeViteFsPath(filePath: string): string {
-  const resolved = path.resolve(filePath).replaceAll("\\", "/");
+  const resolved = NodePath.resolve(filePath).replaceAll("\\", "/");
   return resolved.startsWith("/") ? `/@fs${resolved}` : `/@fs/${resolved}`;
 }
 
 function requireResolveFromRoots(searchRoots: readonly string[], specifier: string): string {
-  const runtimeRequire = createRequire(import.meta.url);
+  const runtimeRequire = NodeModule.createRequire(import.meta.url);
   for (const searchRoot of searchRoots) {
     try {
-      const requireFromRoot = createRequire(path.join(searchRoot, "package.json"));
+      const requireFromRoot = NodeModule.createRequire(NodePath.join(searchRoot, "package.json"));
       return requireFromRoot.resolve(specifier);
     } catch {
       // Try the next candidate root.
@@ -411,7 +415,7 @@ async function resolvePackageBinPath(
   if (!relativeBinPath) {
     throw new Error(`Package "${packageName}" does not define a "${binName}" CLI entry.`);
   }
-  return path.resolve(path.dirname(packageJsonPath), relativeBinPath);
+  return NodePath.resolve(NodePath.dirname(packageJsonPath), relativeBinPath);
 }
 
 async function inferAliasEntries(
@@ -419,12 +423,12 @@ async function inferAliasEntries(
   relativePath: string,
   workspaceRootRelativePath: string,
 ): Promise<readonly AliasEntry[]> {
-  const workspaceRoot = path.join(projectRoot, workspaceRootRelativePath);
+  const workspaceRoot = NodePath.join(projectRoot, workspaceRootRelativePath);
   const candidateConfigPaths = [
-    path.join(workspaceRoot, "tsconfig.json"),
-    path.join(workspaceRoot, "jsconfig.json"),
-    path.join(projectRoot, "tsconfig.json"),
-    path.join(projectRoot, "jsconfig.json"),
+    NodePath.join(workspaceRoot, "tsconfig.json"),
+    NodePath.join(workspaceRoot, "jsconfig.json"),
+    NodePath.join(projectRoot, "tsconfig.json"),
+    NodePath.join(projectRoot, "jsconfig.json"),
   ].filter((candidatePath, index, entries) => entries.indexOf(candidatePath) === index);
 
   const configuredAliasEntries = (
@@ -435,7 +439,7 @@ async function inferAliasEntries(
           return [];
         }
         const aliasEntries = aliasEntriesFromTsconfigPaths(config.compilerOptions.paths, {
-          configDir: path.dirname(configPath),
+          configDir: NodePath.dirname(configPath),
           ...(config.compilerOptions.baseUrl ? { baseUrl: config.compilerOptions.baseUrl } : {}),
         });
         return (
@@ -455,11 +459,11 @@ async function inferAliasEntries(
   const candidateRoots: string[] = [];
   if (markerIndex >= 0) {
     candidateRoots.push(
-      path.join(projectRoot, normalized.slice(0, markerIndex + srcMarker.length)),
+      NodePath.join(projectRoot, normalized.slice(0, markerIndex + srcMarker.length)),
     );
   }
-  candidateRoots.push(path.join(workspaceRoot, "src"));
-  candidateRoots.push(path.join(projectRoot, "src"));
+  candidateRoots.push(NodePath.join(workspaceRoot, "src"));
+  candidateRoots.push(NodePath.join(projectRoot, "src"));
 
   const inferredAliasEntries: AliasEntry[] = [];
   for (const candidateRoot of candidateRoots) {
@@ -506,11 +510,11 @@ function parseModuleMocks(
   const matches = [
     ...moduleMocksMatch[1]!.matchAll(/["'`]([^"'`]+)["'`]\s*:\s*["'`]([^"'`]+)["'`]/g),
   ];
-  const directory = path.posix.dirname(normalizeProjectPath(previewFileRelativePath));
+  const directory = NodePath.posix.dirname(normalizeProjectPath(previewFileRelativePath));
   const entries = matches.map((match) => {
     const rawPath = match[2]!;
     const resolvedPath = rawPath.startsWith(".")
-      ? normalizeProjectPath(path.posix.join(directory, rawPath))
+      ? normalizeProjectPath(NodePath.posix.join(directory, rawPath))
       : normalizeProjectPath(rawPath);
     return [match[1]!, resolvedPath] as const;
   });
@@ -526,8 +530,8 @@ function parsePreviewComponentPath(source: string, previewFileRelativePath: stri
     return normalizeProjectPath(componentRelativePath);
   }
   return normalizeProjectPath(
-    path.posix.join(
-      path.posix.dirname(normalizeProjectPath(previewFileRelativePath)),
+    NodePath.posix.join(
+      NodePath.posix.dirname(normalizeProjectPath(previewFileRelativePath)),
       componentRelativePath,
     ),
   );
@@ -542,7 +546,7 @@ async function inspectPreviewFile(
   readonly moduleMocks: Readonly<Record<string, string>>;
   readonly previewComponentRelativePath: string | null;
 }> {
-  const source = await readTextFile(path.join(projectRoot, previewFileRelativePath));
+  const source = await readTextFile(NodePath.join(projectRoot, previewFileRelativePath));
   if (!source) {
     return {
       scenarioChoices: [],
@@ -562,7 +566,7 @@ async function inspectPreviewFile(
 
 async function allocatePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
-    const server = net.createServer();
+    const server = NodeNet.createServer();
     server.on("error", reject);
     server.listen(0, PREVIEW_RUNTIME_HOST, () => {
       const address = server.address();
@@ -646,31 +650,33 @@ async function createRuntimeWorkspace(args: {
   readonly moduleMocks: Readonly<Record<string, string>>;
   readonly framework: ComponentPreviewFramework;
 }): Promise<string> {
-  const runtimeDir = path.join(
-    os.tmpdir(),
+  const runtimeDir = NodePath.join(
+    NodeOS.tmpdir(),
     "t3-component-preview-harness",
-    randomUUID().slice(0, 12),
+    NodeCrypto.randomUUID().slice(0, 12),
   );
-  await fsPromises.mkdir(path.join(runtimeDir, "src"), { recursive: true });
+  await NodeFSP.mkdir(NodePath.join(runtimeDir, "src"), { recursive: true });
   const defaultComponentModuleUrl = normalizeViteFsPath(
-    path.join(args.projectRoot, args.componentRelativePath),
+    NodePath.join(args.projectRoot, args.componentRelativePath),
   );
   const previewModuleUrl = normalizeViteFsPath(
-    path.join(args.projectRoot, args.previewFileRelativePath),
+    NodePath.join(args.projectRoot, args.previewFileRelativePath),
   );
   const wrapperModuleUrl = normalizeViteFsPath(
-    path.join(args.projectRoot, ".t3/preview/wrapper.tsx"),
+    NodePath.join(args.projectRoot, ".t3/preview/wrapper.tsx"),
   );
-  const mocksModuleUrl = normalizeViteFsPath(path.join(args.projectRoot, ".t3/preview/mocks.ts"));
+  const mocksModuleUrl = normalizeViteFsPath(
+    NodePath.join(args.projectRoot, ".t3/preview/mocks.ts"),
+  );
   const optimizerComponentPath = resolvePreviewComponentPath({
     projectRoot: args.projectRoot,
-    previewFilePath: path.join(args.projectRoot, args.previewFileRelativePath),
+    previewFilePath: NodePath.join(args.projectRoot, args.previewFileRelativePath),
     componentRelativePath: args.componentRelativePath,
     previewComponentRelativePath: args.previewComponentRelativePath,
   });
   const optimizerComponentModuleUrl = normalizeViteFsPath(optimizerComponentPath);
   const optimizerMockModuleUrls = Object.values(args.moduleMocks).map((relativePath) =>
-    normalizeViteFsPath(path.join(args.projectRoot, relativePath)),
+    normalizeViteFsPath(NodePath.join(args.projectRoot, relativePath)),
   );
   const runtimeHelperUrl = normalizeViteFsPath(HARNESS_RUNTIME_MODULE_PATH);
 
@@ -732,13 +738,13 @@ startPreviewRuntime({
 </html>
 `;
 
-  await fsPromises.writeFile(path.join(runtimeDir, "src/main.tsx"), mainSource, "utf8");
-  await fsPromises.writeFile(
-    path.join(runtimeDir, "src/optimizer-entry.ts"),
+  await NodeFSP.writeFile(NodePath.join(runtimeDir, "src/main.tsx"), mainSource, "utf8");
+  await NodeFSP.writeFile(
+    NodePath.join(runtimeDir, "src/optimizer-entry.ts"),
     `${optimizerEntrySource}\n`,
     "utf8",
   );
-  await fsPromises.writeFile(path.join(runtimeDir, "preview.html"), htmlSource, "utf8");
+  await NodeFSP.writeFile(NodePath.join(runtimeDir, "preview.html"), htmlSource, "utf8");
   return runtimeDir;
 }
 
@@ -804,8 +810,8 @@ function buildPreviewGenerationPrompt(args: {
   readonly relativePath: string;
   readonly previewFileRelativePath: string;
 }) {
-  const configImportPath = path.posix.relative(
-    path.posix.dirname(normalizeProjectPath(args.previewFileRelativePath)),
+  const configImportPath = NodePath.posix.relative(
+    NodePath.posix.dirname(normalizeProjectPath(args.previewFileRelativePath)),
     ".t3/preview/config.ts",
   );
   const normalizedConfigImportPath = configImportPath.startsWith(".")
@@ -830,7 +836,7 @@ Minimum preview contract:
 import { defineComponentPreview } from "${normalizedConfigImportPath}";
 
 export default defineComponentPreview({
-  component: "./${path.posix.basename(args.relativePath)}",
+  component: "./${NodePath.posix.basename(args.relativePath)}",
   componentExport: "default",
   scenarios: [
     {
@@ -916,7 +922,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
     projectId: ProjectId,
   ): Effect.Effect<ComponentPreviewIssueAccessTokenResult, never> =>
     Effect.gen(function* () {
-      const token = randomUUID();
+      const token = NodeCrypto.randomUUID();
       const record: PreviewAccessTokenRecord = {
         token,
         projectId,
@@ -964,7 +970,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
     orchestrationEngine
       .dispatch({
         type: "project.meta.update",
-        commandId: CommandId.make(`component-preview-meta:${randomUUID()}`),
+        commandId: CommandId.make(`component-preview-meta:${NodeCrypto.randomUUID()}`),
         projectId: project.id,
         componentPreviewWorkspaceRecords: [...componentPreviewWorkspaceRecords],
       })
@@ -1069,7 +1075,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
     Effect.gen(function* () {
       runtime.child.kill("SIGTERM");
       yield* Effect.tryPromise({
-        try: () => fsPromises.rm(runtime.runtimeDir, { recursive: true, force: true }),
+        try: () => NodeFSP.rm(runtime.runtimeDir, { recursive: true, force: true }),
         catch: () => undefined,
       }).pipe(Effect.catch(() => Effect.void));
     });
@@ -1127,7 +1133,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
           }),
         catch: (cause) => toPreviewError("Failed to create preview runtime workspace.", cause),
       });
-      const workspaceRoot = path.join(project.workspaceRoot, target.workspaceRootRelativePath);
+      const workspaceRoot = NodePath.join(project.workspaceRoot, target.workspaceRootRelativePath);
       const warmupPlan = buildPreviewRuntimeWarmupPlan({
         projectRoot: project.workspaceRoot,
         workspaceRoot,
@@ -1150,32 +1156,36 @@ const makeComponentPreviewManager = Effect.gen(function* () {
         try: () => resolvePackageBinPath([process.cwd()], "vite"),
         catch: (cause) => toPreviewError("Failed to locate the Vite preview runtime CLI.", cause),
       });
-      const child = spawn(process.execPath, [viteCliPath, "--config", HARNESS_VITE_CONFIG_PATH], {
-        cwd: workspaceRoot,
-        env: {
-          ...process.env,
-          T3CODE_PREVIEW_RUNTIME_ROOT: runtimeDir,
-          T3CODE_PREVIEW_PROJECT_ROOT: project.workspaceRoot,
-          T3CODE_PREVIEW_WORKSPACE_ROOT: workspaceRoot,
-          T3CODE_PREVIEW_FRAMEWORK: target.framework,
-          T3CODE_PREVIEW_HOST: PREVIEW_RUNTIME_HOST,
-          T3CODE_PREVIEW_PORT: String(port),
-          T3CODE_PREVIEW_CACHE_DIR: warmupPlan.cacheDir,
-          T3CODE_PREVIEW_OPTIMIZE_DEPS_ENTRIES: JSON.stringify(warmupPlan.optimizeDepsEntries),
-          T3CODE_PREVIEW_WARMUP_FILES: JSON.stringify(warmupPlan.warmupFiles),
-          T3CODE_PREVIEW_MODULE_MOCKS: JSON.stringify(
-            Object.fromEntries(
-              Object.entries(target.moduleMocks).map(([find, replacement]) => [
-                find,
-                path.join(project.workspaceRoot, replacement),
-              ]),
+      const child = NodeChildProcess.spawn(
+        process.execPath,
+        [viteCliPath, "--config", HARNESS_VITE_CONFIG_PATH],
+        {
+          cwd: workspaceRoot,
+          env: {
+            ...process.env,
+            T3CODE_PREVIEW_RUNTIME_ROOT: runtimeDir,
+            T3CODE_PREVIEW_PROJECT_ROOT: project.workspaceRoot,
+            T3CODE_PREVIEW_WORKSPACE_ROOT: workspaceRoot,
+            T3CODE_PREVIEW_FRAMEWORK: target.framework,
+            T3CODE_PREVIEW_HOST: PREVIEW_RUNTIME_HOST,
+            T3CODE_PREVIEW_PORT: String(port),
+            T3CODE_PREVIEW_CACHE_DIR: warmupPlan.cacheDir,
+            T3CODE_PREVIEW_OPTIMIZE_DEPS_ENTRIES: JSON.stringify(warmupPlan.optimizeDepsEntries),
+            T3CODE_PREVIEW_WARMUP_FILES: JSON.stringify(warmupPlan.warmupFiles),
+            T3CODE_PREVIEW_MODULE_MOCKS: JSON.stringify(
+              Object.fromEntries(
+                Object.entries(target.moduleMocks).map(([find, replacement]) => [
+                  find,
+                  NodePath.join(project.workspaceRoot, replacement),
+                ]),
+              ),
             ),
-          ),
-          T3CODE_PREVIEW_ALIASES: JSON.stringify(target.aliasEntries),
-          T3CODE_PREVIEW_REACT_ALIASES: JSON.stringify(reactAliases),
+            T3CODE_PREVIEW_ALIASES: JSON.stringify(target.aliasEntries),
+            T3CODE_PREVIEW_REACT_ALIASES: JSON.stringify(reactAliases),
+          },
+          stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      );
       if (!child.stdout || !child.stderr) {
         yield* stopRuntimeRecord({
           projectId: project.id,
@@ -1186,7 +1196,11 @@ const makeComponentPreviewManager = Effect.gen(function* () {
           port,
           baseUrl: `http://${PREVIEW_RUNTIME_HOST}:${port}`,
           iframeBasePath: `${COMPONENT_PREVIEW_IFRAME_PATH_PREFIX}/${project.id}`,
-          child: child as ChildProcessByStdio<null, Readable, Readable>,
+          child: child as NodeChildProcess.ChildProcessByStdio<
+            null,
+            NodeStream.Readable,
+            NodeStream.Readable
+          >,
           logs: [],
           readinessPaths: warmupPlan.readinessPaths,
           startedAt: new Date().toISOString(),
@@ -1194,7 +1208,11 @@ const makeComponentPreviewManager = Effect.gen(function* () {
         });
         return yield* failPreview("Preview runtime did not expose stdout/stderr pipes.");
       }
-      const runtimeChild = child as ChildProcessByStdio<null, Readable, Readable>;
+      const runtimeChild = child as NodeChildProcess.ChildProcessByStdio<
+        null,
+        NodeStream.Readable,
+        NodeStream.Readable
+      >;
 
       const logs: string[] = [];
       const captureLogs = (chunk: Buffer) => {
@@ -1283,7 +1301,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
     Effect.gen(function* () {
       const project = yield* getProjectById(input.projectId);
       const relativePath = normalizeProjectPath(input.relativePath);
-      const absolutePath = path.join(project.workspaceRoot, relativePath);
+      const absolutePath = NodePath.join(project.workspaceRoot, relativePath);
       const exists = yield* Effect.tryPromise({
         try: () => pathExists(absolutePath),
         catch: (cause) => toPreviewError("Failed to resolve the selected preview target.", cause),
@@ -1338,7 +1356,7 @@ const makeComponentPreviewManager = Effect.gen(function* () {
       const previewFileRelativePath = previewFilePathForComponent(relativePath);
       if (
         !(yield* Effect.tryPromise({
-          try: () => pathExists(path.join(project.workspaceRoot, previewFileRelativePath)),
+          try: () => pathExists(NodePath.join(project.workspaceRoot, previewFileRelativePath)),
           catch: (cause) => toPreviewError("Failed to inspect component preview files.", cause),
         }))
       ) {

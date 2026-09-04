@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import vm from "node:vm";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeVM from "node:vm";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeUtil from "node:util";
 
-const execFileAsync = promisify(execFile);
+const execFileAsync = NodeUtil.promisify(NodeChildProcess.execFile);
 
 const VERSION = process.argv[2] ?? "12.17.0";
 const VERSION_TAG = `v${VERSION}`;
@@ -15,8 +15,8 @@ const VSIX_URL = `https://open-vsx.org/api/vscode-icons-team/vscode-icons/${VERS
 const LANGUAGES_URL = `https://raw.githubusercontent.com/vscode-icons/vscode-icons/${VERSION_TAG}/src/iconsManifest/languages.ts`;
 
 const REPO_ROOT = process.cwd();
-const MANIFEST_PATH = path.join(REPO_ROOT, "apps/web/src/vscode-icons-manifest.json");
-const ASSOCIATIONS_PATH = path.join(
+const MANIFEST_PATH = NodePath.join(REPO_ROOT, "apps/web/src/vscode-icons-manifest.json");
+const ASSOCIATIONS_PATH = NodePath.join(
   REPO_ROOT,
   "apps/web/src/vscode-icons-language-associations.json",
 );
@@ -36,13 +36,13 @@ function putIfAbsent(target, key, value) {
 }
 
 async function downloadVsix(tmpDir) {
-  const vsixPath = path.join(tmpDir, `vscode-icons-${VERSION}.vsix`);
+  const vsixPath = NodePath.join(tmpDir, `vscode-icons-${VERSION}.vsix`);
   const response = await fetch(VSIX_URL);
   if (!response.ok) {
     throw new Error(`Failed to download VSIX: ${response.status} ${response.statusText}`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(vsixPath, bytes);
+  await NodeFSP.writeFile(vsixPath, bytes);
   return vsixPath;
 }
 
@@ -70,8 +70,8 @@ async function loadLanguagesCollection() {
     .replace(/\}\s*satisfies\s*Record<[^;]+>;/, "};");
 
   const context = {};
-  vm.createContext(context);
-  vm.runInContext(`${source}\n;globalThis.__languages = languages;`, context);
+  NodeVM.createContext(context);
+  NodeVM.runInContext(`${source}\n;globalThis.__languages = languages;`, context);
   const languages = context.__languages;
   if (!languages || typeof languages !== "object") {
     throw new Error("Failed to parse languages.ts into a collection");
@@ -123,15 +123,15 @@ function buildLanguageAssociations(manifest, languages) {
 }
 
 async function main() {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "forma-vscode-icons-sync-"));
+  const tmpDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "forma-vscode-icons-sync-"));
   try {
     const vsixPath = await downloadVsix(tmpDir);
     const manifest = await extractManifestFromVsix(vsixPath);
     const languages = await loadLanguagesCollection();
     const associations = buildLanguageAssociations(manifest, languages);
 
-    await fs.writeFile(MANIFEST_PATH, `${JSON.stringify(manifest)}\n`, "utf8");
-    await fs.writeFile(ASSOCIATIONS_PATH, `${JSON.stringify(associations)}\n`, "utf8");
+    await NodeFSP.writeFile(MANIFEST_PATH, `${JSON.stringify(manifest)}\n`, "utf8");
+    await NodeFSP.writeFile(ASSOCIATIONS_PATH, `${JSON.stringify(associations)}\n`, "utf8");
 
     process.stdout.write(
       [
@@ -143,7 +143,7 @@ async function main() {
       ].join("\n") + "\n",
     );
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await NodeFSP.rm(tmpDir, { recursive: true, force: true });
   }
 }
 

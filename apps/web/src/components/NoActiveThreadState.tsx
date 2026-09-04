@@ -34,6 +34,7 @@ import { ThreadRowLeadingStatus } from "./ThreadStatusIndicators";
 import { AddProjectIcon, HouseIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "~/components/ui/sidebar";
 import { WorkspaceHeaderTitle } from "~/components/WorkspaceHeaderTitle";
 
@@ -127,32 +128,44 @@ function ThreadListRow({
             </span>
           </div>
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground/72">
-            <span
-              className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
-              title={workspacePath ?? resolveThreadProjectLabel(item)}
-            >
-              <ThreadBreadcrumbProjectChipContent
-                icon={
-                  <ProjectFavicon
-                    environmentId={item.thread.environmentId}
-                    cwd={item.project?.workspaceRoot ?? item.thread.worktreePath ?? ""}
-                    projectName={resolveThreadProjectLabel(item)}
-                    className="size-3 shrink-0"
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
                   />
                 }
-                label={resolveThreadProjectLabel(item)}
-              />
-            </span>
-            {item.thread.branch ? (
-              <span
-                className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
-                title={item.thread.branch}
               >
-                <ThreadBreadcrumbChipContent
-                  icon={<ThreadBranchIcon />}
-                  label={item.thread.branch}
+                <ThreadBreadcrumbProjectChipContent
+                  icon={
+                    <ProjectFavicon
+                      environmentId={item.thread.environmentId}
+                      cwd={item.project?.workspaceRoot ?? item.thread.worktreePath ?? ""}
+                      projectName={resolveThreadProjectLabel(item)}
+                      className="size-3 shrink-0"
+                    />
+                  }
+                  label={resolveThreadProjectLabel(item)}
                 />
-              </span>
+              </TooltipTrigger>
+              <TooltipPopup>{workspacePath ?? resolveThreadProjectLabel(item)}</TooltipPopup>
+            </Tooltip>
+            {item.thread.branch ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
+                    />
+                  }
+                >
+                  <ThreadBreadcrumbChipContent
+                    icon={<ThreadBranchIcon />}
+                    label={item.thread.branch}
+                  />
+                </TooltipTrigger>
+                <TooltipPopup>{item.thread.branch}</TooltipPopup>
+              </Tooltip>
             ) : null}
             <span className="text-ui-xs shrink-0 text-muted-foreground/68">
               {formatRelativeTimeLabel(getThreadTimestamp(item.thread))}

@@ -2413,27 +2413,33 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           onContextMenu={handleProjectButtonContextMenu}
         >
           {!projectExpanded && projectStatus ? (
-            <span
-              aria-hidden="true"
-              title={projectStatus.label}
-              className={cn(
-                getSidebarIndicatorClassName({
-                  toneClass: projectStatus.toneClass,
-                }),
-                "-ml-0.5 relative",
-              )}
-            >
-              <SidebarStatusGlyph
-                compact
-                status={projectStatus}
-                className="absolute inset-0 m-auto transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-0"
-              />
-              {isProjectReorderingEnabled ? (
-                <SidebarGrabHandleIcon className="absolute inset-0 m-auto size-2 text-muted-foreground/70 opacity-0 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-100" />
-              ) : (
-                <ChevronRightIcon className="absolute inset-0 m-auto size-2.5 fill-muted-foreground/70 text-muted-foreground/70 opacity-0 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-100" />
-              )}
-            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      getSidebarIndicatorClassName({
+                        toneClass: projectStatus.toneClass,
+                      }),
+                      "-ml-0.5 relative",
+                    )}
+                  />
+                }
+              >
+                <SidebarStatusGlyph
+                  compact
+                  status={projectStatus}
+                  className="absolute inset-0 m-auto transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-0"
+                />
+                {isProjectReorderingEnabled ? (
+                  <SidebarGrabHandleIcon className="absolute inset-0 m-auto size-2 text-muted-foreground/70 opacity-0 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-100" />
+                ) : (
+                  <ChevronRightIcon className="absolute inset-0 m-auto size-2.5 fill-muted-foreground/70 text-muted-foreground/70 opacity-0 transition-opacity [transition-duration:var(--motion-duration-micro)] [transition-timing-function:var(--motion-ease-out)] group-hover/project-header:opacity-100" />
+                )}
+              </TooltipTrigger>
+              <TooltipPopup>{projectStatus.label}</TooltipPopup>
+            </Tooltip>
           ) : (
             <span className="-ml-0.5 relative inline-flex size-2.5 shrink-0 items-center justify-center">
               <ChevronRightIcon

@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - pure path/filesystem helpers for the preview harness.
-import { createServer } from "node:http";
+import * as NodeHttp from "node:http";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 async function startReadinessServer(statusByPath: Readonly<Record<string, number>>) {
-  const server = createServer((request, response) => {
+  const server = NodeHttp.createServer((request, response) => {
     const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
     const status = statusByPath[requestUrl.pathname] ?? 404;
     response.statusCode = status;

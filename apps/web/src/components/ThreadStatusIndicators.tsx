@@ -549,34 +549,48 @@ export function ThreadStatusLabel({
 }) {
   if (compact) {
     return (
-      <span
-        title={status.label}
-        className={getSidebarIndicatorClassName({
-          toneClass: status.toneClass,
-          className,
-        })}
-      >
-        <SidebarStatusGlyph compact status={status} />
-        <span className="sr-only">{status.label}</span>
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className={getSidebarIndicatorClassName({
+                toneClass: status.toneClass,
+                className,
+              })}
+            />
+          }
+        >
+          <SidebarStatusGlyph compact status={status} />
+          <span className="sr-only">{status.label}</span>
+        </TooltipTrigger>
+        <TooltipPopup>{status.label}</TooltipPopup>
+      </Tooltip>
     );
   }
 
   return (
-    <span title={status.label} className={cn("inline-flex items-center gap-1.5", className)}>
-      <span
-        className={getSidebarIndicatorClassName({
-          toneClass: status.toneClass,
-        })}
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className={cn("inline-flex items-center gap-1.5", className)} />}
       >
-        <SidebarStatusGlyph status={status} />
-      </span>
-      <span
-        className={cn("hidden text-ui-2xs font-medium tracking-tight md:inline", status.toneClass)}
-      >
-        {status.label}
-      </span>
-    </span>
+        <span
+          className={getSidebarIndicatorClassName({
+            toneClass: status.toneClass,
+          })}
+        >
+          <SidebarStatusGlyph status={status} />
+        </span>
+        <span
+          className={cn(
+            "hidden text-ui-2xs font-medium tracking-tight md:inline",
+            status.toneClass,
+          )}
+        >
+          {status.label}
+        </span>
+      </TooltipTrigger>
+      <TooltipPopup>{status.label}</TooltipPopup>
+    </Tooltip>
   );
 }
 

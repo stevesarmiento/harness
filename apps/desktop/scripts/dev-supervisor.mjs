@@ -1,6 +1,10 @@
-import { spawn, spawnSync } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeOS from "node:os";
 
 const forceShutdownTimeoutMs = 1_500;
+
+// oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone dev script has no Effect runtime.
+const hostPlatform = NodeOS.platform();
 
 let shuttingDown = false;
 let shutdownPromise = null;
@@ -9,7 +13,7 @@ let exitCode = 0;
 const children = new Map();
 
 function isWindows() {
-  return process.platform === "win32";
+  return hostPlatform === "win32";
 }
 
 function resolveBunCommand() {
@@ -47,15 +51,15 @@ function killChildTreeByPid(pid, signal) {
   }
 
   if (isWindows()) {
-    spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+    NodeChildProcess.spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
     return;
   }
 
-  spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
+  NodeChildProcess.spawnSync("pkill", [`-${signal}`, "-P", String(pid)], { stdio: "ignore" });
 }
 
 function spawnChild(name, command, args) {
-  const child = spawn(command, args, {
+  const child = NodeChildProcess.spawn(command, args, {
     cwd: process.cwd(),
     env: process.env,
     stdio: "inherit",

@@ -96,6 +96,8 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
           contents: "# Report\n",
           byteLength: 9,
           truncated: false,
+          // Fork: reads carry a content-hash version token for guarded saves.
+          version: "497b7725a00101d6cf82489ef502fb0918962b10aaa7279962ab5ec3edc62533",
         });
       }),
     );

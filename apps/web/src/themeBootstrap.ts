@@ -18,9 +18,13 @@ const systemDark =
   typeof window.matchMedia === "function" &&
   window.matchMedia(THEME_MEDIA_QUERY).matches;
 
-applyThemePreferenceToDocument(readStoredThemeSettings(), {
-  document,
-  systemDark,
-});
+// Guard for non-browser contexts (bundled-dev smoke tests run the entry chunk
+// under node with a stub document).
+if (typeof document !== "undefined" && document.documentElement) {
+  applyThemePreferenceToDocument(readStoredThemeSettings(), {
+    document,
+    systemDark,
+  });
 
-applyInterfaceSettingsToDocument(readStoredInterfaceAppearanceSettings(), document);
+  applyInterfaceSettingsToDocument(readStoredInterfaceAppearanceSettings(), document);
+}

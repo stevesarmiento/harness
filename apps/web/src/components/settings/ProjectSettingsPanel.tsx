@@ -231,29 +231,35 @@ function ProjectSettingsBreadcrumb({ projectKey }: { projectKey: string }) {
       <CrumbChevronRightIcon className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME} aria-hidden />
       {selected ? (
         <Menu>
-          <MenuTrigger
-            render={
-              <button
-                type="button"
-                aria-label="Switch project"
-                // Flat pill matching the thread-header breadcrumb chips.
-                className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-                title={selected.displayName}
-              />
-            }
-          >
-            {representative ? (
-              <ProjectFavicon
-                environmentId={representative.environmentId}
-                cwd={representative.workspaceRoot}
-                projectName={selected.displayName}
-                faviconPath={representative.faviconPath ?? null}
-                className="size-3.5 shrink-0"
-              />
-            ) : null}
-            <span className="min-w-0 truncate">{selected.displayName}</span>
-            <CrumbChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
-          </MenuTrigger>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <MenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Switch project"
+                      // Flat pill matching the thread-header breadcrumb chips.
+                      className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                    />
+                  }
+                />
+              }
+            >
+              {representative ? (
+                <ProjectFavicon
+                  environmentId={representative.environmentId}
+                  cwd={representative.workspaceRoot}
+                  projectName={selected.displayName}
+                  faviconPath={representative.faviconPath ?? null}
+                  className="size-3.5 shrink-0"
+                />
+              ) : null}
+              <span className="min-w-0 truncate">{selected.displayName}</span>
+              <CrumbChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
+            </TooltipTrigger>
+            <TooltipPopup>{selected.displayName}</TooltipPopup>
+          </Tooltip>
           <MenuPopup align="start" className="w-80 max-w-[calc(100vw-1rem)]">
             {groups.map((group) => {
               const isActive = group.projectKey === selected.projectKey;

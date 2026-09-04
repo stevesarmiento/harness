@@ -77,6 +77,7 @@ import { Button } from "./ui/button";
 import { SidebarArchiveIcon } from "./icons/custom";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 const PREVIEW_PARENT_SOURCE = "t3-component-preview-parent";
 const PREVIEW_RUNTIME_SOURCE = "t3-component-harness";
@@ -779,18 +780,23 @@ function PreviewViewportControl(props: {
             ? `${viewport.label} viewport (${viewport.width}x${viewport.height})`
             : `${viewport.label} viewport`;
         return (
-          <button
-            key={viewport.id}
-            type="button"
-            className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
-            style={previewChromeIconButtonStyle(active)}
-            onClick={() => props.onSelectViewport(viewport.id)}
-            aria-label={title}
-            aria-pressed={active}
-            title={title}
-          >
-            <PreviewViewportIcon viewportId={viewport.id} size={16} />
-          </button>
+          <Tooltip key={viewport.id}>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
+                  style={previewChromeIconButtonStyle(active)}
+                  onClick={() => props.onSelectViewport(viewport.id)}
+                  aria-label={title}
+                  aria-pressed={active}
+                />
+              }
+            >
+              <PreviewViewportIcon viewportId={viewport.id} size={16} />
+            </TooltipTrigger>
+            <TooltipPopup>{title}</TooltipPopup>
+          </Tooltip>
         );
       })}
     </div>
@@ -809,18 +815,23 @@ function PreviewZoomControl(props: {
       {PREVIEW_ZOOM_LEVELS.map((zoom) => {
         const active = props.selectedZoomId === zoom.id;
         return (
-          <button
-            key={zoom.id}
-            type="button"
-            className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
-            style={previewChromeIconButtonStyle(active)}
-            onClick={() => props.onSelectZoom(zoom.id)}
-            aria-label={`Zoom ${zoom.label}`}
-            aria-pressed={active}
-            title={`Zoom ${zoom.label}`}
-          >
-            <PreviewZoomIcon zoomId={zoom.id} size={16} />
-          </button>
+          <Tooltip key={zoom.id}>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
+                  style={previewChromeIconButtonStyle(active)}
+                  onClick={() => props.onSelectZoom(zoom.id)}
+                  aria-label={`Zoom ${zoom.label}`}
+                  aria-pressed={active}
+                />
+              }
+            >
+              <PreviewZoomIcon zoomId={zoom.id} size={16} />
+            </TooltipTrigger>
+            <TooltipPopup>{`Zoom ${zoom.label}`}</TooltipPopup>
+          </Tooltip>
         );
       })}
     </div>
@@ -2517,15 +2528,21 @@ export function ComponentPreviewPanel() {
         )}
         {activeProjectState?.currentRelativePath ? (
           <div className="inline-flex h-6 items-center overflow-hidden rounded-md border border-border/70 bg-background/88 shadow-sm backdrop-blur-md">
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center text-foreground/90 transition-colors hover:bg-accent"
-              onClick={() => void restartPreviewRuntime().then(refreshInspection)}
-              aria-label="Refresh preview"
-              title="Refresh preview"
-            >
-              <RefreshIcon className="size-3 fill-current" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center text-foreground/90 transition-colors hover:bg-accent"
+                    onClick={() => void restartPreviewRuntime().then(refreshInspection)}
+                    aria-label="Refresh preview"
+                  />
+                }
+              >
+                <RefreshIcon className="size-3 fill-current" />
+              </TooltipTrigger>
+              <TooltipPopup>Refresh preview</TooltipPopup>
+            </Tooltip>
           </div>
         ) : null}
       </div>
@@ -2547,80 +2564,104 @@ export function ComponentPreviewPanel() {
               className="pointer-events-auto inline-flex h-7 items-center overflow-visible rounded-md"
               style={previewChromePillStyle}
             >
-              <button
-                type="button"
-                className="inline-flex size-7 items-center justify-center rounded-none rounded-l-md border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
-                style={previewChromeIconButtonStyle(feedbackEnabled)}
-                onClick={() => setFeedbackEnabled((current) => !current)}
-                aria-label="Annotate preview"
-                title="Annotate preview"
-              >
-                <AnnotationIcon className="size-3.5 fill-current" />
-              </button>
-              <button
-                type="button"
-                className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
-                style={previewChromeIconButtonStyle(feedbackMarkersVisible)}
-                onClick={() => setFeedbackMarkersVisible((current) => !current)}
-                aria-label="Show feedback markers"
-                title="Show feedback markers"
-              >
-                <PreviewFeedbackEyeIcon size={16} isOpen={feedbackMarkersVisible} />
-              </button>
-              <button
-                type="button"
-                className="relative inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-35"
-                style={previewChromeIconButtonStyle(false)}
-                disabled={unsentFeedbackCount === 0}
-                onClick={() => void openPreviewFeedbackThread()}
-                aria-label="Send feedback to agent"
-                title="Send feedback to agent"
-              >
-                <SendFeedbackIcon className="size-3.5 fill-current" />
-                {unsentFeedbackCount > 0 ? (
-                  <span
-                    className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white"
-                    style={{
-                      backgroundColor: "var(--primary)",
-                      boxShadow:
-                        "0 0 0 2px var(--popover, var(--background)), 0 1px 3px color-mix(in srgb, var(--foreground) 20%, transparent)",
-                    }}
-                  >
-                    {unsentFeedbackCount}
-                  </span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-35"
-                style={previewChromeIconButtonStyle(false)}
-                disabled={activeFeedbackAnnotations.length === 0}
-                onClick={() => {
-                  if (!activeProjectRef || !activePreviewFileRelativePath) {
-                    return;
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="inline-flex size-7 items-center justify-center rounded-none rounded-l-md border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
+                      style={previewChromeIconButtonStyle(feedbackEnabled)}
+                      onClick={() => setFeedbackEnabled((current) => !current)}
+                      aria-label="Annotate preview"
+                    />
                   }
-                  updateProjectState(activeProjectRef, (currentState) => ({
-                    ...currentState,
-                    sessionsByPreviewFilePath: upsertPreviewFileSession(
-                      currentState.sessionsByPreviewFilePath,
-                      activePreviewFileRelativePath,
-                      (session) => ({
-                        ...session,
-                        feedbackAnnotations: session.feedbackAnnotations.filter(
-                          (annotation) =>
-                            buildPreviewFeedbackScopeKey(annotation.scope) !==
-                            buildPreviewFeedbackScopeKey(activeFeedbackScope),
-                        ),
-                        updatedAt: new Date().toISOString(),
-                      }),
-                    ),
-                  }));
-                }}
-                aria-label="Clear feedback"
-                title="Clear feedback"
-              >
-                <SidebarArchiveIcon className="size-3.5" />
-              </button>
+                >
+                  <AnnotationIcon className="size-3.5 fill-current" />
+                </TooltipTrigger>
+                <TooltipPopup>Annotate preview</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92]"
+                      style={previewChromeIconButtonStyle(feedbackMarkersVisible)}
+                      onClick={() => setFeedbackMarkersVisible((current) => !current)}
+                      aria-label="Show feedback markers"
+                    />
+                  }
+                >
+                  <PreviewFeedbackEyeIcon size={16} isOpen={feedbackMarkersVisible} />
+                </TooltipTrigger>
+                <TooltipPopup>Show feedback markers</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="relative inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-35"
+                      style={previewChromeIconButtonStyle(false)}
+                      disabled={unsentFeedbackCount === 0}
+                      onClick={() => void openPreviewFeedbackThread()}
+                      aria-label="Send feedback to agent"
+                    />
+                  }
+                >
+                  <SendFeedbackIcon className="size-3.5 fill-current" />
+                  {unsentFeedbackCount > 0 ? (
+                    <span
+                      className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white"
+                      style={{
+                        backgroundColor: "var(--primary)",
+                        boxShadow:
+                          "0 0 0 2px var(--popover, var(--background)), 0 1px 3px color-mix(in srgb, var(--foreground) 20%, transparent)",
+                      }}
+                    >
+                      {unsentFeedbackCount}
+                    </span>
+                  ) : null}
+                </TooltipTrigger>
+                <TooltipPopup>Send feedback to agent</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="inline-flex size-7 items-center justify-center rounded-none border-0 bg-transparent transition-colors hover:bg-accent active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-35"
+                      style={previewChromeIconButtonStyle(false)}
+                      disabled={activeFeedbackAnnotations.length === 0}
+                      onClick={() => {
+                        if (!activeProjectRef || !activePreviewFileRelativePath) {
+                          return;
+                        }
+                        updateProjectState(activeProjectRef, (currentState) => ({
+                          ...currentState,
+                          sessionsByPreviewFilePath: upsertPreviewFileSession(
+                            currentState.sessionsByPreviewFilePath,
+                            activePreviewFileRelativePath,
+                            (session) => ({
+                              ...session,
+                              feedbackAnnotations: session.feedbackAnnotations.filter(
+                                (annotation) =>
+                                  buildPreviewFeedbackScopeKey(annotation.scope) !==
+                                  buildPreviewFeedbackScopeKey(activeFeedbackScope),
+                              ),
+                              updatedAt: new Date().toISOString(),
+                            }),
+                          ),
+                        }));
+                      }}
+                      aria-label="Clear feedback"
+                    />
+                  }
+                >
+                  <SidebarArchiveIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup>Clear feedback</TooltipPopup>
+              </Tooltip>
             </div>
           </div>
         </>

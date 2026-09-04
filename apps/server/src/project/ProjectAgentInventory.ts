@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - direct fs access for agent inventory scanning
-import * as fsPromises from "node:fs/promises";
+import * as NodeFSP from "node:fs/promises";
 
 import type {
   ServerLocalAgentCommand,
@@ -41,7 +41,7 @@ function toWarningDetail(error: unknown): string {
 
 async function pathExists(pathValue: string): Promise<boolean> {
   try {
-    await fsPromises.stat(pathValue);
+    await NodeFSP.stat(pathValue);
     return true;
   } catch {
     return false;
@@ -49,7 +49,7 @@ async function pathExists(pathValue: string): Promise<boolean> {
 }
 
 async function listFilesRecursively(root: string): Promise<string[]> {
-  const entries = await fsPromises.readdir(root, { withFileTypes: true });
+  const entries = await NodeFSP.readdir(root, { withFileTypes: true });
   const files: string[] = [];
 
   for (const entry of entries) {
@@ -138,7 +138,7 @@ async function readSkillFile(input: {
   readonly warnings: ReadonlyArray<InventoryWarning>;
 }> {
   try {
-    const contents = await fsPromises.readFile(
+    const contents = await NodeFSP.readFile(
       input.path.join(input.normalizedRoot, input.relativePath),
       "utf8",
     );
@@ -175,7 +175,7 @@ async function readCommandFile(input: {
   readonly warnings: ReadonlyArray<InventoryWarning>;
 }> {
   try {
-    const contents = await fsPromises.readFile(
+    const contents = await NodeFSP.readFile(
       input.path.join(input.normalizedRoot, input.relativePath),
       "utf8",
     );

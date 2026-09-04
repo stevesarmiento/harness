@@ -4,6 +4,7 @@ import { PlayIcon, Trash2Icon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   composerPopoverLabelClassName,
   composerPopoverSurfaceClassName,
@@ -65,9 +66,14 @@ export const ComposerQueuedTurnsPanel = memo(function ComposerQueuedTurnsPanel({
               key={turn.messageId}
               className="group flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors duration-(--motion-duration-fast) hover:bg-accent/65 motion-reduce:transition-none"
             >
-              <div className="min-w-0 flex-1 truncate text-foreground" title={preview}>
-                {preview}
-              </div>
+              <Tooltip>
+                <TooltipTrigger
+                  render={<div className="min-w-0 flex-1 truncate text-foreground" />}
+                >
+                  {preview}
+                </TooltipTrigger>
+                <TooltipPopup>{preview}</TooltipPopup>
+              </Tooltip>
               <Button
                 size="icon-xs"
                 variant="ghost"

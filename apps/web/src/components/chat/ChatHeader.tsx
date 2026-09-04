@@ -176,18 +176,24 @@ export const ChatHeader = memo(function ChatHeader({
         <DesktopSidebarReopenButton className="md:ml-0" />
         {activeProjectName && activeProjectId ? (
           <nav aria-label="Thread breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
-            <button
-              type="button"
-              aria-label="Switch project"
-              aria-haspopup="dialog"
-              onClick={() => openCommandPalette({ open: "switch-project" })}
-              // Flat pill matching the right-panel surface tabs (no border/divider).
-              className="flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-              title={activeProjectName}
-            >
-              <CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
-              <span className="min-w-0 truncate">{activeProjectName}</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Switch project"
+                    aria-haspopup="dialog"
+                    onClick={() => openCommandPalette({ open: "switch-project" })}
+                    // Flat pill matching the right-panel surface tabs (no border/divider).
+                    className="flex h-6 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                  />
+                }
+              >
+                <CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+                <span className="min-w-0 truncate">{activeProjectName}</span>
+              </TooltipTrigger>
+              <TooltipPopup>{activeProjectName}</TooltipPopup>
+            </Tooltip>
             <ChevronRightIcon className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME} aria-hidden />
             <ThreadTitleMenu
               activeThreadEnvironmentId={activeThreadEnvironmentId}
@@ -199,13 +205,19 @@ export const ChatHeader = memo(function ChatHeader({
             {breadcrumbTrailing}
           </nav>
         ) : (
-          <h2
-            aria-label={activeThreadTitle}
-            className="min-w-0 flex-1 truncate px-2 py-0.5 text-sm font-medium text-foreground"
-            title={activeThreadTitle}
-          >
-            {activeThreadTitle}
-          </h2>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <h2
+                  aria-label={activeThreadTitle}
+                  className="min-w-0 flex-1 truncate px-2 py-0.5 text-sm font-medium text-foreground"
+                />
+              }
+            >
+              {activeThreadTitle}
+            </TooltipTrigger>
+            <TooltipPopup>{activeThreadTitle}</TooltipPopup>
+          </Tooltip>
         )}
         {activeProjectName && !isGitRepo ? (
           <Badge variant="outline" className="text-ui-2xs shrink-0 text-amber-700">
@@ -292,23 +304,29 @@ function ThreadTitleMenu({
 
   return (
     <Menu>
-      <MenuTrigger
-        render={
-          <button
-            type="button"
-            aria-label="Switch thread"
-            // Flat pill: rounded fill with no border/shadow so it reads as an
-            // object at rest, keeping the original hover treatment. Text and
-            // icon sizing match the right-panel surface pills.
-            className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-            title={activeThreadTitle}
-          />
-        }
-      >
-        <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
-        <span className="min-w-0 truncate">{activeThreadTitle}</span>
-        <ChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
-      </MenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <MenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Switch thread"
+                  // Flat pill: rounded fill with no border/shadow so it reads as an
+                  // object at rest, keeping the original hover treatment. Text and
+                  // icon sizing match the right-panel surface pills.
+                  className="group flex h-6 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                />
+              }
+            />
+          }
+        >
+          <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+          <span className="min-w-0 truncate">{activeThreadTitle}</span>
+          <ChevronDownIcon className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70" />
+        </TooltipTrigger>
+        <TooltipPopup>{activeThreadTitle}</TooltipPopup>
+      </Tooltip>
       <MenuPopup align="start" className="w-80 max-w-[calc(100vw-1rem)]">
         {visibleThreads.length > 0 ? (
           visibleThreads.map((thread) => {

@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeModule from "node:module";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Alias, type Plugin } from "vite";
@@ -30,7 +30,8 @@ const port = Number(process.env.T3CODE_PREVIEW_PORT ?? "0");
 const framework = process.env.T3CODE_PREVIEW_FRAMEWORK?.trim() || "unsupported";
 const moduleMocks = parseJsonEnv<Record<string, string>>("T3CODE_PREVIEW_MODULE_MOCKS", {});
 const cacheDir =
-  process.env.T3CODE_PREVIEW_CACHE_DIR?.trim() || path.join(runtimeRoot, "node_modules", ".vite");
+  process.env.T3CODE_PREVIEW_CACHE_DIR?.trim() ||
+  NodePath.join(runtimeRoot, "node_modules", ".vite");
 const optimizeDepsEntries = parseJsonEnv<string[]>("T3CODE_PREVIEW_OPTIMIZE_DEPS_ENTRIES", [
   "src/main.tsx",
 ]);
@@ -40,11 +41,11 @@ const extraAliases = parseJsonEnv<Array<{ find: string; replacement: string }>>(
   [],
 );
 
-const harnessDir = path.dirname(fileURLToPath(import.meta.url));
+const harnessDir = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const reactAliases = parseJsonEnv<Record<string, string>>("T3CODE_PREVIEW_REACT_ALIASES", {});
-const workspacePublicDir = path.join(workspaceRoot, "public");
-const workspaceRequire = createRequire(path.join(workspaceRoot, "package.json"));
-const projectRequire = createRequire(path.join(projectRoot, "package.json"));
+const workspacePublicDir = NodePath.join(workspaceRoot, "public");
+const workspaceRequire = NodeModule.createRequire(NodePath.join(workspaceRoot, "package.json"));
+const projectRequire = NodeModule.createRequire(NodePath.join(projectRoot, "package.json"));
 
 function cssString(value: string): string {
   return JSON.stringify(value);
@@ -85,10 +86,11 @@ function workspaceBareImportResolver(): Plugin {
 function tailwindSourceInjector(): Plugin {
   const sourceRoots = [
     workspaceRoot,
-    path.join(projectRoot, ".t3", "preview"),
-    path.join(projectRoot, "packages"),
+    NodePath.join(projectRoot, ".t3", "preview"),
+    NodePath.join(projectRoot, "packages"),
   ].filter(
-    (sourceRoot, index, roots) => existsSync(sourceRoot) && roots.indexOf(sourceRoot) === index,
+    (sourceRoot, index, roots) =>
+      NodeFS.existsSync(sourceRoot) && roots.indexOf(sourceRoot) === index,
   );
   const sourceDirectives = sourceRoots.map((sourceRoot) => `@source ${cssString(sourceRoot)};`);
 
@@ -132,15 +134,15 @@ const aliasEntries: Alias[] = [
     ? [
         {
           find: "next/navigation",
-          replacement: path.join(harnessDir, "nextNavigationShim.ts"),
+          replacement: NodePath.join(harnessDir, "nextNavigationShim.ts"),
         },
         {
           find: "next/link",
-          replacement: path.join(harnessDir, "nextLinkShim.tsx"),
+          replacement: NodePath.join(harnessDir, "nextLinkShim.tsx"),
         },
         {
           find: "next/image",
-          replacement: path.join(harnessDir, "nextImageShim.tsx"),
+          replacement: NodePath.join(harnessDir, "nextImageShim.tsx"),
         },
       ]
     : []),
@@ -152,7 +154,7 @@ export default defineConfig({
   appType: "spa",
   root: runtimeRoot,
   cacheDir,
-  publicDir: existsSync(workspacePublicDir) ? workspacePublicDir : false,
+  publicDir: NodeFS.existsSync(workspacePublicDir) ? workspacePublicDir : false,
   plugins: [workspaceBareImportResolver(), tailwindSourceInjector(), react(), tailwindcss()],
   css: {
     postcss: workspaceRoot,

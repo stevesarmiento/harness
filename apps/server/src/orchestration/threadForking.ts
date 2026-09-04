@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import type {
   EventId,
   MessageId,
@@ -20,7 +20,7 @@ function forkCloneHash(input: {
   readonly entityKind: ForkCloneEntityKind;
   readonly sourceId: string;
 }): string {
-  return createHash("sha256")
+  return NodeCrypto.createHash("sha256")
     .update(`${input.targetThreadId}:${input.entityKind}:${input.sourceId}`)
     .digest("hex");
 }
