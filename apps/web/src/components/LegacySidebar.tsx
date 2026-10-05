@@ -202,6 +202,8 @@ import {
   resolveThreadStatusPill,
   threadStatusToneClass,
   orderItemsByPreferredIds,
+  // Fork: shared with the v2 sidebar so collapse state stays in sync.
+  projectExpansionPreferenceKeys,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
   useSidebarRowSubscriptionLease,
@@ -287,14 +289,6 @@ function formatProjectMemberActionLabel(
 
 function formatThreadCountLabel(count: number): string {
   return `${count} thread${count === 1 ? "" : "s"}`;
-}
-
-function projectExpansionPreferenceKeys(project: SidebarProjectSnapshot): string[] {
-  return [
-    project.projectKey,
-    ...project.memberProjects.map((member) => member.physicalProjectKey),
-    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
-  ];
 }
 
 function projectGroupingModeDescription(mode: SidebarProjectGroupingMode): string {

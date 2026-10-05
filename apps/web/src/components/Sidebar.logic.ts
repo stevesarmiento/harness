@@ -6,7 +6,12 @@ import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  defaultAnimateLayoutChanges,
+  type AnimateLayoutChanges,
+} from "@dnd-kit/sortable";
+import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
@@ -26,6 +31,7 @@ import type { SidebarThreadSummary, Thread } from "../types";
 import { cn } from "../lib/utils";
 import { isLatestRunSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { legacyProjectCwdPreferenceKey, resolveProjectExpanded } from "../uiStateStore";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -511,6 +517,201 @@ export function resolveSidebarProjectReorder(
     draggedProjectKeys: activeProject.memberProjects.map((member) => member.physicalProjectKey),
     targetProjectKeys: targetProject.memberProjects.map((member) => member.physicalProjectKey),
   };
+}
+
+// Fork: both sidebars read a project's collapse state through this one key
+// chain (logical key, then physical keys, then legacy cwd keys), so
+// collapsing a project in one sidebar collapses it in the other.
+export function projectExpansionPreferenceKeys(project: {
+  readonly projectKey: string;
+  readonly memberProjects: ReadonlyArray<{
+    readonly physicalProjectKey: string;
+    readonly workspaceRoot: string;
+  }>;
+}): string[] {
+  return [
+    project.projectKey,
+    ...project.memberProjects.map((member) => member.physicalProjectKey),
+    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
+  ];
+}
+
+type SidebarSectionThread = {
+  readonly environmentId: EnvironmentId;
+  readonly id: ThreadId;
+  readonly projectId: string;
+};
+
+type SidebarSectionProject = {
+  readonly projectKey: string;
+  readonly memberProjects: ReadonlyArray<{
+    readonly physicalProjectKey: string;
+    readonly workspaceRoot: string;
+  }>;
+  readonly memberProjectRefs: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly projectId: string;
+  }>;
+};
+
+export type SidebarProjectSectionPart = "pinned" | "active" | "snoozed";
+
+/** One project's slice of the all-projects (grouped) sidebar view. */
+export interface SidebarProjectSection<TGroup, TThread> {
+  readonly group: TGroup;
+  readonly expanded: boolean;
+  readonly threadCount: number;
+  readonly pinned: readonly TThread[];
+  readonly active: readonly TThread[];
+  readonly snoozed: readonly TThread[];
+  readonly snoozedExpanded: boolean;
+  /** Snoozed rows on screen: all when the shelf is open, else only the route thread. */
+  readonly visibleSnoozed: readonly TThread[];
+  /** The open thread, kept under the header of a collapsed section. */
+  readonly collapsedRoute: {
+    readonly thread: TThread;
+    readonly section: SidebarProjectSectionPart;
+  } | null;
+}
+
+// Fork: Forma's all-projects view. Splits the already-sorted lifecycle
+// partitions into one section per logical project, in project order. Settled
+// and Working threads stay in their global shelves after the sections.
+// Threads whose project is not in the catalog have no section and are left
+// out. The open thread never hides behind a collapsed section or a collapsed
+// snoozed shelf.
+export function buildSidebarProjectSections<
+  TGroup extends SidebarSectionProject,
+  TThread extends SidebarSectionThread,
+>(input: {
+  readonly projectGroups: readonly TGroup[];
+  readonly pinned: readonly TThread[];
+  readonly active: readonly TThread[];
+  readonly snoozed: readonly TThread[];
+  readonly projectExpandedById: Readonly<Record<string, boolean>>;
+  readonly snoozedExpandedKeys: ReadonlySet<string>;
+  readonly routeThreadKey: string | null;
+}): SidebarProjectSection<TGroup, TThread>[] {
+  const logicalKeyByProjectRef = new Map<string, string>();
+  for (const group of input.projectGroups) {
+    for (const ref of group.memberProjectRefs) {
+      logicalKeyByProjectRef.set(`${ref.environmentId}:${ref.projectId}`, group.projectKey);
+    }
+  }
+  const partsByProjectKey = new Map<string, Record<SidebarProjectSectionPart, TThread[]>>();
+  const collect = (threads: readonly TThread[], part: SidebarProjectSectionPart) => {
+    for (const thread of threads) {
+      const projectKey = logicalKeyByProjectRef.get(`${thread.environmentId}:${thread.projectId}`);
+      if (projectKey === undefined) continue;
+      let parts = partsByProjectKey.get(projectKey);
+      if (parts === undefined) {
+        parts = { pinned: [], active: [], snoozed: [] };
+        partsByProjectKey.set(projectKey, parts);
+      }
+      parts[part].push(thread);
+    }
+  };
+  collect(input.pinned, "pinned");
+  collect(input.active, "active");
+  collect(input.snoozed, "snoozed");
+
+  const { routeThreadKey } = input;
+  const findRouteThread = (threads: readonly TThread[]) =>
+    routeThreadKey === null
+      ? undefined
+      : threads.find(
+          (thread) =>
+            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+        );
+
+  return input.projectGroups.map((group) => {
+    const parts = partsByProjectKey.get(group.projectKey) ?? {
+      pinned: [],
+      active: [],
+      snoozed: [],
+    };
+    const expanded = resolveProjectExpanded(
+      input.projectExpandedById,
+      projectExpansionPreferenceKeys(group),
+    );
+    const snoozedExpanded = input.snoozedExpandedKeys.has(group.projectKey);
+    const snoozedRouteThread = snoozedExpanded ? undefined : findRouteThread(parts.snoozed);
+    let collapsedRoute: SidebarProjectSection<TGroup, TThread>["collapsedRoute"] = null;
+    if (!expanded) {
+      for (const section of ["pinned", "active", "snoozed"] as const) {
+        const thread = findRouteThread(parts[section]);
+        if (thread !== undefined) {
+          collapsedRoute = { thread, section };
+          break;
+        }
+      }
+    }
+    return {
+      group,
+      expanded,
+      threadCount: parts.pinned.length + parts.active.length + parts.snoozed.length,
+      pinned: parts.pinned,
+      active: parts.active,
+      snoozed: parts.snoozed,
+      snoozedExpanded,
+      visibleSnoozed: snoozedExpanded
+        ? parts.snoozed
+        : snoozedRouteThread === undefined
+          ? []
+          : [snoozedRouteThread],
+      collapsedRoute,
+    };
+  });
+}
+
+// Fork: the grouped sections' rows in on-screen order, so jump hints, range
+// selection and forward navigation follow what the user sees.
+export function orderedThreadsForSections<TThread>(
+  sections: ReadonlyArray<SidebarProjectSection<unknown, TThread>>,
+): TThread[] {
+  return sections.flatMap((section) =>
+    section.expanded
+      ? [...section.pinned, ...section.active, ...section.visibleSnoozed]
+      : section.collapsedRoute === null
+        ? []
+        : [section.collapsedRoute.thread],
+  );
+}
+
+// Fork: drop target inside a grouped project section. Rows reorder within
+// their own block (pinned among pinned, active among active) of their own
+// project; lifecycle moves stay in the context menu, as in Forma's grouped
+// view. The orders are the global displayed orders, so the result feeds
+// planSidebarThreadDrop exactly like a flat-list drop.
+export function resolveSidebarSectionReorderTarget(input: {
+  readonly activeKey: string;
+  readonly overKey: string;
+  readonly pinnedOrder: readonly string[];
+  readonly activeOrder: readonly string[];
+  readonly projectKeyByThreadKey: ReadonlyMap<string, string>;
+}): SidebarDropTarget | null {
+  const { activeKey, overKey, pinnedOrder, activeOrder } = input;
+  const section = pinnedOrder.includes(activeKey)
+    ? "pinned"
+    : activeOrder.includes(activeKey)
+      ? "active"
+      : null;
+  if (section === null) return null;
+  if (overKey === activeKey) return { section, pinnedOrder, activeOrder };
+  const order = section === "pinned" ? pinnedOrder : activeOrder;
+  const overIndex = order.indexOf(overKey);
+  const projectKey = input.projectKeyByThreadKey.get(activeKey);
+  if (
+    overIndex === -1 ||
+    projectKey === undefined ||
+    input.projectKeyByThreadKey.get(overKey) !== projectKey
+  ) {
+    return null;
+  }
+  const moved = arrayMove([...order], order.indexOf(activeKey), overIndex);
+  return section === "pinned"
+    ? { section, pinnedOrder: moved, activeOrder }
+    : { section, pinnedOrder, activeOrder: moved };
 }
 
 /**
