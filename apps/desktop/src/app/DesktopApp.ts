@@ -252,6 +252,12 @@ const bootstrap = Effect.gen(function* () {
     }
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
+    // Fork: a slow local start (a first launch can spend a minute migrating a
+    // large database) otherwise shows no window at all. The splash only
+    // appears when no window exists yet and is dismissed on first reveal.
+    yield* Effect.forkScoped(
+      Effect.sleep(Duration.seconds(2)).pipe(Effect.andThen(desktopWindow.showConnectingSplash)),
+    );
     yield* appActivation.start.pipe(
       Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
       Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
