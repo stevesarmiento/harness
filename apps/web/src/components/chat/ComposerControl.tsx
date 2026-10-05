@@ -2,7 +2,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { useRender } from "@base-ui/react/use-render";
 import type { ComponentProps, ComponentType, SVGProps } from "react";
-import { ChevronDownIcon } from "lucide-react";
+import { IconChevronDown as ChevronDownIcon } from "symbols-react";
 
 import { cn } from "~/lib/utils";
 import { Separator } from "../ui/separator";
@@ -78,15 +78,15 @@ export function ComposerControlChevron({
   size?: ComposerControlSize;
 } = {}) {
   return (
+    // Fork: Forma's composer chevrons are the filled SF Symbols glyph.
     <ChevronDownIcon
       aria-hidden="true"
       className={cn(
-        "shrink-0",
-        size === "xs" ? "size-3 text-current opacity-50" : "size-3.5 text-icon-muted",
+        "shrink-0 fill-current",
+        size === "xs" ? "size-2.5 opacity-50" : "size-2.5 text-icon-muted",
         className,
       )}
       data-composer-control-chevron
-      strokeWidth={2.25}
     />
   );
 }

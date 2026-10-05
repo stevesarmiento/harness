@@ -98,11 +98,11 @@ export function ContextWindowMeter(props: {
                   strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={dashOffset}
-                  className="transition-[stroke-dashoffset,stroke] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-out)] motion-reduce:transition-none"
+                  className="transition-[stroke-dashoffset,stroke] duration-ui ease-motion-out motion-reduce:transition-none"
                 />
               </svg>
               {!isLabeled ? (
-                <span className="relative flex size-[15px] items-center justify-center rounded-full bg-background text-[8px] font-medium text-muted-foreground">
+                <span className="relative flex size-[15px] items-center justify-center rounded-full bg-background text-4xs font-medium text-muted-foreground">
                   {usage.usedPercentage !== null
                     ? Math.round(usage.usedPercentage)
                     : formatContextWindowTokens(usage.usedTokens)}
@@ -152,7 +152,7 @@ export function ContextWindowMeter(props: {
               aria-label="Context window usage"
             >
               <div
-                className="h-full rounded-full transition-[width,background-color] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-out)] motion-reduce:transition-none"
+                className="h-full rounded-full transition-[width,background-color] duration-ui ease-motion-out motion-reduce:transition-none"
                 style={{ width: `${normalizedPercentage}%`, backgroundColor: usageColor }}
               />
             </div>

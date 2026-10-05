@@ -9,6 +9,7 @@ import {
 
 import { cn } from "~/lib/utils";
 import { type MenuHandle, Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { useComposerMenuProps } from "./composerEventScope";
 import { composerInteractionModeConfig } from "./composerInteractionMode";
 
 const ImageUploadIcon = ({ className }: { className?: string }) => (
@@ -38,6 +39,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
   onSelectSkill: () => void;
   onOpenStash: () => void;
 }) {
+  const composerMenuProps = useComposerMenuProps();
   return (
     <Menu handle={props.menuHandle}>
       <MenuTrigger
@@ -46,7 +48,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
         render={
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground/72 transition-[color,transform] [transition-duration:var(--motion-duration-micro)] hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/60 active:scale-[0.97]"
+            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/72 transition-[color,transform] duration-(--motion-duration-micro) hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/60 active:scale-[0.97]"
             aria-label="Add composer action"
             data-composer-add-actions-trigger="true"
           />
@@ -54,7 +56,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
       >
         <PlusCircleIcon className="size-6 fill-current" />
       </MenuTrigger>
-      <MenuPopup align="start" className="w-56">
+      <MenuPopup align="start" className="w-56" {...composerMenuProps}>
         {props.showInteractionModeActions
           ? modeOrder.map((mode) => {
               const option = composerInteractionModeConfig[mode];
@@ -62,7 +64,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
               return (
                 <MenuItem
                   key={mode}
-                  className="gap-3"
+
                   disabled={props.interactionMode === mode}
                   onClick={() => props.onSelectMode(mode)}
                 >
@@ -76,21 +78,21 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
             })
           : null}
         {props.showInteractionModeActions ? <MenuSeparator /> : null}
-        <MenuItem className="gap-3" disabled={props.imageDisabled} onClick={props.onSelectImage}>
+        <MenuItem disabled={props.imageDisabled} onClick={props.onSelectImage}>
           <ImageUploadIcon className="size-4 shrink-0" />
-          <span className="font-medium text-foreground">Image</span>
+          <span className="font-medium text-foreground">Attach files</span>
         </MenuItem>
-        <MenuItem className="gap-3" disabled={props.skillDisabled} onClick={props.onSelectSkill}>
+        <MenuItem disabled={props.skillDisabled} onClick={props.onSelectSkill}>
           <SkillIcon className="size-3.5 shrink-0 fill-current" />
           <span className="font-medium text-foreground">Skill</span>
         </MenuItem>
         {props.stashCount > 0 ? (
           <>
             <MenuSeparator />
-            <MenuItem className="gap-3" onClick={props.onOpenStash}>
+            <MenuItem onClick={props.onOpenStash}>
               <BookmarkIcon className="size-4 shrink-0 fill-current" />
               <span className="font-medium text-foreground">Stashed prompts</span>
-              <span className="ml-auto rounded-full bg-muted px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              <span className="ml-auto rounded-full bg-muted px-1.5 text-3xs font-medium tabular-nums text-muted-foreground">
                 {props.stashCount}
               </span>
             </MenuItem>

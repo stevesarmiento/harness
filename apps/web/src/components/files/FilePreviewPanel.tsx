@@ -703,6 +703,32 @@ function EditableFileSurface({
     ],
   );
 
+  // Fork: "Add to chat" attaches the selected lines to the composer as an
+  // uncommented file excerpt, reusing the review-comment context chip.
+  const addSelectionToChat = useCallback(
+    (entryId: string, startLine: number, endLine: number) => {
+      setSelectedRange(null);
+      addReviewComment(
+        composerDraftTarget,
+        buildFileReviewComment({
+          id: entryId,
+          filePath: relativePath,
+          startLine,
+          endLine,
+          text: "",
+          contents,
+        }),
+      );
+      setLineAnnotations((current) =>
+        current.flatMap((annotation) => {
+          const entries = annotation.metadata.entries.filter((entry) => entry.id !== entryId);
+          return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
+        }),
+      );
+    },
+    [addReviewComment, composerDraftTarget, contents, relativePath, setSelectedRange],
+  );
+
   const beginComment = useCallback(
     (range: SelectedLineRange) => {
       editor.setSelections([]);
@@ -845,6 +871,11 @@ function EditableFileSurface({
                       onCancel={() => removeAnnotationEntry(entry.id)}
                       onComment={(text) => submitAnnotationEntry(entry.id, text)}
                       onDelete={() => removeAnnotationEntry(entry.id)}
+                      onAddToChat={
+                        entry.kind === "draft"
+                          ? () => addSelectionToChat(entry.id, entry.startLine, entry.endLine)
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -865,20 +896,20 @@ function FileVersionConflictBanner(props: {
   readonly onOverwrite: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+    <div className="flex shrink-0 items-center gap-3 border-b border-warning/25 bg-warning-surface px-3 py-2 text-xs text-warning-foreground">
       <span className="min-w-0 flex-1">
         This file changed on disk. Your local draft is preserved and autosave is paused.
       </span>
       <button
         type="button"
-        className="rounded-md px-2 py-1 font-medium hover:bg-amber-500/15"
+        className="rounded-md px-2 py-1 font-medium hover:bg-warning/15"
         onClick={props.onReloadFromDisk}
       >
         Reload
       </button>
       <button
         type="button"
-        className="rounded-md bg-amber-500/15 px-2 py-1 font-medium hover:bg-amber-500/25"
+        className="rounded-md bg-warning/15 px-2 py-1 font-medium hover:bg-warning/25"
         onClick={props.onOverwrite}
       >
         Overwrite

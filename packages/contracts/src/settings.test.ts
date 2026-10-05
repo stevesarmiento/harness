@@ -362,11 +362,12 @@ describe("ClientSettings load balancing", () => {
 });
 
 describe("ClientSettings composer context strip", () => {
-  it("defaults to draft-only and accepts a persistent strip preference", () => {
-    expect(decodeClientSettings({}).persistComposerContextStrip).toBe(false);
+  // Fork: Forma keeps the meta row in active threads by default.
+  it("defaults to persistent and accepts a draft-only strip preference", () => {
+    expect(decodeClientSettings({}).persistComposerContextStrip).toBe(true);
     expect(
-      decodeClientSettingsPatch({ persistComposerContextStrip: true }).persistComposerContextStrip,
-    ).toBe(true);
+      decodeClientSettingsPatch({ persistComposerContextStrip: false }).persistComposerContextStrip,
+    ).toBe(false);
   });
 });
 
@@ -668,8 +669,9 @@ describe("ClientSettings sidebar", () => {
 });
 
 describe("ClientSettings context window meter", () => {
-  it("defaults off and preserves an explicit legacy opt-in", () => {
-    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
+  // Fork: Forma shows the meter by default.
+  it("defaults on and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(true);
     expect(
       decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
     ).toBe(true);

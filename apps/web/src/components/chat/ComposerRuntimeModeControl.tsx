@@ -10,6 +10,7 @@ import { memo } from "react";
 
 import { cn } from "~/lib/utils";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { useComposerMenuProps } from "./composerEventScope";
 
 export const runtimeModeConfig: Record<
   RuntimeMode,
@@ -37,15 +38,21 @@ export const runtimeModeConfig: Record<
   },
 };
 
-const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
+const allRuntimeModeOptions = (Object.keys(runtimeModeConfig) as RuntimeMode[]).map((mode) => ({
+  mode,
+}));
 
 export const ComposerRuntimeModeControl = memo(function ComposerRuntimeModeControl(props: {
   runtimeMode: RuntimeMode;
+  /** The modes the active provider supports; all modes when omitted. */
+  options?: ReadonlyArray<{ readonly mode: RuntimeMode }>;
   className?: string;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const composerMenuProps = useComposerMenuProps();
   const selected = runtimeModeConfig[props.runtimeMode];
   const SelectedIcon = selected.icon;
+  const options = props.options ?? allRuntimeModeOptions;
 
   return (
     <Select
@@ -58,19 +65,19 @@ export const ComposerRuntimeModeControl = memo(function ComposerRuntimeModeContr
       <SelectTrigger
         variant="ghost"
         size="xs"
-        className={cn("font-medium", props.className)}
+        className={cn(props.className)}
         aria-label="Access mode"
         title={selected.description}
       >
         <SelectedIcon className="size-3 fill-current" />
         <SelectValue>{selected.label}</SelectValue>
       </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
-        {runtimeModeOptions.map((mode) => {
+      <SelectPopup alignItemWithTrigger={false} {...composerMenuProps}>
+        {options.map(({ mode }) => {
           const option = runtimeModeConfig[mode];
           const OptionIcon = option.icon;
           return (
-            <SelectItem key={mode} value={mode} className="min-w-64 py-2">
+            <SelectItem key={mode} value={mode} className="min-w-64">
               <div className="grid min-w-0 gap-0.5">
                 <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
                   <OptionIcon className="size-3.5 shrink-0 fill-muted-foreground" />
