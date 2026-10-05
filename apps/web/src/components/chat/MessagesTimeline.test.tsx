@@ -851,10 +851,11 @@ describe("MessagesTimeline", () => {
       <MessagesTimeline {...buildProps()} timelineEntries={timelineEntries} topFadeEnabled />,
     );
 
+    // Fork: Forma's taller fade band and `.chat-timeline-scroll-fade` mask.
     expect(compactMarkup).toContain('class="h-3 sm:h-4"');
-    expect(compactMarkup).not.toContain("topbar-scroll-fade");
-    expect(fadedMarkup).toContain('class="h-[var(--workspace-titlebar-scroll-fade-height)]"');
-    expect(fadedMarkup).toContain("topbar-scroll-fade");
+    expect(compactMarkup).not.toContain("chat-timeline-scroll-fade");
+    expect(fadedMarkup).toContain('class="h-10 sm:h-12"');
+    expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
   });
 
   it("keeps assistant changed-files headers sticky below the thread header", () => {
@@ -1353,7 +1354,8 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
-    expect(markup).toContain("rounded-2xl bg-message p-3");
+    // Fork: Forma's user message card.
+    expect(markup).toContain('data-user-message-card="true"');
   });
 
   it("identifies user-role messages sent by another agent", async () => {
@@ -2360,8 +2362,8 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    // The T3 wordmark replaces the generic tool icon for T3 MCP calls.
-    expect(markup).toContain('viewBox="15.5309 37 94.3941 56.96"');
+    // Fork: the Forma mark replaces the generic tool icon for T3 MCP calls.
+    expect(markup).toContain('viewBox="0 0 432 489"');
     expect(markup).toContain("Read a T3 thread");
     expect(markup).not.toContain("mcp__t3-code__t3_thread_read");
   });

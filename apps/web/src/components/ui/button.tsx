@@ -63,6 +63,9 @@ const buttonVariants = cva(
         overlay: "border-transparent bg-black/70 text-white/65 [:hover,[data-pressed]]:bg-black/90",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90",
+        // Fork: Forma's quiet outline for per-message actions (copy, edit from here, fork).
+        "subtle-outline":
+          "[--control-icon-color:currentColor] border-border/50 bg-background/35 text-muted-foreground/45 shadow-none [:hover,[data-pressed]]:border-border/70 [:hover,[data-pressed]]:bg-background/55 [:hover,[data-pressed]]:text-muted-foreground/70",
         "warning-outline":
           "border-warning/32 bg-warning-surface text-warning-foreground shadow-xs/5 [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:border-warning/40 [:hover,[data-pressed]]:bg-warning/16 dark:[:hover,[data-pressed]]:bg-warning/24",
       },

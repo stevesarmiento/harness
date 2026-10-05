@@ -10,9 +10,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MessageCopyIcon } from "../icons/custom";
 
-export const SUBTLE_MESSAGE_COPY_BUTTON_CLASS_NAME =
-  "border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70";
-
 export const MessageCopyButton = memo(function MessageCopyButton({
   text,
   extraFlavors,
@@ -24,7 +21,8 @@ export const MessageCopyButton = memo(function MessageCopyButton({
   /** Additional clipboard types written beside `text/plain` when the platform allows it. */
   extraFlavors?: Readonly<Record<string, string>>;
   size?: "xs" | "icon-xs";
-  variant?: "outline" | "ghost";
+  /** "subtle" is Forma's quiet outline for message actions. */
+  variant?: "outline" | "ghost" | "subtle";
   className?: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -46,7 +44,13 @@ export const MessageCopyButton = memo(function MessageCopyButton({
             ref={ref}
             type="button"
             size={size}
-            variant={variant === "ghost" ? "ghost-muted" : variant}
+            variant={
+              variant === "ghost"
+                ? "ghost-muted"
+                : variant === "subtle"
+                  ? "subtle-outline"
+                  : variant
+            }
             className={className}
           />
         }

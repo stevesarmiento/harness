@@ -1,37 +1,55 @@
-import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectId, type ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import type {
+  EnvironmentProject,
+  EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/shell";
+import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { IconChevronDown as ChevronDownIcon } from "symbols-react";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  IconBubbleLeftAndTextBubbleRight as ThreadIcon,
+  IconCheckmark as CheckIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconCube as CubeIcon,
+  IconPlus as PlusIcon,
+} from "symbols-react";
 import {
   memo,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
-import { isTrailingDoubleClick } from "../Sidebar.logic";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { toastManager } from "../ui/toast";
+import { openCommandPalette } from "~/commandPaletteBus";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { cn } from "~/lib/utils";
+import { sortThreads } from "~/lib/threadSort";
 import { readLocalApi } from "~/localApi";
+import { useThreadShells } from "~/state/entities";
+import { buildThreadRouteParams } from "~/threadRoutes";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ProjectFavicon } from "../ProjectFavicon";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-  WorkspaceBreadcrumbText,
-} from "../WorkspaceBreadcrumb";
-import { cn } from "~/lib/utils";
+import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
+import { Badge } from "../ui/badge";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { SidebarTrigger } from "../ui/sidebar";
+import { toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
+// Fork: Forma's header — sidebar reopen button, a flat project pill that opens
+// the project switcher, and a thread pill that opens the project's thread
+// switcher — over upstream's header behaviour (inline rename on double-click,
+// the thread action menu on right-click, project settings for drafts).
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
@@ -39,7 +57,12 @@ interface ChatHeaderProps {
   /** Drafts have no server thread yet, so the title carries no action menu. */
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
+  /** Omitted while git status is unknown; false shows the "No Git" badge. */
+  isGitRepo?: boolean;
+  /** Reserves room for the wider titlebar control cluster shown with an inline right panel. */
   rightPanelOpen: boolean;
+  /** Rendered after the breadcrumb, before the titlebar control cluster (e.g. the actions menu). */
+  actions?: ReactNode;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
 }
@@ -58,20 +81,36 @@ export function resolveRenameCommit(input: {
   return { action: "commit", title: trimmed };
 }
 
-// How long a click on the thread title waits before opening the action menu,
-// so a double-click-to-rename can cancel it first. Only the native desktop
-// menu needs this: it swallows input while open, so the wait must cover the
-// OS double-click interval. The browser fallback menu keeps seeing DOM
-// events (the second click dismisses it and dblclick still fires), so it
-// opens immediately.
-const TITLE_MENU_OPEN_DELAY_MS = 500;
+/** Unarchived threads of one project in one environment, in the sidebar's order. */
+export function selectHeaderThreads(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+  sortOrder: SidebarThreadSortOrder,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return sortThreads(
+    threads.filter(
+      (thread) =>
+        thread.archivedAt === null &&
+        thread.environmentId === environmentId &&
+        thread.projectId === projectId,
+    ),
+    sortOrder,
+  );
+}
+
+const HEADER_PILL_CLASS_NAME =
+  "flex h-6 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [-webkit-app-region:no-drag]";
+
 export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
   isServerThread,
   activeProject,
+  isGitRepo,
   rightPanelOpen,
+  actions,
   onNewThreadInProject,
   onOpenProjectSettings,
 }: ChatHeaderProps) {
@@ -138,65 +177,21 @@ export const ChatHeader = memo(function ChatHeader({
     projectCwd: activeProjectCwd,
     onStartRename: startRename,
   });
-  const titleButtonRef = useRef<HTMLButtonElement | null>(null);
-  const titleMenuTimerRef = useRef<number | null>(null);
-  const cancelPendingTitleMenu = useCallback(() => {
-    if (titleMenuTimerRef.current === null) return;
-    clearTimeout(titleMenuTimerRef.current);
-    titleMenuTimerRef.current = null;
-  }, []);
-  // Drop a pending menu-open when the thread changes or the header unmounts,
-  // so it can never fire for a thread the user already left.
-  useEffect(
-    () => () => {
-      cancelPendingTitleMenu();
-    },
-    [activeThreadEnvironmentId, activeThreadId, cancelPendingTitleMenu],
-  );
-  const openTitleMenuNow = useCallback(() => {
-    cancelPendingTitleMenu();
-    const rect = titleButtonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    openMenu({ x: rect.left, y: rect.bottom + 4 });
-  }, [cancelPendingTitleMenu, openMenu]);
-  const openMenuFromTitle = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      // The trailing click of a double-click belongs to rename, not the menu.
-      if (isTrailingDoubleClick(event.detail)) return;
-      // Keyboard activation and the explicit chevron affordance can never be
-      // the first half of a double-click, so they open without waiting.
-      const clickedChevron =
-        (event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null;
-      if (event.detail === 0 || clickedChevron || window.desktopBridge === undefined) {
-        openTitleMenuNow();
-        return;
-      }
-      // Stay pending long enough for dblclick to cancel the open before the
-      // native menu appears and swallows the second click.
-      cancelPendingTitleMenu();
-      titleMenuTimerRef.current = window.setTimeout(() => {
-        titleMenuTimerRef.current = null;
-        openTitleMenuNow();
-      }, TITLE_MENU_OPEN_DELAY_MS);
-    },
-    [cancelPendingTitleMenu, openTitleMenuNow],
-  );
   const handleTitleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {
+      if (!isServerThread) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      // The chevron is the explicit menu affordance; only the title text renames.
+      // The chevron is the explicit switcher affordance; only the title text renames.
       if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
-      cancelPendingTitleMenu();
       closeMenu();
       startRename();
     },
-    [cancelPendingTitleMenu, closeMenu, startRename],
+    [closeMenu, isServerThread, startRename],
   );
   const handleHeaderContextMenu = useCallback(
     (event: ReactMouseEvent) => {
       if (renamingTitle !== null) return;
       if (!isServerThread && onOpenProjectSettings === undefined) return;
-      cancelPendingTitleMenu();
       event.preventDefault();
       if (!isServerThread) {
         const api = readLocalApi();
@@ -213,7 +208,7 @@ export const ChatHeader = memo(function ChatHeader({
       }
       openMenu({ x: event.clientX, y: event.clientY });
     },
-    [cancelPendingTitleMenu, isServerThread, onOpenProjectSettings, openMenu, renamingTitle],
+    [isServerThread, onOpenProjectSettings, openMenu, renamingTitle],
   );
   const handleRenameKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -228,54 +223,53 @@ export const ChatHeader = memo(function ChatHeader({
     },
     [commitRename],
   );
+
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-        rightPanelOpen ? "pr-10" : "pr-24",
+        "flex min-w-0 flex-1 items-center gap-2",
+        // Clear of the fixed titlebar control cluster at the header's end.
+        rightPanelOpen ? "pr-32" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
-      <WorkspaceBreadcrumb
-        ariaLabel="Thread breadcrumb"
-        className="flex-1 overflow-clip [overflow-clip-margin:2px]"
-      >
-        {/* The project always leads the header: knowing which project a
-            thread lives in is priority zero, and the thread title alone
-            doesn't answer it. */}
-        {activeProject ? (
-          <>
-            <WorkspaceBreadcrumbItem className="shrink">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3 md:overflow-visible">
+        <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+        <DesktopSidebarReopenButton className="md:ml-0" />
+        <nav aria-label="Thread breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5">
+          {/* The project always leads the header: knowing which project a
+              thread lives in is priority zero, and the thread title alone
+              doesn't answer it. */}
+          {activeProject ? (
+            <>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <button
                       type="button"
-                      aria-label={`New thread in ${activeProjectName}`}
-                      onClick={onNewThreadInProject}
-                      className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      onClick={() => openCommandPalette({ open: "switch-project" })}
+                      className={cn(HEADER_PILL_CLASS_NAME, "min-w-0 max-w-48 shrink-0")}
                     />
                   }
                 >
-                  <ProjectFavicon project={activeProject} className="size-3.5" />
-                  <WorkspaceBreadcrumbText className="max-w-40">
-                    {activeProjectName}
-                  </WorkspaceBreadcrumbText>
+                  <CubeIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+                  <span className="min-w-0 truncate">{activeProjectName}</span>
                 </TooltipTrigger>
-                <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
+                <TooltipPopup side="bottom">Switch project · {activeProjectName}</TooltipPopup>
               </Tooltip>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator>
-              <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
-            </WorkspaceBreadcrumbSeparator>
-          </>
-        ) : null}
-        <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
+              <ChevronRightIcon
+                className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                aria-hidden
+              />
+            </>
+          ) : null}
           {renamingTitle !== null ? (
             <input
               autoFocus
               aria-label="Thread title"
-              className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring"
+              className="h-6 min-w-0 flex-1 rounded-md bg-muted/40 px-2 text-xs font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring [-webkit-app-region:no-drag]"
               defaultValue={renamingTitle}
               onBlur={(event) => {
                 if (renameCommittedRef.current) return;
@@ -293,45 +287,152 @@ export const ChatHeader = memo(function ChatHeader({
               onFocus={(event) => event.currentTarget.select()}
               onKeyDown={handleRenameKeyDown}
             />
-          ) : isServerThread ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    ref={titleButtonRef}
-                    type="button"
-                    aria-label={`Thread actions for ${activeThreadTitle}`}
-                    aria-haspopup="menu"
-                    onClick={openMenuFromTitle}
-                    onDoubleClick={handleTitleDoubleClick}
-                    onBlur={cancelPendingTitleMenu}
-                    className="group/thread-title inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
-              >
-                <h2 className="min-w-0">
-                  <WorkspaceBreadcrumbText>{activeThreadTitle}</WorkspaceBreadcrumbText>
-                </h2>
-                <ChevronDownIcon
-                  aria-hidden
-                  data-thread-title-chevron
-                  className="size-3 shrink-0 fill-current text-muted-foreground opacity-0 transition-opacity group-hover/thread-title:opacity-100 group-focus-visible/thread-title:opacity-100"
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
-            </Tooltip>
+          ) : activeProject ? (
+            <ThreadTitleMenu
+              activeThreadEnvironmentId={activeThreadEnvironmentId}
+              activeThreadId={activeThreadId}
+              activeThreadTitle={activeThreadTitle}
+              activeProjectId={activeProject.id}
+              onNewThreadInProject={onNewThreadInProject}
+              onDoubleClick={handleTitleDoubleClick}
+            />
           ) : (
             <Tooltip>
               <TooltipTrigger
-                render={<h2 aria-label={activeThreadTitle} className="min-w-0 flex-1" />}
+                render={
+                  <h2
+                    aria-label={activeThreadTitle}
+                    className="min-w-0 flex-1 truncate px-2 py-0.5 text-sm font-medium text-foreground"
+                    onDoubleClick={handleTitleDoubleClick}
+                  />
+                }
               >
-                <WorkspaceBreadcrumbText>{activeThreadTitle}</WorkspaceBreadcrumbText>
+                {activeThreadTitle}
               </TooltipTrigger>
-              <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
+              <TooltipPopup side="bottom">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
-        </WorkspaceBreadcrumbItem>
-      </WorkspaceBreadcrumb>
+        </nav>
+        {activeProject && isGitRepo === false ? (
+          <Badge variant="warning" className="shrink-0">
+            No Git
+          </Badge>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className="flex shrink-0 items-center justify-end gap-2 [-webkit-app-region:no-drag]">
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 });
+
+function ThreadTitleMenu({
+  activeThreadEnvironmentId,
+  activeThreadId,
+  activeThreadTitle,
+  activeProjectId,
+  onNewThreadInProject,
+  onDoubleClick,
+}: {
+  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadId: ThreadId;
+  activeThreadTitle: string;
+  activeProjectId: ProjectId;
+  onNewThreadInProject: () => void;
+  onDoubleClick: (event: ReactMouseEvent) => void;
+}) {
+  return (
+    <Menu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <MenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Switch thread"
+                  onDoubleClick={onDoubleClick}
+                  className={cn(HEADER_PILL_CLASS_NAME, "group min-w-0 shrink text-left")}
+                />
+              }
+            />
+          }
+        >
+          <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+          <h2 className="min-w-0 truncate">{activeThreadTitle}</h2>
+          <ChevronDownIcon
+            aria-hidden
+            data-thread-title-chevron
+            className="size-2.5 shrink-0 fill-muted-foreground/60 transition-colors group-hover:fill-foreground/70"
+          />
+        </TooltipTrigger>
+        <TooltipPopup side="bottom">{activeThreadTitle}</TooltipPopup>
+      </Tooltip>
+      <MenuPopup align="start" className="w-80">
+        {/* Mounted only while open, so the header does not re-render on every
+            thread shell change in the environment. */}
+        <ThreadSwitcherItems
+          activeThreadEnvironmentId={activeThreadEnvironmentId}
+          activeThreadId={activeThreadId}
+          activeProjectId={activeProjectId}
+        />
+        <MenuSeparator />
+        <MenuItem onClick={onNewThreadInProject}>
+          <PlusIcon className="size-3.5" aria-hidden />
+          New thread
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+function ThreadSwitcherItems({
+  activeThreadEnvironmentId,
+  activeThreadId,
+  activeProjectId,
+}: {
+  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadId: ThreadId;
+  activeProjectId: ProjectId;
+}) {
+  const navigate = useNavigate();
+  const threadShells = useThreadShells();
+  const threadSortOrder = useClientSettings((settings) => settings.sidebarThreadSortOrder);
+  const visibleThreads = useMemo(
+    () =>
+      selectHeaderThreads(
+        threadShells,
+        activeThreadEnvironmentId,
+        activeProjectId,
+        threadSortOrder,
+      ),
+    [activeProjectId, activeThreadEnvironmentId, threadShells, threadSortOrder],
+  );
+
+  if (visibleThreads.length === 0) {
+    return <MenuItem disabled>No active threads</MenuItem>;
+  }
+  return visibleThreads.map((thread) => {
+    const isActive = thread.id === activeThreadId;
+    return (
+      <MenuItem
+        key={`${thread.environmentId}:${thread.id}`}
+        className="grid grid-cols-[1rem_1fr]"
+        onClick={() => {
+          if (isActive) return;
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+          });
+        }}
+      >
+        <span className="flex items-center justify-center">
+          {isActive ? <CheckIcon className="size-3 fill-current" /> : null}
+        </span>
+        <span className="min-w-0 truncate">{thread.title}</span>
+      </MenuItem>
+    );
+  });
+}

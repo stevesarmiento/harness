@@ -114,7 +114,8 @@ import ChatMarkdown, { ChatMarkdownAssetImage } from "../ChatMarkdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Root, RootContent } from "mdast";
-import { T3Wordmark } from "../T3Wordmark";
+import { LogomarkForma } from "../LogomarkForma";
+import { APP_BASE_NAME } from "~/branding";
 import { ThreadContextChip } from "../ThreadContextChip";
 import {
   BotIcon,
@@ -177,7 +178,10 @@ import {
   rememberTimelinePosition,
   timelineContentOverflowsViewport,
 } from "./timelineScrollAnchoring";
+// Fork: Forma message actions, pixel-grid working indicator, and micro fades.
 import { MessageCopyButton } from "./MessageCopyButton";
+import { PixelGridLoader } from "../ui/pixel-grid-loader";
+import { MICRO_FADE_MOTION_CLASS_NAME } from "~/lib/motion";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { inferEntryKindFromPath } from "../../pierre-icons";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
@@ -366,9 +370,13 @@ const WorkGroupViewCtx = createContext<{
   onToggleEntry: (collapsed: boolean) => void;
 } | null>(null);
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
-const TIMELINE_LIST_FADE_HEADER = (
-  <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
-);
+// Fork: Forma's taller top fade band (matches `.chat-timeline-scroll-fade`).
+const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
+// Forma's settings-driven UI type scale (`text-ui-*`) for timeline metadata.
+const USER_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/70 tabular-nums";
+const ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/30 tabular-nums";
+const WORKING_ROW_LABEL_CLASS_NAME =
+  "text-ui-xs flex h-6 min-w-0 items-center gap-2 text-muted-foreground/70 tabular-nums";
 function TimelineListFooter({ composerInset }: { readonly composerInset: number }) {
   return (
     <div aria-hidden>
@@ -1374,7 +1382,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             onItemSizeChanged={reportContentOverflow}
             className={cn(
               "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-              topFadeEnabled && "topbar-scroll-fade",
+              topFadeEnabled && "chat-timeline-scroll-fade",
             )}
             ListHeaderComponent={listHeader}
             ListFooterComponent={timelineListFooter}
@@ -2105,7 +2113,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
 
   return (
-    <div className="group flex flex-col items-end gap-1">
+    <div className="group flex flex-col items-end gap-1 px-0.5">
       {userMessage.isAutomation ? (
         <p
           className="me-1 text-2xs text-muted-foreground/70"
@@ -2144,7 +2152,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       {row.message.inputIntent && row.message.inputIntent !== "turn_start" ? (
         <UserMessageIntentMarker intent={row.message.inputIntent} />
       ) : null}
-      <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
+      {/* Fork: Forma's full-width user message card. */}
+      <div
+        className="relative w-full rounded-xl border border-border/80 bg-secondary/95 px-4 py-3 shadow-sm"
+        data-user-message-card="true"
+      >
         <MessageAuthorHeading>You</MessageAuthorHeading>
         {(regularImages.length > 0 || userVideos.length > 0) && (
           <div className="mb-2 grid max-w-[210px] grid-cols-2 gap-2">
@@ -2267,17 +2279,22 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </span>
         </div>
       ) : null}
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
+      <div
+        className={cn(
+          "flex w-full items-center justify-end pe-1 tabular-nums opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
-            <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+            <TooltipTrigger render={<p className={USER_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
               {formatDayAwareTimestamp(row.message.createdAt, ctx.timestampFormat)}
             </TooltipTrigger>
             <TooltipPopup>
               {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
             </TooltipPopup>
           </Tooltip>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1.5">
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
             )}
@@ -2297,7 +2314,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                       extraFlavors: { [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment },
                     }
                   : {})}
-                variant="ghost"
+                size="icon-xs"
+                variant="subtle"
               />
             )}
           </div>
@@ -2390,8 +2408,8 @@ function RevertUserMessageButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={activity.isRevertingCheckpoint || activity.isWorking}
             onClick={() => ctx.onRevertToTurnCount(turnCount, messageId)}
             aria-label="Edit from here"
@@ -2498,7 +2516,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
+        <MessageAuthorHeading>{APP_BASE_NAME}</MessageAuthorHeading>
         <AssistantCitationSource
           messageId={row.message.id}
           {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
@@ -2565,8 +2583,8 @@ function AssistantForkButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -2621,32 +2639,12 @@ function AssistantMessageMeta({
 }) {
   const ctx = use(TimelineRowCtx);
 
+  // Fork: Forma keeps a faint timestamp visible and fades the actions in on hover.
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
-        alwaysVisible
-          ? "opacity-100"
-          : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
-        className,
-      )}
-    >
-      {projectedItem?.item.type === "assistant_message" ? (
-        <AssistantForkButton projectedItem={projectedItem} />
-      ) : null}
-      {projectedItem && projectedItem.item.status !== "completed" ? (
-        <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
-          {projectedItem.item.status}
-        </span>
-      ) : null}
-      <AssistantCopyButton
-        message={message}
-        showCopyButton={showCopyButton}
-        streaming={copyStreaming}
-      />
+    <div className={cn("flex items-center gap-2 tabular-nums", className)}>
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+          <TooltipTrigger render={<p className={ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
             {formatDayAwareTimestamp(message.updatedAt, ctx.timestampFormat)}
           </TooltipTrigger>
           <TooltipPopup>
@@ -2654,6 +2652,29 @@ function AssistantMessageMeta({
           </TooltipPopup>
         </Tooltip>
       )}
+      <div
+        className={cn(
+          "flex items-center gap-1.5",
+          alwaysVisible
+            ? "opacity-100"
+            : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
+        {projectedItem?.item.type === "assistant_message" ? (
+          <AssistantForkButton projectedItem={projectedItem} />
+        ) : null}
+        {projectedItem && projectedItem.item.status !== "completed" ? (
+          <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
+            {projectedItem.item.status}
+          </span>
+        ) : null}
+        <AssistantCopyButton
+          message={message}
+          showCopyButton={showCopyButton}
+          streaming={copyStreaming}
+        />
+      </div>
     </div>
   );
 }
@@ -2677,7 +2698,7 @@ function AssistantCopyButton({
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  return <MessageCopyButton text={assistantCopyState.text ?? ""} size="icon-xs" variant="subtle" />;
 }
 
 function ProposedPlanTimelineRow({
@@ -3415,9 +3436,15 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
   ) : (
     "Working..."
   );
+  // Fork: Forma's compact working row with the pixel-grid loader. The loader
+  // only mounts with this row (i.e. while a turn is working) and holds still
+  // under reduced motion.
   return (
-    <div className="border-b border-border/60 pb-2 pt-1">
-      <div className="flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+    <div className="py-0.5 pl-1.5">
+      <div className={WORKING_ROW_LABEL_CLASS_NAME}>
+        <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
+          <PixelGridLoader variant="chat" />
+        </span>
         <span
           ref={shimmer ? observeVisibleAnimation : undefined}
           className="relative shrink-0 overflow-hidden whitespace-nowrap"
@@ -4752,7 +4779,8 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
     case "device":
       return <SmartphoneIcon className={className} aria-hidden />;
     case "t3-code":
-      return <T3Wordmark className={className} aria-hidden />;
+      // Fork: Forma mark for the app's own tool activity.
+      return <LogomarkForma className={className} aria-hidden />;
     case "check":
       return <CheckIcon className={className} aria-hidden />;
     case "circle-alert":
