@@ -59,9 +59,11 @@ interface ChatHeaderProps {
   activeProject: EnvironmentProject | null;
   /** Omitted while git status is unknown; false shows the "No Git" badge. */
   isGitRepo?: boolean;
-  /** Reserves room for the wider titlebar control cluster shown with an inline right panel. */
-  rightPanelOpen: boolean;
-  /** Rendered after the breadcrumb, before the titlebar control cluster (e.g. the actions menu). */
+  /** Fork: rendered after the thread pill inside the breadcrumb (the right-panel tab strip). */
+  breadcrumbTrailing?: ReactNode;
+  /** Fork: rendered first in the right cluster, before `actions` (the panel layout controls). */
+  actionsLeading?: ReactNode;
+  /** Rendered at the end of the header (e.g. the actions menu). */
   actions?: ReactNode;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
@@ -109,7 +111,8 @@ export const ChatHeader = memo(function ChatHeader({
   isServerThread,
   activeProject,
   isGitRepo,
-  rightPanelOpen,
+  breadcrumbTrailing,
+  actionsLeading,
   actions,
   onNewThreadInProject,
   onOpenProjectSettings,
@@ -225,14 +228,7 @@ export const ChatHeader = memo(function ChatHeader({
   );
 
   return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-1 items-center gap-2",
-        // Clear of the fixed titlebar control cluster at the header's end.
-        rightPanelOpen ? "pr-32" : "pr-24",
-      )}
-      onContextMenu={handleHeaderContextMenu}
-    >
+    <div className="flex min-w-0 flex-1 items-center gap-2" onContextMenu={handleHeaderContextMenu}>
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3 md:overflow-visible">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <DesktopSidebarReopenButton className="md:ml-0" />
@@ -312,6 +308,7 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="bottom">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {breadcrumbTrailing}
         </nav>
         {activeProject && isGitRepo === false ? (
           <Badge variant="warning" className="shrink-0">
@@ -319,8 +316,9 @@ export const ChatHeader = memo(function ChatHeader({
           </Badge>
         ) : null}
       </div>
-      {actions ? (
+      {actionsLeading || actions ? (
         <div className="flex shrink-0 items-center justify-end gap-2 [-webkit-app-region:no-drag]">
+          {actionsLeading}
           {actions}
         </div>
       ) : null}

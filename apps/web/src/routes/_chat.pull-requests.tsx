@@ -50,7 +50,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 // Fork: the page title wears the same SF Symbol the sidebar's Pull Requests entry does.
-import { IconArrowTriangleheadPull as PullRequestsTitleIcon } from "symbols-react";
+import {
+  IconArrowTriangleheadPull as PullRequestsTitleIcon,
+  IconChevronRight as BreadcrumbChevronIcon,
+} from "symbols-react";
 
 import {
   filterPullRequestsByInvolvement,
@@ -119,7 +122,13 @@ import {
   type PullRequestRowTarget,
 } from "../components/pullRequest/PullRequestRow";
 import { PullRequestsUnavailableState } from "../components/pullRequest/PullRequestsUnavailableState";
-import { RightPanelTabs, type PullRequestTabStatusSeed } from "../components/RightPanelTabs";
+import {
+  RightPanelTabStrip,
+  type RightPanelTabStripProps,
+  RightPanelTabs,
+  type PullRequestTabStatusSeed,
+} from "../components/RightPanelTabs";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../components/ThreadBreadcrumb";
 import { WorkspacePageContainer } from "../components/WorkspacePageContainer";
 // Fork: Forma page shell (header band on the window chrome + inset card), as Settings uses.
 import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
@@ -147,6 +156,7 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
   type PullRequestSurface,
+  type RightPanelSurface,
 } from "../rightPanelStore";
 import { useDebouncedValue } from "../state/queries";
 import { useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
@@ -2115,6 +2125,48 @@ function PullRequestsRouteView() {
     selectSurfaceInUrl(null);
   };
 
+  // Fork: one prop set for the header pills and the panel mount. This page's
+  // panel only hosts pull requests, so every "add surface" action is off.
+  const pullRequestTabProps = {
+    surfaces: renderedRightPanelSurfaces,
+    environmentId: panelEnvironmentId,
+    activeSurfaceId: renderedPullRequestSurface?.id ?? null,
+    pendingSurfaceIds: EMPTY_PENDING_SURFACES,
+    previewSessions: EMPTY_PREVIEW_SESSIONS,
+    desktopByTabId: EMPTY_PREVIEW_DESKTOP_STATE,
+    terminalLabelsById: EMPTY_TERMINAL_LABELS,
+    onActivate: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") activateSurface(surface);
+    },
+    onCloseSurface: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurface(surface);
+    },
+    onCloseOtherSurfaces: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeOtherSurfaces(surface);
+    },
+    onCloseSurfacesToRight: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurfacesToRight(surface);
+    },
+    onCloseAllSurfaces: closeAllSurfaces,
+    onCopyFilePath: () => undefined,
+    onAddBrowser: () => undefined,
+    onAddBrowserInProfile: () => undefined,
+    onAddTerminal: () => undefined,
+    onAddDiff: () => undefined,
+    onAddFiles: () => undefined,
+    onAddPullRequest: () => undefined,
+    onAddPullRequests: () => undefined,
+    onAddDevice: () => undefined,
+    browserAvailable: false,
+    terminalAvailable: false,
+    diffAvailable: false,
+    filesAvailable: false,
+    pullRequestAvailable: false,
+    pullRequestsAvailable: false,
+    deviceAvailable: false,
+    pullRequestStatusSeeds: listedPullRequestTabStatuses,
+  } satisfies Omit<RightPanelTabStripProps, "className" | "layoutControls">;
+
   // This page has no ChatView, so it handles the shared panel shortcuts itself.
   const copyPullRequestFromShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (!openPanelPullRequestUrl) return;
@@ -2189,6 +2241,20 @@ function PullRequestsRouteView() {
           >
             Pull Requests
           </WorkspaceHeaderTitle>
+          {/* Fork: open pull request surfaces continue the header as pills, the
+              same treatment the thread header gives its right-panel tabs. */}
+          {rightPanelState.isOpen && renderedRightPanelSurfaces.length > 0 ? (
+            <>
+              <BreadcrumbChevronIcon
+                className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                aria-hidden
+              />
+              <RightPanelTabStrip
+                {...pullRequestTabProps}
+                className="h-full min-h-0 min-w-0 shrink border-b-0 bg-transparent p-0 [-webkit-app-region:no-drag]"
+              />
+            </>
+          ) : null}
           <div
             ref={setHeaderActionsElement}
             className="ms-auto flex min-w-0 items-center justify-end gap-1.5 [-webkit-app-region:no-drag]"
@@ -2202,53 +2268,15 @@ function PullRequestsRouteView() {
           <RightPanelTabs
             mode="inline"
             open={rightPanelState.isOpen}
-            // Fork: the toggle lives in the Forma header row above the card, so a filled slot
-            // drops the tab bar's reserve for floating titlebar controls.
-            // Fork: TODO move these tabs into the header row as pills once RightPanelTabs
-            // exposes a header tab strip again (pre-V2 Forma used RightPanelTabStrip + hideTabBar).
-            layoutControls={<></>}
+            // Fork: the tabs render as pills in the Forma header row above the card.
+            hideTabBar
+            titleBarInCard
             widthStorageKey="t3code:pull-request-panel-width"
             // Default to roughly half the viewport: the PR list needs more
             // room than a chat, so the 540px chat-preview default squashes
             // it. SSR has no window, so fall back to a reasonable width.
             defaultWidth={typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2)}
-            surfaces={renderedRightPanelSurfaces}
-            environmentId={panelEnvironmentId}
-            activeSurfaceId={renderedPullRequestSurface.id}
-            pendingSurfaceIds={EMPTY_PENDING_SURFACES}
-            previewSessions={EMPTY_PREVIEW_SESSIONS}
-            desktopByTabId={EMPTY_PREVIEW_DESKTOP_STATE}
-            terminalLabelsById={EMPTY_TERMINAL_LABELS}
-            onActivate={(surface) => {
-              if (surface.kind === "pull-request") activateSurface(surface);
-            }}
-            onCloseSurface={(surface) => {
-              if (surface.kind === "pull-request") closeSurface(surface);
-            }}
-            onCloseOtherSurfaces={(surface) => {
-              if (surface.kind === "pull-request") closeOtherSurfaces(surface);
-            }}
-            onCloseSurfacesToRight={(surface) => {
-              if (surface.kind === "pull-request") closeSurfacesToRight(surface);
-            }}
-            onCloseAllSurfaces={closeAllSurfaces}
-            onCopyFilePath={() => undefined}
-            onAddBrowser={() => undefined}
-            onAddBrowserInProfile={() => undefined}
-            onAddTerminal={() => undefined}
-            onAddDiff={() => undefined}
-            onAddFiles={() => undefined}
-            onAddPullRequest={() => undefined}
-            onAddPullRequests={() => undefined}
-            onAddDevice={() => undefined}
-            browserAvailable={false}
-            terminalAvailable={false}
-            diffAvailable={false}
-            filesAvailable={false}
-            pullRequestAvailable={false}
-            pullRequestsAvailable={false}
-            deviceAvailable={false}
-            pullRequestStatusSeeds={listedPullRequestTabStatuses}
+            {...pullRequestTabProps}
           >
             <PullRequestDetailPanel
               getShortcutContext={getShortcutContext}

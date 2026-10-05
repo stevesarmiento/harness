@@ -1069,16 +1069,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --topbar-scroll-fade-height: 1.5rem;
   }
 
-  .workspace-titlebar-controls {
-    position: absolute;
-    top: var(--workspace-controls-top);
-    right: var(--workspace-controls-right);
-    display: flex;
-    height: var(--workspace-topbar-height);
-    align-items: center;
-    -webkit-app-region: no-drag;
-  }
-
   .chat-composer-horizontal-inset {
     padding-inline-start: calc(env(safe-area-inset-left) + 0.75rem);
     padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);

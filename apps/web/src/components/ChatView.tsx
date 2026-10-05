@@ -274,7 +274,10 @@ import {
 import { PullRequestDetailPanel } from "./pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
-import { RightPanelTabs } from "./RightPanelTabs";
+import { RightPanelTabStrip, type RightPanelTabStripProps, RightPanelTabs } from "./RightPanelTabs";
+// Fork: the right-panel tabs render in the header breadcrumb after a chevron.
+import { IconChevronRight as BreadcrumbChevronIcon } from "symbols-react";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "./ThreadBreadcrumb";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
@@ -2316,7 +2319,6 @@ export default function ChatView(props: ChatViewProps) {
   const rightPanelPresent = rightPanelPresence.present;
   const rightPanelControlsInPanel =
     shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
-  const rightPanelControlsAtRoot = rightPanelPresent && !shouldUsePlanSidebarSheet;
   const renderedRightPanelSurface = rightPanelPresence.value?.activeSurface ?? null;
   const renderedRightPanelSurfaces = rightPanelPresence.value?.surfaces ?? [];
   const previewMiniPlayerVisible = shouldRenderPreviewMiniPlayer(
@@ -10831,42 +10833,74 @@ export default function ChatView(props: ChatViewProps) {
     onToggleRightPanel: toggleRightPanel,
   } satisfies PanelLayoutControlsProps;
   // Fork: Forma's header spans the chat column and the inline right panel, so
-  // one control cluster (thread details included) always sits at its end.
+  // the panel controls (thread details included) sit in its right cluster,
+  // maximize first while the inline panel is open. The open sheet carries its
+  // own copy in its tab bar instead.
   const panelToggleControls = <PanelLayoutControls {...panelToggleControlProps} />;
-  const panelLayoutControls = (
-    <div
-      className={cn(
-        // Keep one viewport anchor inside the header's no-drag region. The
-        // header can shrink behind the right panel without moving the controls.
-        "pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
-      )}
-      data-workspace-titlebar-controls
-    >
-      {!shouldUsePlanSidebarSheet ? (
-        <span
-          aria-hidden={!rightPanelOpen}
-          className={cn(
-            "flex shrink-0",
-            panelAnimationsActive &&
-              "motion-safe:transition-opacity motion-safe:duration-(--panel-animation-duration) motion-safe:ease-out",
-            // Closed, the control leaves the flex flow so the cluster is only as wide as the two
-            // toggles the header reserves room for; anchored to the cluster's left edge, it fades
-            // out where it stood rather than over the terminal toggle.
-            rightPanelOpen
-              ? "pointer-events-auto opacity-100"
-              : "pointer-events-none absolute right-full mr-1 opacity-0",
-          )}
-          inert={!rightPanelOpen}
-        >
-          <RightPanelMaximizeControl
-            maximized={rightPanelMaximized}
-            onToggle={toggleRightPanelMaximized}
-          />
-        </span>
+  const headerPanelControls = rightPanelControlsInPanel ? null : (
+    <>
+      {canMaximizeRightPanel ? (
+        <RightPanelMaximizeControl
+          maximized={rightPanelMaximized}
+          onToggle={toggleRightPanelMaximized}
+        />
       ) : null}
-      <div className="pointer-events-auto flex h-full items-center">{panelToggleControls}</div>
-    </div>
+      {panelToggleControls}
+    </>
   );
+  // Fork: one prop set for the header strip and both panel mounts, so they
+  // cannot drift. The close wrappers confirm before closing live terminals
+  // and agent browsers.
+  const rightPanelTabProps = {
+    surfaces: renderedRightPanelSurfaces,
+    environmentId: activeThreadRef?.environmentId ?? null,
+    activeSurfaceId: renderedRightPanelSurface?.id ?? null,
+    pendingSurfaceIds: pendingFileSurfaceIds,
+    previewSessions: activePreviewState.sessions,
+    desktopByTabId: activePreviewState.desktopByTabId,
+    previewRuntimeTabId: resolvePreviewRuntimeTabId,
+    terminalLabelsById: activeTerminalLabelsById,
+    onActivate: activateRightPanelSurface,
+    onCloseSurface: closeRightPanelSurface,
+    onRenameDevice: (surfaceId: string, title: string) => {
+      if (activeThreadRef)
+        useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
+    },
+    onCloseOtherSurfaces: closeOtherRightPanelSurfaces,
+    onCloseSurfacesToRight: closeRightPanelSurfacesToRight,
+    onCloseAllSurfaces: closeAllRightPanelSurfaces,
+    onCopyFilePath: copyRightPanelFilePath,
+    onAddBrowser: () => createBrowserSurface(),
+    onAddBrowserInProfile: createBrowserSurface,
+    onAddTerminal: addTerminalSurface,
+    onAddDiff: addDiffSurface,
+    onAddFiles: addFilesSurface,
+    onAddPullRequest: addPullRequestSurface,
+    onAddPullRequests: addPullRequestsSurface,
+    onAddDevice: addDeviceSurface,
+    browserAvailable: isPreviewSupportedInRuntime(),
+    terminalAvailable: activeProject !== null,
+    diffAvailable: isServerThread && isGitRepo,
+    filesAvailable: activeProject !== null,
+    pullRequestAvailable: pullRequestSurfaceAvailable,
+    pullRequestsAvailable: pullRequestsSurfaceAvailable,
+    deviceAvailable: activeThreadRef !== null,
+  } satisfies Omit<RightPanelTabStripProps, "className" | "layoutControls">;
+  // Fork: with the inline panel open, its tabs continue the header breadcrumb
+  // (`project › thread › [tabs] [+]`) and the panel mounts without a tab bar.
+  const headerRightPanelTabs =
+    inlineRightPanelOpen && activeThreadRef && renderedRightPanelSurfaces.length > 0 ? (
+      <>
+        <BreadcrumbChevronIcon
+          className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+          aria-hidden
+        />
+        <RightPanelTabStrip
+          {...rightPanelTabProps}
+          className="h-full min-h-0 min-w-0 shrink border-b-0 bg-transparent p-0 [-webkit-app-region:no-drag]"
+        />
+      </>
+    ) : null;
   const workspaceFileDropHandlers = makeWorkspaceFileDropHandlers({
     setDragActive: setIsWorkspaceFileDragActive,
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
@@ -10878,7 +10912,7 @@ export default function ChatView(props: ChatViewProps) {
       ref={workspaceLayoutRef}
       // Fork: Forma chrome — the header sits on the window chrome above an inset
       // card holding the chat column and the inline right panel. The compact
-      // titlebar height is scoped here so the fixed control cluster matches it.
+      // titlebar height is scoped here so the header and sheet tab bar match.
       className={cn(
         "relative flex min-h-0 min-w-0 flex-1 flex-col [--workspace-topbar-height:40px]",
         isElectron && "[--workspace-topbar-height:39px]",
@@ -10907,7 +10941,6 @@ export default function ChatView(props: ChatViewProps) {
           ) : null}
         </WizardPopup>
       </Dialog>
-      {rightPanelControlsAtRoot ? panelLayoutControls : null}
       {/* Top bar */}
       <header
         ref={threadPanelPopoverAnchorRef}
@@ -10920,13 +10953,6 @@ export default function ChatView(props: ChatViewProps) {
           isElectron && "drag-region wco:pr-(--workspace-native-controls-inset)",
         )}
       >
-        {isElectron && rightPanelControlsAtRoot ? (
-          <span
-            aria-hidden
-            className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
-          />
-        ) : null}
-        {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
         <ChatHeader
           activeThreadEnvironmentId={activeThread.environmentId}
           activeThreadId={activeThread.id}
@@ -10934,7 +10960,8 @@ export default function ChatView(props: ChatViewProps) {
           activeThreadTitle={activeThread.title}
           activeProject={activeProject ?? null}
           {...(liveIsGitRepo === undefined ? {} : { isGitRepo: liveIsGitRepo })}
-          rightPanelOpen={inlineRightPanelOpen}
+          breadcrumbTrailing={headerRightPanelTabs}
+          actionsLeading={headerPanelControls}
           actions={
             <ChatHeaderActionsMenu
               routeKind={routeKind}
@@ -11606,43 +11633,13 @@ export default function ChatView(props: ChatViewProps) {
         {rightPanelPresent && !shouldUsePlanSidebarSheet && activeThreadRef ? (
           <RightPanelTabs
             mode="inline"
+            // Fork: the tabs render in the header breadcrumb instead.
+            hideTabBar
             titleBarInCard
             open={rightPanelOpen}
             maximized={rightPanelMaximized}
             inlineSize={previewPanelInlineSize}
-            surfaces={renderedRightPanelSurfaces}
-            environmentId={activeThreadRef.environmentId}
-            activeSurfaceId={renderedRightPanelSurface?.id ?? null}
-            pendingSurfaceIds={pendingFileSurfaceIds}
-            previewSessions={activePreviewState.sessions}
-            desktopByTabId={activePreviewState.desktopByTabId}
-            previewRuntimeTabId={resolvePreviewRuntimeTabId}
-            terminalLabelsById={activeTerminalLabelsById}
-            onActivate={activateRightPanelSurface}
-            onCloseSurface={closeRightPanelSurface}
-            onRenameDevice={(surfaceId, title) => {
-              if (activeThreadRef)
-                useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
-            }}
-            onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
-            onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
-            onCloseAllSurfaces={closeAllRightPanelSurfaces}
-            onCopyFilePath={copyRightPanelFilePath}
-            onAddBrowser={() => createBrowserSurface()}
-            onAddBrowserInProfile={createBrowserSurface}
-            onAddTerminal={addTerminalSurface}
-            onAddDiff={addDiffSurface}
-            onAddFiles={addFilesSurface}
-            onAddPullRequest={addPullRequestSurface}
-            onAddPullRequests={addPullRequestsSurface}
-            onAddDevice={addDeviceSurface}
-            browserAvailable={isPreviewSupportedInRuntime()}
-            terminalAvailable={activeProject !== null}
-            diffAvailable={isServerThread && isGitRepo}
-            filesAvailable={activeProject !== null}
-            pullRequestAvailable={pullRequestSurfaceAvailable}
-            pullRequestsAvailable={pullRequestsSurfaceAvailable}
-            deviceAvailable={activeThreadRef !== null}
+            {...rightPanelTabProps}
           >
             {rightPanelContent}
           </RightPanelTabs>
@@ -11666,39 +11663,7 @@ export default function ChatView(props: ChatViewProps) {
                 <div className="mr-px flex items-center">{panelToggleControls}</div>
               ) : null
             }
-            surfaces={renderedRightPanelSurfaces}
-            environmentId={activeThreadRef.environmentId}
-            activeSurfaceId={renderedRightPanelSurface?.id ?? null}
-            pendingSurfaceIds={pendingFileSurfaceIds}
-            previewSessions={activePreviewState.sessions}
-            desktopByTabId={activePreviewState.desktopByTabId}
-            previewRuntimeTabId={resolvePreviewRuntimeTabId}
-            terminalLabelsById={activeTerminalLabelsById}
-            onActivate={activateRightPanelSurface}
-            onCloseSurface={closeRightPanelSurface}
-            onRenameDevice={(surfaceId, title) => {
-              if (activeThreadRef)
-                useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
-            }}
-            onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
-            onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
-            onCloseAllSurfaces={closeAllRightPanelSurfaces}
-            onCopyFilePath={copyRightPanelFilePath}
-            onAddBrowser={() => createBrowserSurface()}
-            onAddBrowserInProfile={createBrowserSurface}
-            onAddTerminal={addTerminalSurface}
-            onAddDiff={addDiffSurface}
-            onAddFiles={addFilesSurface}
-            onAddPullRequest={addPullRequestSurface}
-            onAddPullRequests={addPullRequestsSurface}
-            onAddDevice={addDeviceSurface}
-            browserAvailable={isPreviewSupportedInRuntime()}
-            terminalAvailable={activeProject !== null}
-            diffAvailable={isServerThread && isGitRepo}
-            filesAvailable={activeProject !== null}
-            pullRequestAvailable={pullRequestSurfaceAvailable}
-            pullRequestsAvailable={pullRequestsSurfaceAvailable}
-            deviceAvailable={activeThreadRef !== null}
+            {...rightPanelTabProps}
           >
             {rightPanelContent}
           </RightPanelTabs>
