@@ -63,7 +63,6 @@ import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { getProjectFaviconCacheKey } from "@t3tools/shared/projectFavicon";
 import { claudeSkillInvocation } from "@t3tools/shared/toolActivity";
-import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
   createContext,
   memo,
@@ -1879,22 +1878,10 @@ function ContextCompactionTimelineRow({
       className="mx-auto flex w-full max-w-(--chat-content-max-width) items-center gap-3 py-1 text-muted-foreground text-xs"
     >
       <span className="h-px flex-1 bg-border/70" />
-      <span
-        ref={row.active ? observeVisibleAnimation : undefined}
-        className="relative shrink-0 overflow-hidden"
-      >
-        <span className="flex items-center gap-1.5">
-          <Minimize2Icon aria-hidden="true" className="size-3" />
-          {row.label}
-        </span>
-        {row.active ? (
-          <ActivityShimmerOverlay>
-            <span className="flex items-center gap-1.5">
-              <Minimize2Icon aria-hidden="true" className="size-3" />
-              {row.label}
-            </span>
-          </ActivityShimmerOverlay>
-        ) : null}
+      {/* Fork: Forma labels stay still; the working row's loader shows activity. */}
+      <span className="flex shrink-0 items-center gap-1.5">
+        <Minimize2Icon aria-hidden="true" className="size-3" />
+        {row.label}
       </span>
       <span className="h-px flex-1 bg-border/70" />
     </div>
@@ -3395,19 +3382,6 @@ function ExpandedWorkGroupEntries({
 
 const workEntryKey = (entry: TimelineWorkEntry) => entry.id;
 
-function ActivityShimmerOverlay({ children }: { children: ReactNode }) {
-  return (
-    <span
-      aria-hidden
-      className="live-activity-focus pointer-events-none absolute inset-y-0 select-none"
-    >
-      <span className="live-activity-focus-counter block">
-        <span className="live-activity-focus-aligned block text-foreground">{children}</span>
-      </span>
-    </span>
-  );
-}
-
 const failedToolIconClassName = "text-tool-error-icon/40";
 
 /** Image icons and the gradient computer-use mark cannot take a currentColor
@@ -3424,7 +3398,7 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
     use(TimelineRowActivityCtx);
   // One span for every label so the setup-to-working handoff swaps text in
   // place instead of remounting the row.
-  const shimmer = isPreparingWorktree || isCompacting;
+  const ownsWorkingSlot = isPreparingWorktree || isCompacting;
   const label = isPreparingWorktree ? (
     "Setting up worktree…"
   ) : isCompacting ? (
@@ -3436,22 +3410,18 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
   ) : (
     "Working..."
   );
-  // Fork: Forma's compact working row with the pixel-grid loader. The loader
-  // only mounts with this row (i.e. while a turn is working) and holds still
-  // under reduced motion.
+  // Fork: the live activity row carries Forma's pixel-grid loader, so this
+  // header is a static timer. While setup or compaction owns the slot there is
+  // no live row, so the loader shows here instead. Labels never shimmer.
   return (
     <div className="py-0.5 pl-1.5">
       <div className={WORKING_ROW_LABEL_CLASS_NAME}>
-        <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
-          <PixelGridLoader variant="chat" />
-        </span>
-        <span
-          ref={shimmer ? observeVisibleAnimation : undefined}
-          className="relative shrink-0 overflow-hidden whitespace-nowrap"
-        >
-          {label}
-          {shimmer ? <ActivityShimmerOverlay>{label}</ActivityShimmerOverlay> : null}
-        </span>
+        {ownsWorkingSlot ? (
+          <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
+            <PixelGridLoader variant="chat" />
+          </span>
+        ) : null}
+        <span className="relative shrink-0 overflow-hidden whitespace-nowrap">{label}</span>
         {backgroundWorktreeSetup ? (
           <BackgroundWorktreeSetupChip snapshot={backgroundWorktreeSetup} />
         ) : null}
@@ -3516,7 +3486,7 @@ function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "think
   const { isCompacting, isPreparingWorktree } = use(TimelineRowActivityCtx);
   // Reserve the activity row during setup so the handoff keeps the same height.
   if (isPreparingWorktree || isCompacting) return <WorkLogRow label="" />;
-  const activity = <LiveActivityRow label="Thinking" iconName="brain" active shimmer />;
+  const activity = <LiveActivityRow label="Thinking" iconName="brain" active />;
   const { groupId } = row;
   if (groupId === undefined) return activity;
   return (
@@ -3537,35 +3507,26 @@ function LiveActivityRow({
   toolIcon,
   failed = false,
   active = false,
-  shimmer = false,
 }: {
   label: ReactNode;
   iconName?: WorkEntryIconName;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
   active?: boolean;
-  shimmer?: boolean;
 }) {
+  // Fork: while active, Forma's pixel-grid loader leads the label in place of
+  // the tool icon, and the label stays still (no shimmer or shine).
   const animated = active && !failed;
-  const showShimmer = animated && shimmer;
   return (
-    <div
-      ref={animated ? observeVisibleAnimation : undefined}
-      className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed"
-    >
+    <div className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed">
       <LiveActivityContent
         label={label}
         iconName={iconName}
         toolIcon={toolIcon}
         failed={failed}
         announceFailure={failed}
-        active={animated && !shimmer}
+        working={animated}
       />
-      {showShimmer ? (
-        <ActivityShimmerOverlay>
-          <LiveActivityContent label={label} iconName={iconName} toolIcon={toolIcon} highlighted />
-        </ActivityShimmerOverlay>
-      ) : null}
     </div>
   );
 }
@@ -3576,7 +3537,7 @@ function LiveActivityContent({
   toolIcon,
   failed = false,
   announceFailure = false,
-  active = false,
+  working = false,
   highlighted = false,
 }: {
   label: ReactNode;
@@ -3584,7 +3545,7 @@ function LiveActivityContent({
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
   announceFailure?: boolean;
-  active?: boolean;
+  working?: boolean;
   highlighted?: boolean;
 }) {
   const showTrailingFailureMark =
@@ -3593,7 +3554,11 @@ function LiveActivityContent({
   return (
     <WorkLogRow
       icon={
-        iconName ? (
+        working ? (
+          <span className="flex size-4 items-center justify-center text-foreground/72 dark:text-foreground/78">
+            <PixelGridLoader variant="chat" />
+          </span>
+        ) : iconName ? (
           <span
             className={cn(
               "flex size-4 items-center justify-center",
@@ -3616,15 +3581,7 @@ function LiveActivityContent({
         ) : null
       }
       label={
-        <span
-          className={cn(
-            "block truncate",
-            highlighted && "text-foreground",
-            active && "live-tool-shine",
-          )}
-        >
-          {label}
-        </span>
+        <span className={cn("block truncate", highlighted && "text-foreground")}>{label}</span>
       }
       trailing={
         showTrailingFailureMark ? (
@@ -3758,23 +3715,25 @@ function WorkGroupHeader(props: {
 }) {
   return (
     <WorkLogButton
-      ref={props.active && !props.failed ? observeVisibleAnimation : undefined}
       aria-label={props.failed ? `${props.label}, tool call failed` : props.label}
       aria-expanded={props.expanded}
       onClick={props.onToggle}
       icon={
-        <ToolActivityIconView
-          icon={props.toolIcon}
-          fallbackName={props.iconName}
-          className="size-4 shrink-0 stroke-2 text-icon-muted"
-          muted
-        />
+        // Fork: an active group leads with Forma's loader; labels never shine.
+        props.active && !props.failed ? (
+          <span className="flex size-4 items-center justify-center text-foreground/72 dark:text-foreground/78">
+            <PixelGridLoader variant="chat" />
+          </span>
+        ) : (
+          <ToolActivityIconView
+            icon={props.toolIcon}
+            fallbackName={props.iconName}
+            className="size-4 shrink-0 stroke-2 text-icon-muted"
+            muted
+          />
+        )
       }
-      label={
-        <span className={cn("block truncate", props.active && !props.failed && "live-tool-shine")}>
-          {props.label}
-        </span>
-      }
+      label={<span className="block truncate">{props.label}</span>}
       trailing={
         <TimelineRowTimestamp createdAt={props.createdAt} timestampFormat={props.timestampFormat} />
       }
