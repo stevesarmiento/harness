@@ -50,6 +50,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 import { ThemePreferenceSelector } from "./ThemePreferenceSelector";
 
 const THEME_MODE_LABELS = {
@@ -171,7 +172,11 @@ function AppIconPreview({ id, src }: { id: AppIconId; src: string }) {
     .slice(0, 2);
 
   return (
-    <span className="relative flex size-16 items-center justify-center overflow-hidden rounded-[22%]">
+    <span
+      className="relative flex size-16 items-center justify-center overflow-hidden"
+      // App icon squircle radius, matching the dock artwork.
+      style={{ borderRadius: "22%" }}
+    >
       {!failed ? (
         <img
           alt=""
@@ -251,6 +256,7 @@ export function InterfaceSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Theme">
         <SettingsRow
+          id={searchableSetting("theme").id}
           title="Theme"
           description="Build a theme from mode, hue, and saturation."
           resetAction={
@@ -300,6 +306,7 @@ export function InterfaceSettingsPanel() {
 
       <SettingsSection title="Icons">
         <SettingsRow
+          id={searchableSetting("app-icon").id}
           description="Choose the artwork used for browser chrome and the desktop dock or window icon."
           resetAction={
             appIcon !== DEFAULT_APP_ICON_ID ? (
@@ -322,6 +329,7 @@ export function InterfaceSettingsPanel() {
 
       <SettingsSection title="Display">
         <SettingsRow
+          id={searchableSetting("time-format").id}
           title="Time format"
           description="System default follows your browser or OS clock preference."
           resetAction={
@@ -364,6 +372,7 @@ export function InterfaceSettingsPanel() {
         />
 
         <SettingsRow
+          id={searchableSetting("response-streaming").id}
           title="Assistant output"
           description={RESPONSE_STREAMING_MODE_DESCRIPTIONS[settings.responseStreamingMode]}
           resetAction={

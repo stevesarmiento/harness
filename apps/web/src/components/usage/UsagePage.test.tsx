@@ -24,7 +24,15 @@ vi.mock("../ui/select", () => ({
   SelectTrigger: "div",
   SelectValue: "div",
 }));
-vi.mock("../ui/sidebar", () => ({ SidebarInset: "div" }));
+// Fork: the Forma page shell adds the inset card, mobile trigger and reopen button.
+vi.mock("../ui/sidebar", () => ({
+  SidebarInset: "div",
+  SidebarInsetCard: "div",
+  SidebarTrigger: "button",
+}));
+vi.mock("../sidebar/DesktopSidebarReopenButton", () => ({
+  DesktopSidebarReopenButton: () => null,
+}));
 vi.mock("../ui/toggle-group", () => ({ Toggle: "button", ToggleGroup: "div" }));
 vi.mock("../WorkspaceBreadcrumb", () => ({
   WorkspaceBreadcrumb: "div",

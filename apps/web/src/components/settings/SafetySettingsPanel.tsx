@@ -11,6 +11,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 const ORCHESTRATION_EVENTS_ENDPOINT_PATH = "/api/orchestration/events";
 
@@ -43,6 +44,7 @@ export function SafetySettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Filesystem">
         <SettingsRow
+          id={searchableSetting("protected-paths").id}
           title="Protected paths"
           description="Skip OS-sensitive folders during browse and workspace scans."
           resetAction={
@@ -79,6 +81,7 @@ export function SafetySettingsPanel() {
 
       <SettingsSection title="Diagnostics">
         <SettingsRow
+          id={searchableSetting("event-stream").id}
           title="Event stream"
           description="Authenticated read-only stream for debugging orchestration events."
           status={

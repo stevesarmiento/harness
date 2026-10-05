@@ -14,6 +14,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 const THREAD_CLEANUP_DAY_OPTIONS: readonly ThreadCleanupInactiveDays[] = [1, 3, 7, 14, 30];
 
@@ -68,6 +69,7 @@ export function ThreadsSettingsPanel() {
         {settings.defaultThreadEnvMode === "worktree" ? (
           <SettingsRow
             className="bg-muted/20 sm:pl-9"
+            id={searchableSetting("start-from-origin").id}
             title="Start from origin"
             description="Creates the worktree from the latest matching branch on origin instead of your local branch."
             resetAction={
@@ -97,6 +99,7 @@ export function ThreadsSettingsPanel() {
         ) : null}
 
         <SettingsRow
+          id={searchableSetting("add-project-starts-in").id}
           title="Add project starts in"
           description='Leave empty to use "~/" when the Add Project browser opens.'
           resetAction={
@@ -127,6 +130,7 @@ export function ThreadsSettingsPanel() {
 
       <SettingsSection title="Safety & cleanup">
         <SettingsRow
+          id={searchableSetting("thread-cleanup-window").id}
           title="Thread cleanup window"
           description="Sidebar cleanup archives threads with no user message in this many days."
           resetAction={
@@ -171,6 +175,7 @@ export function ThreadsSettingsPanel() {
         />
 
         <SettingsRow
+          id={searchableSetting("archive-confirmation").id}
           title="Archive confirmation"
           description="Require a second click on the inline archive action before a thread is archived."
           resetAction={
@@ -197,6 +202,7 @@ export function ThreadsSettingsPanel() {
         />
 
         <SettingsRow
+          id={searchableSetting("delete-confirmation").id}
           title="Delete confirmation"
           description="Ask before deleting a thread and its chat history."
           resetAction={

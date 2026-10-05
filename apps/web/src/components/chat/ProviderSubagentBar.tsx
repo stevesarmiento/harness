@@ -3,7 +3,8 @@ import {
   type ProviderSubagentStatus,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
-import { ArrowUpLeftIcon } from "lucide-react";
+// Fork: Forma symbol icon.
+import { IconArrowUpLeft as ArrowUpLeftIcon } from "symbols-react";
 import { useLayoutEffect, useRef } from "react";
 
 import type { ProviderInstanceEntry } from "../../providerInstances";
@@ -53,7 +54,8 @@ export function ProviderSubagentBar(props: {
   }, [live, status]);
 
   return (
-    <div className="flex min-h-12 items-center gap-3 rounded-3xl py-2 ps-5 pe-2 text-sm">
+    // Fork: Forma UI type token.
+    <div className="text-ui-sm flex min-h-12 items-center gap-3 rounded-3xl py-2 ps-5 pe-2">
       <span className="flex min-w-0 items-center gap-2">
         {props.provider ? (
           <ProviderInstanceIcon
@@ -84,7 +86,7 @@ export function ProviderSubagentBar(props: {
       <span className="ms-auto shrink-0 text-muted-foreground max-sm:hidden">Runs on its own</span>
       {props.onOpenParent ? (
         <Button size="sm" variant="ghost" onClick={props.onOpenParent}>
-          <ArrowUpLeftIcon />
+          <ArrowUpLeftIcon className="fill-current" />
           Open parent
         </Button>
       ) : null}

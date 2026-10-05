@@ -23,7 +23,13 @@ export type SettingsPath =
   | "/settings/source-control"
   | "/settings/storage"
   | "/settings/connections"
-  | "/settings/archived";
+  | "/settings/archived"
+  // Fork: Forma settings sections (see settingsNavigation.ts).
+  | "/settings/interface"
+  | "/settings/threads"
+  | "/settings/notifications"
+  | "/settings/safety"
+  | "/settings/advanced";
 
 /**
  * Where a setting can be edited. Device-local rows have no scope: they render
@@ -96,6 +102,12 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/storage": "Storage",
   "/settings/connections": "Connections",
   "/settings/archived": "Archive",
+  // Fork: Forma settings sections.
+  "/settings/interface": "Interface",
+  "/settings/threads": "Threads",
+  "/settings/notifications": "Notifications",
+  "/settings/safety": "Safety",
+  "/settings/advanced": "Advanced",
 };
 
 /** Anchor id of the first row bound to `command` on the Keybindings page. */
@@ -872,11 +884,104 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  // Fork: rows that only exist on Forma's settings pages.
+  {
+    id: "app-icon",
+    title: "App icon",
+    to: "/settings/interface",
+    searchTerms: ["dock window browser favicon artwork"],
+  },
+  {
+    id: "thread-cleanup-window",
+    title: "Thread cleanup window",
+    to: "/settings/threads",
+    searchTerms: ["archive inactive old threads days automatic"],
+  },
+  {
+    id: "protected-paths",
+    title: "Protected paths",
+    to: "/settings/safety",
+    searchTerms: ["filesystem safety deny write guard directories"],
+  },
+  {
+    id: "event-stream",
+    title: "Event stream",
+    to: "/settings/safety",
+    searchTerms: ["diagnostics url copy orchestration events"],
+  },
+  {
+    id: "keybindings-file",
+    title: "Keybindings file",
+    to: "/settings/advanced",
+    searchTerms: ["keybindings.json edit editor shortcuts"],
+  },
+  {
+    id: "logs-folder",
+    title: "Logs",
+    to: "/settings/advanced",
+    searchTerms: ["diagnostics log directory folder"],
+  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
+
+/**
+ * Fork: Forma reorganizes upstream's General and Appearance pages into
+ * Interface, Threads, Notifications, and Advanced. Settings that moved get a
+ * Forma destination; settings with no Forma home are left out of search so a
+ * result never lands on a redirect. Everything else keeps its upstream page
+ * (`/settings/general` stays routable for the upstream-only rows).
+ */
+const FORMA_SETTINGS_DESTINATIONS: Partial<
+  Record<SettingsSearchItemId, { readonly to: SettingsPath; readonly targetId?: string }>
+> = {
+  "color-scheme": { to: "/settings/interface", targetId: "theme" },
+  theme: { to: "/settings/interface" },
+  "setting-appearance-contrast": { to: "/settings/interface", targetId: "theme" },
+  "interface-font": { to: "/settings/interface" },
+  "prompt-font": { to: "/settings/interface" },
+  "code-font": { to: "/settings/interface" },
+  "terminal-font": { to: "/settings/interface" },
+  "font-smoothing": { to: "/settings/interface" },
+  "word-wrap": { to: "/settings/interface" },
+  "time-format": { to: "/settings/interface" },
+  "response-streaming": { to: "/settings/interface" },
+  "thread-notifications": { to: "/settings/notifications" },
+  "in-app-notifications": { to: "/settings/notifications" },
+  "start-from-origin": { to: "/settings/threads" },
+  "add-project-starts-in": { to: "/settings/threads" },
+  "archive-confirmation": { to: "/settings/threads" },
+  "delete-confirmation": { to: "/settings/threads" },
+  diagnostics: { to: "/settings/advanced" },
+  "open-source-licenses": { to: "/settings/advanced" },
+  "legacy-plan-mode": { to: "/settings/advanced" },
+  "legacy-context-window-indicator": { to: "/settings/advanced" },
+  "legacy-sidebar": { to: "/settings/advanced" },
+};
+
+/** Fork: upstream Appearance rows Forma's Interface page does not render. */
+const FORMA_UNAVAILABLE_SETTINGS: ReadonlySet<SettingsSearchItemId> = new Set([
+  "setting-glass-opacity",
+  "diff-color-scheme",
+  "chat-width",
+  "panel-animations",
+  "environment-identification",
+  "composer-context",
+]);
+
+/** Fork: the search catalog as Forma's settings pages lay it out. */
+export const FORMA_SETTINGS_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> =
+  SETTINGS_SEARCH_ITEMS.flatMap((item): SettingsSearchItem[] => {
+    if (FORMA_UNAVAILABLE_SETTINGS.has(item.id)) return [];
+    const destination = FORMA_SETTINGS_DESTINATIONS[item.id];
+    if (!destination) return [item];
+    // Forma's pages edit primary/device settings, so the moved rows drop
+    // their upstream scope along with their upstream anchor.
+    const { scope: _scope, targetId: _targetId, ...rest } = item as SettingsSearchItem;
+    return [{ ...rest, ...destination }];
+  });
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/projects": "project",
@@ -893,11 +998,18 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/connections": "connections",
   "/settings/scheduled-tasks": null,
   "/settings/archived": "project-defaults",
+  // Fork: Forma pages edit device-local or primary-environment settings.
+  "/settings/interface": null,
+  "/settings/threads": null,
+  "/settings/notifications": null,
+  "/settings/safety": null,
+  "/settings/advanced": null,
 };
 
 /** Search keeps the selected target. A missing row can explain its owning scope instead. */
 export function getSettingsSearchTargetScope(targetId: string) {
-  const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
+  // Fork: resolve against Forma's destinations.
+  const items: readonly SettingsSearchItem[] = FORMA_SETTINGS_SEARCH_ITEMS;
   const item =
     items.find((candidate) => candidate.id === targetId) ??
     items.find((candidate) => candidate.targetId === targetId);
@@ -1001,7 +1113,8 @@ export function searchableSetting(id: SettingsSearchItemId): {
 export function filterAvailableSettingsSearchItems(
   availability: SettingsSearchAvailability,
 ): ReadonlyArray<SettingsSearchItem> {
-  const items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS;
+  // Fork: filter Forma's catalog.
+  const items: ReadonlyArray<SettingsSearchItem> = FORMA_SETTINGS_SEARCH_ITEMS;
   return items.filter(
     (item) =>
       (!item.cloudOnly || availability.hasCloudPublicConfig) &&
@@ -1017,7 +1130,8 @@ export function filterAvailableSettingsSearchItems(
 
 export function searchSettings(
   query: string,
-  items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS,
+  // Fork: default to Forma's catalog (the command palette searches this).
+  items: ReadonlyArray<SettingsSearchItem> = FORMA_SETTINGS_SEARCH_ITEMS,
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];

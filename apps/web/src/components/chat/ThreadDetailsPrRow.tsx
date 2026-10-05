@@ -71,6 +71,8 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
 
+// Fork: Forma UI type tokens (text-ui-*) replace the fixed text sizes in this file.
+
 export function ThreadDetailsPrRow({
   environmentId,
   pr,
@@ -236,11 +238,11 @@ export function ThreadDetailsPrRow({
         className="max-w-80 text-left whitespace-normal"
       >
         <div className="flex min-w-0 max-w-80 flex-col gap-2 px-1 py-2">
-          <div className="flex min-w-0 items-baseline gap-1.5 text-xs leading-none">
+          <div className="flex min-w-0 items-baseline gap-1.5 text-ui-xs leading-none">
             <span className="min-w-0 truncate font-medium text-foreground">{detail.title}</span>
             <span className="shrink-0 text-muted-foreground">#{detail.number}</span>
           </div>
-          <div className="grid gap-1.5 pl-0.5 text-xs text-muted-foreground">
+          <div className="grid gap-1.5 pl-0.5 text-ui-xs text-muted-foreground">
             <div className="flex min-w-0 items-center gap-2">
               <statePresentation.Icon
                 aria-hidden

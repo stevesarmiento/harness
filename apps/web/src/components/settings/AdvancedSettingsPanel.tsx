@@ -17,6 +17,7 @@ import { Button } from "../ui/button";
 import { AboutVersionSection, LegacyFeaturesSection } from "./SettingsPanels";
 import { formatDiagnosticsDescription } from "./SettingsPanels.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
 
 type OpenPathTarget = "keybindings" | "logsDirectory";
 
@@ -100,6 +101,7 @@ function useAdvancedSettingsPanelState() {
 
   return {
     diagnosticsDescription,
+    environmentId,
     isOpeningKeybindings: openingPathByTarget.keybindings,
     isOpeningLogsDirectory: openingPathByTarget.logsDirectory,
     keybindingsConfigPath,
@@ -114,6 +116,7 @@ function useAdvancedSettingsPanelState() {
 export function AdvancedSettingsPanel() {
   const {
     diagnosticsDescription,
+    environmentId,
     isOpeningKeybindings,
     isOpeningLogsDirectory,
     keybindingsConfigPath,
@@ -128,6 +131,7 @@ export function AdvancedSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection title="Files">
         <SettingsRow
+          id={searchableSetting("keybindings-file").id}
           title="Keybindings"
           description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
           status={
@@ -157,6 +161,7 @@ export function AdvancedSettingsPanel() {
 
       <SettingsSection title="Diagnostics">
         <SettingsRow
+          id={searchableSetting("logs-folder").id}
           title="Logs"
           description={diagnosticsDescription}
           status={
@@ -180,6 +185,22 @@ export function AdvancedSettingsPanel() {
             </Button>
           }
         />
+        <SettingsRow
+          id={searchableSetting("diagnostics").id}
+          title="Processes and resources"
+          description="Inspect processes, resource use, and logs on this environment."
+          control={
+            <Button
+              render={
+                <Link to="/settings/diagnostics" search={{ machine: environmentId ?? undefined }} />
+              }
+              size="xs"
+              variant="outline"
+            >
+              View diagnostics
+            </Button>
+          }
+        />
       </SettingsSection>
 
       <SettingsSection title="Updates">
@@ -190,13 +211,14 @@ export function AdvancedSettingsPanel() {
             title={
               <span className="inline-flex items-center gap-2">
                 <span>Version</span>
-                <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
+                <code className="text-2xs font-medium text-muted-foreground">{APP_VERSION}</code>
               </span>
             }
             description="Current version of the application."
           />
         )}
         <SettingsRow
+          id={searchableSetting("open-source-licenses").id}
           title="Open source licenses"
           description="Notices for dependencies, assets, and optional tools used by Forma."
           control={

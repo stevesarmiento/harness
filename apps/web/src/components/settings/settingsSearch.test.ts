@@ -59,8 +59,13 @@ describe("searchSettings", () => {
 
   it("matches normalized title substrings", () => {
     expect(searchSettings("  WORD   WRAP  ", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
-    expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
-    expect(searchSettings("panel animations").map((item) => item.id)).toEqual(["panel-animations"]);
+    // Fork: Forma's Interface page has no glass or panel-animation rows; match via the raw catalog.
+    expect(searchSettings("glass", SETTINGS_SEARCH_ITEMS).map((item) => item.id)).toEqual([
+      "setting-glass-opacity",
+    ]);
+    expect(
+      searchSettings("panel animations", SETTINGS_SEARCH_ITEMS).map((item) => item.id),
+    ).toEqual(["panel-animations"]);
     expect(searchSettings("thè\u{1ab0}mes")[0]?.id).toBe("theme");
     const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockReturnValue("gıt");
     try {
@@ -275,24 +280,26 @@ describe("searchSettings", () => {
     expect(searchableSetting("archive")).toEqual({ id: "archive", title: "Archived threads" });
   });
 
+  // Fork: upstream's Appearance and General rows resolve to Forma's settings pages.
   it("routes appearance settings to their current section", () => {
     expect(searchSettings("theme")[0]).toMatchObject({
       id: "theme",
-      to: "/settings/appearance",
+      to: "/settings/interface",
     });
     expect(searchSettings("word wrap")[0]).toMatchObject({
       id: "word-wrap",
-      to: "/settings/appearance",
+      to: "/settings/interface",
     });
-    expect(searchSettings("composer context")[0]).toMatchObject({
-      id: "composer-context",
-      to: "/settings/appearance",
+    expect(searchSettings("thread notifications")[0]).toMatchObject({
+      id: "thread-notifications",
+      to: "/settings/notifications",
     });
-    expect(searchSettings("environment identification")[0]).toMatchObject({
-      id: "environment-identification",
-      to: "/settings/appearance",
-      targetId: "appearance-interface",
-    });
+    expect(searchSettings("composer context").map((item) => item.id)).not.toContain(
+      "composer-context",
+    );
+    expect(searchSettings("environment identification").map((item) => item.id)).not.toContain(
+      "environment-identification",
+    );
   });
 
   it("routes conditional window capture settings to the stable toggle row", () => {
@@ -384,7 +391,8 @@ describe("settings search targets", () => {
     expect(setting).toEqual({ title: "Time format", scope: null });
     expect(isSettingsSearchScopeAvailable(setting.scope, "project")).toBe(true);
     expect(isSettingsSearchScopeAvailable(setting.scope, "all")).toBe(true);
-    expect(getSettingsSearchTargetScope("appearance")).toMatchObject({ scope: null });
+    // Fork: Forma has no Appearance section anchor.
+    expect(getSettingsSearchTargetScope("appearance")).toBeNull();
     expect(getSettingsSearchTargetScope("missing-setting")).toBeNull();
   });
 
@@ -419,8 +427,9 @@ describe("settings search targets", () => {
     expect(isSettingsSearchScopeAvailable(updates.scope, "environment")).toBe(true);
     expect(isSettingsSearchScopeAvailable(updates.scope, "all")).toBe(true);
     expect(isSettingsSearchScopeAvailable(updates.scope, "project")).toBe(false);
+    // Fork: Forma's Interface page edits response streaming on the primary environment.
     const streaming = getSettingsSearchTargetScope("response-streaming")!;
-    expect(streaming.scope).toBe("project-defaults");
+    expect(streaming.scope).toBeNull();
     expect(isSettingsSearchScopeAvailable(streaming.scope, "project")).toBe(true);
     for (const id of ["legacy-plan-mode", "legacy-context-window-indicator", "legacy-sidebar"]) {
       expect(getSettingsSearchTargetScope(id)!.scope).toBeNull();

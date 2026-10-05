@@ -1,14 +1,12 @@
 import type { ComponentType } from "react";
+import { ShieldIcon } from "lucide-react";
 import {
-  BlocksIcon,
-  CalendarClockIcon,
-  createLucideIcon,
-  GitPullRequestIcon as SourceControlIcon,
-  HardDriveIcon,
-  PanelsTopLeftIcon,
-  ShieldIcon,
-} from "lucide-react";
-import {
+  IconArrowTriangleheadBranch as SourceControlIcon,
+  IconCalendarBadgeClock as ScheduledTasksIcon,
+  IconFolder as ProjectsIcon,
+  IconInternaldrive as StorageIcon,
+  IconPuzzlepieceExtension as IntegrationsIcon,
+  IconViewfinder as SnapShotIcon,
   IconWifi as ConnectionsIcon,
   IconSwatchpalette as InterfaceIcon,
   IconTextBubble as ThreadsIcon,
@@ -18,18 +16,6 @@ import {
   NotificationsSettingsIcon as NotificationsIcon,
   ProvidersSettingsIcon as ProvidersIcon,
 } from "../icons/custom";
-
-const SnapShotIcon = createLucideIcon("snap-shot", [
-  [
-    "path",
-    {
-      d: "M8 3H6a3 3 0 0 0-3 3v2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2",
-      key: "capture-frame",
-    },
-  ],
-  ["rect", { width: "10", height: "8", x: "7", y: "8", rx: "2", key: "window" }],
-  ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
-]);
 
 export type SettingsRestoreScope =
   | "interface"
@@ -93,8 +79,8 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   {
     label: "Projects",
     to: "/settings/projects",
-    icon: PanelsTopLeftIcon,
-    iconUsesFill: false,
+    icon: ProjectsIcon,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
@@ -107,22 +93,22 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   {
     label: "Integrations",
     to: "/settings/integrations",
-    icon: BlocksIcon,
-    iconUsesFill: false,
+    icon: IntegrationsIcon,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
     label: "Scheduled Tasks",
     to: "/settings/scheduled-tasks",
-    icon: CalendarClockIcon,
-    iconUsesFill: false,
+    icon: ScheduledTasksIcon,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
     label: "SnapShots",
     to: "/settings/snap-shot",
     icon: SnapShotIcon,
-    iconUsesFill: false,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
@@ -136,14 +122,14 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
     label: "Source Control",
     to: "/settings/source-control",
     icon: SourceControlIcon,
-    iconUsesFill: false,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
     label: "Storage",
     to: "/settings/storage",
-    icon: HardDriveIcon,
-    iconUsesFill: false,
+    icon: StorageIcon,
+    iconUsesFill: true,
     restoreScope: null,
   },
   {
