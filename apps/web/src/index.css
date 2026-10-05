@@ -149,6 +149,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 }
 
 .chat-composer-surface {
+  border-radius: 40px;
+  corner-shape: squircle;
   background: var(--composer-surface-fill);
   border-color: var(--composer-surface-border);
   box-shadow: var(--composer-surface-overlay-shadow), var(--composer-surface-shadow);
@@ -157,6 +159,23 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 .chat-composer-surface:focus-within {
   border-color: color-mix(in srgb, var(--ring) 45%, transparent);
   box-shadow: var(--composer-surface-overlay-shadow), var(--composer-surface-focus-shadow);
+}
+
+/* Hairline between the composer prompt and its footer controls. */
+.chat-composer-footer-separator {
+  height: 2px;
+  border-top: 1px solid
+    color-mix(
+      in srgb,
+      var(--composer-footer-separator-border-color) var(--composer-footer-separator-border-opacity),
+      transparent
+    );
+  background-color: color-mix(
+    in srgb,
+    var(--composer-footer-separator-background-color)
+      var(--composer-footer-separator-background-opacity),
+    transparent
+  );
 }
 
 .chat-composer-banner {
@@ -229,6 +248,21 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --text-4xs--line-height: 1;
   --text-5xs: 0.4375rem;
   --text-5xs--line-height: 1;
+  /* Fork: Forma's appearance-driven type sizes, registered so Tailwind and the
+     class linter know text-ui-* / text-code-* are font sizes. The unlayered
+     .text-ui-* / .text-code-* rules below still win, exactly as before. */
+  --text-ui-2xs: var(--app-ui-text-2xs);
+  --text-ui-xs: var(--app-ui-text-xs);
+  --text-ui-sm: var(--app-ui-text-sm);
+  --text-code-body: var(--app-code-font-size);
+  --text-code-compact: var(--app-code-font-size-compact);
+  /* Fork: Forma's unified motion tokens as theme utilities (duration-micro,
+     ease-motion-out, ...), so app code needs no arbitrary transition values. */
+  --transition-duration-micro: var(--motion-duration-micro);
+  --transition-duration-ui: var(--motion-duration-ui);
+  --transition-duration-modal: var(--motion-duration-modal);
+  --ease-motion-out: var(--motion-ease-out);
+  --ease-motion-in-out: var(--motion-ease-in-out);
   /* Motion. drawer is the decelerating curve for surfaces that slide or pop in
      (composer context, pills). */
   --inset-shadow-control-highlight: 0 1px rgb(255 255 255 / 16%);
@@ -1207,6 +1241,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 @utility pr-safe {
   padding-right: max(env(safe-area-inset-right), 0px);
 }
+/* Fork: Forma's sidebar titlebar row clears the window-controls overlay. */
+@utility pl-titlebar-area {
+  padding-left: calc(env(titlebar-area-x) + 1em);
+}
 
 /* Grain texture for chrome surfaces that float above the body (see the
    --surface-grain note). Layered over the element's background-color, so it
@@ -1342,8 +1380,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 /* Forma's project-grouped sidebar inherits the selected theme exactly as PR #1
    did. Its surface is the theme card, with no extra grain or zinc palette
    substitution. Sidebar v2 keeps upstream's independent navigation palette. */
-[data-sidebar-version="v1"],
-.forma-sidebar-v1 {
+[data-sidebar-version="v1"] {
   --sidebar: var(--app-chrome-background);
   --sidebar-foreground: var(--foreground);
   --sidebar-muted-foreground: var(--muted-foreground);
@@ -1357,6 +1394,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --sidebar-stage-fade: var(--sidebar);
   --surface-grain: none;
   background-color: var(--sidebar);
+  color: var(--sidebar-foreground);
 }
 /* The v2 sidebar pins an independent zinc/black palette; the shell wrapper
    (the gap chrome around the inset content card) must match it. */
@@ -1389,6 +1427,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --sidebar-border: var(--color-zinc-200);
   --sidebar-stage-fade: var(--sidebar);
   background-color: var(--sidebar);
+  color: var(--sidebar-foreground);
 
   @variant dark {
     --background: #000;

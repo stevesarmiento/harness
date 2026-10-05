@@ -142,6 +142,12 @@ export interface PixelGridLoaderProps extends React.ComponentProps<"span"> {
   preset?: PixelGridLoaderPreset;
   color?: PixelGridColor;
   colors?: readonly string[];
+  /**
+   * Fork: false renders the lit, static grid (a calm state such as Monitoring).
+   * While true the cycle still pauses offscreen, in hidden tabs, and under
+   * reduced motion, so a sidebar full of working rows never repaints unseen.
+   */
+  animate?: boolean;
 }
 
 function isNamedColor(value: string): value is PixelGridNamedColor {
@@ -173,31 +179,36 @@ export function PixelGridLoader({
   preset,
   color = "currentColor",
   colors,
+  animate = true,
   className,
   style,
   "aria-hidden": ariaHidden = true,
   ...props
 }: PixelGridLoaderProps) {
+  const containerRef = useRef<HTMLSpanElement | null>(null);
   const cellRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const { name: presetName, config } = resolvePreset(preset, variant);
   const resolvedCellColors = colors ?? ("colors" in config ? config.colors : undefined);
   const useInlineContainerColor = color !== "currentColor" && !isNamedColor(color);
 
   useEffect(() => {
+    const container = containerRef.current;
     const cells = cellRefs.current.slice(0, PIXEL_GRID_CELL_IDS.length);
-    if (cells.some((cell) => cell === null)) {
+    if (container === null || cells.some((cell) => cell === null)) {
       return;
     }
 
     const resolvedCells = cells as HTMLSpanElement[];
     const reducedMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
 
     let timers: Array<ReturnType<typeof setTimeout>> = [];
     let cycleTimer: ReturnType<typeof setTimeout> | null = null;
-    let running = true;
+    let running = false;
+    // Until the observer reports, assume offscreen so nothing animates unseen.
+    let intersecting = typeof IntersectionObserver === "undefined";
 
     const clearTimers = () => {
       timers.forEach((timer) => clearTimeout(timer));
@@ -245,31 +256,51 @@ export function PixelGridLoader({
       });
     };
 
-    resolvedCells.forEach((cell) => {
-      cell.classList.remove("is-on");
-    });
-
-    if (reducedMotion) {
+    const setAllCells = (on: boolean) => {
       resolvedCells.forEach((cell) => {
-        cell.classList.add("is-on");
+        cell.classList.toggle("is-on", on);
       });
-      return () => {
-        resolvedCells.forEach((cell) => {
-          cell.classList.remove("is-on");
-        });
-      };
-    }
+    };
 
-    cycle();
+    // The static frame is fully lit (calm states and reduced motion); a cycle
+    // paused offscreen or in a hidden tab just rests dark until it resumes.
+    const staticFrameLit = () => !animate || reducedMotion?.matches === true;
+
+    const update = () => {
+      const shouldRun = !staticFrameLit() && intersecting && document.visibilityState === "visible";
+      if (shouldRun === running) {
+        if (!running) setAllCells(staticFrameLit());
+        return;
+      }
+      running = shouldRun;
+      clearTimers();
+      setAllCells(shouldRun ? false : staticFrameLit());
+      if (shouldRun) cycle();
+    };
+
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver((entries) => {
+            const entry = entries.at(-1);
+            if (!entry) return;
+            intersecting = entry.isIntersecting;
+            update();
+          });
+    observer?.observe(container);
+    reducedMotion?.addEventListener("change", update);
+    document.addEventListener("visibilitychange", update);
+    update();
 
     return () => {
       running = false;
       clearTimers();
-      resolvedCells.forEach((cell) => {
-        cell.classList.remove("is-on");
-      });
+      observer?.disconnect();
+      reducedMotion?.removeEventListener("change", update);
+      document.removeEventListener("visibilitychange", update);
+      setAllCells(false);
     };
-  }, [config, presetName]);
+  }, [animate, config]);
 
   const containerClassName = color && isNamedColor(color) ? `pixel-grid--${color}` : undefined;
   const containerStyle = {
@@ -284,6 +315,7 @@ export function PixelGridLoader({
 
   return (
     <span
+      ref={containerRef}
       aria-hidden={ariaHidden}
       className={cn("pixel-grid pixel-grid-loader", containerClassName, className)}
       data-pixel-grid-preset={presetName}

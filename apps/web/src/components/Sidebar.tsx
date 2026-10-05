@@ -41,7 +41,6 @@ import {
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
 import {
-  resolveThreadProviderStack,
   threadRuntimeCanArchive,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
@@ -65,22 +64,27 @@ import {
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
-  CircleDashedIcon,
+  CircleQuestionMarkIcon,
   ClockIcon,
-  EyeIcon,
   FolderIcon,
   GitBranchIcon,
-  MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
-  SettingsIcon,
-  ShieldQuestionIcon,
-  SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
   XIcon,
 } from "lucide-react";
+// Fork: Forma iconography (custom marks for new thread, project settings,
+// scope filter and the row status glyphs).
+import {
+  NewThreadIcon,
+  SettingsHexIcon,
+  SidebarCompletedIcon,
+  SidebarFilterIcon,
+  SidebarPlanReadyIcon,
+} from "./icons/custom";
+import { PixelGridLoader } from "./ui/pixel-grid-loader";
 import {
   memo,
   useCallback,
@@ -182,6 +186,7 @@ import {
   formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
+  isSidebarThreadPlanReady,
   isSidebarNestedLinkClick,
   isSidebarThreadWorking,
   isTrailingDoubleClick,
@@ -196,6 +201,8 @@ import {
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
+  resolveSidebarV2TopStatus,
+  type SidebarV2TopStatusKind,
   resolveThreadLastVisitedAt,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
@@ -228,7 +235,6 @@ import { createSidebarListMotion } from "./Sidebar.motion";
 import {
   ThreadPullRequestBadgeControl,
   ThreadPullRequestsMiniList,
-  ThreadWorktreeIndicator,
   nextThreadChangeRequestSnapshot,
   prStatusIndicator,
   resolveThreadPullRequestBadge,
@@ -324,7 +330,8 @@ function JumpHintBadge(props: { label: string }) {
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute right-1.5 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-full border border-border/80 bg-background/95 px-1.5 font-mono text-3xs font-medium tracking-tight text-foreground shadow-sm"
+      // Fork: Forma's compact code size instead of upstream's text-3xs.
+      className="pointer-events-none absolute right-1.5 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-full border border-border/80 bg-background/95 px-1.5 font-mono text-code-compact font-medium tracking-tight text-foreground shadow-sm"
     >
       {props.label}
     </span>
@@ -348,53 +355,56 @@ function terminalProcessLabel(count: number): string {
   return `${count} terminal ${count === 1 ? "process" : "processes"} running`;
 }
 
-function SidebarProviderStack(props: {
-  thread: SidebarThreadSummary;
-  providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
-}) {
-  const stack = resolveThreadProviderStack(props.thread);
-  const currentInstanceId = stack[stack.length - 1]!;
-  const currentEntry = props.providerEntryByInstanceId.get(currentInstanceId) ?? null;
-  if (currentEntry === null) return null;
-  const showInstanceBadge = shouldShowInstanceBadge(
-    currentEntry,
-    props.providerEntryByInstanceId.values(),
-  );
-  const current = (
-    <ProviderInstanceIcon
-      driverKind={currentEntry.driverKind}
-      displayName={currentEntry.displayName}
-      accentColor={currentEntry.accentColor}
-      acpRegistryAgentId={currentEntry.acpRegistryAgentId}
-      acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
-      showBadge={showInstanceBadge}
-      // Glyph dims, badge stays saturated; offset matches the composer trigger.
-      iconClassName="size-3.5 opacity-60"
-      badgeClassName="right-[-0.1875rem] bottom-[-0.1875rem] h-3 min-w-3 px-0.5 text-5xs"
-    />
-  );
-  if (stack.length === 1) {
-    return <span className="inline-flex shrink-0 items-center">{current}</span>;
+// Fork: Forma rows drop upstream's provider stack and branch/diff meta line
+// (rows are single-line) and carry Forma status glyphs instead: the pixel-grid
+// "working bit" while in motion, alert/question marks for the attention
+// states, custom marks for Plan Ready and Done. Failed and Limited stay
+// text-only. Plan Ready is fork-only, so it extends upstream's top status.
+type SidebarRowTopStatusKind = SidebarV2TopStatusKind | "plan-ready";
+
+const SIDEBAR_ROW_TOP_STATUS: Record<
+  SidebarRowTopStatusKind,
+  { readonly label: string; readonly className: string }
+> = {
+  // No shimmer: a label that animates forever is noise in a sidebar full of
+  // them (and repaints every vsync on high-refresh displays).
+  working: { label: "Working", className: "text-info" },
+  // Waiting is calm background presence (post-settle background roster), not
+  // active progress, so the label keeps full strength.
+  waiting: { label: "Waiting", className: "text-muted-foreground" },
+  approval: { label: "Approval", className: "text-warning-foreground" },
+  input: { label: "Input", className: "text-indigo-600 dark:text-indigo-300" },
+  "plan-ready": { label: "Plan Ready", className: "text-violet-600 dark:text-violet-300" },
+  limited: { label: "Limited", className: "text-warning" },
+  failed: { label: "Failed", className: "text-error" },
+  woke: { label: "Woke", className: "text-warning" },
+  done: { label: "Done", className: "text-success" },
+};
+
+// Fork: Forma's status glyphs. The pixel grid animates only for Working (and
+// pauses offscreen / under reduced motion); Waiting shows it lit and still.
+function SidebarRowStatusGlyph({ kind }: { kind: SidebarRowTopStatusKind }) {
+  switch (kind) {
+    case "working":
+    case "waiting":
+      return (
+        <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center">
+          <PixelGridLoader variant="sidebar" animate={kind === "working"} />
+        </span>
+      );
+    case "approval":
+      return <CircleAlertIcon aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />;
+    case "input":
+      return (
+        <CircleQuestionMarkIcon aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+      );
+    case "plan-ready":
+      return <SidebarPlanReadyIcon aria-hidden className="size-3.5 shrink-0" />;
+    case "done":
+      return <SidebarCompletedIcon aria-hidden className="size-3.5 shrink-0" />;
+    default:
+      return null;
   }
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
-      {stack.slice(0, -1).map((instanceId) => {
-        const entry = props.providerEntryByInstanceId.get(instanceId);
-        if (entry === undefined) return null;
-        return (
-          <ProviderInstanceIcon
-            key={instanceId}
-            driverKind={entry.driverKind}
-            displayName={entry.displayName}
-            acpRegistryAgentId={entry.acpRegistryAgentId}
-            acpRegistryIconUrl={entry.acpRegistryIconUrl}
-            iconClassName="size-3 opacity-35 grayscale"
-          />
-        );
-      })}
-      <span className="relative z-10 inline-flex items-center">{current}</span>
-    </span>
-  );
 }
 
 function SidebarThreadTooltip({
@@ -645,6 +655,7 @@ function SortableThreadRow(props: {
 
 // Unsent work shares one look: the new-thread draft rows and thread rows
 // with unsent composer text both use this tint and pen so they read alike.
+// Fork: the pen is Forma's NewThreadIcon, matching the new-thread button.
 const draftSurfaceClassName = "bg-warning/4 hover:bg-warning/8";
 const draftPenClassName = "size-3 shrink-0 text-warning-foreground";
 
@@ -697,9 +708,11 @@ function SidebarSectionPlaceholder(props: {
       className="relative mx-0.5 -mb-px h-0"
     >
       {props.showHint ? (
+        // Fork: h-7 to match Forma's compact slim rows, whose height the
+        // sorting strategy opens for this hint.
         <div
           className={cn(
-            "absolute inset-x-0 top-0 flex h-9 items-center justify-center rounded-md border border-dashed border-sidebar-foreground/25 text-xs text-sidebar-foreground/80",
+            "absolute inset-x-0 top-0 flex h-7 items-center justify-center rounded-md border border-dashed border-sidebar-foreground/25 text-xs text-sidebar-foreground/80",
             props.isDropTarget && "border-primary/40 bg-primary/5 text-primary",
           )}
         >
@@ -719,6 +732,8 @@ type SidebarSweepAction = "settle" | "unsettle" | "unsnooze";
 // Zero-height markers reserve no label space at rest. During a drag the
 // sorting strategy opens 24px for a 16px label with 4px clearance on each side.
 const SIDEBAR_DRAG_LABEL_HEIGHT = 24;
+// Fork: unscaled heights of Forma's compact card and slim rows.
+const SIDEBAR_RESTING_ROW_HEIGHTS = { card: 32, slim: 28 } as const;
 
 function SidebarDragBoundary(props: {
   marker: "pinned-header" | "pinned-divider";
@@ -885,7 +900,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         <span className="sr-only">{preview}</span>
         <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
           <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <SquarePenIcon aria-hidden className={draftPenClassName} />
+            <NewThreadIcon aria-hidden className={draftPenClassName} />
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
@@ -1109,7 +1124,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   isActive: boolean;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
-  currentEnvironmentId: string | null;
+  // Fork: no per-row machine glyph in compact rows; the hover card names the
+  // environment and machine.
   environmentLabel: string | null;
   environmentMachine: EnvironmentMachineKind;
   project: EnvironmentProject | null;
@@ -1255,61 +1271,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Status hues follow the system-wide convention set by sidebar v1 and the
   // mobile Live Activity/widgets (amber approval, indigo input, sky working)
   // so a thread reads the same color everywhere it surfaces.
-  const topStatus =
-    status === "working"
-      ? {
-          label: "Working",
-          icon: "working" as const,
-          // No shimmer: a label that animates forever is noise in a sidebar
-          // full of them (and repaints every vsync on high-refresh displays).
-          className: "text-info",
-        }
-      : status === "waiting"
-        ? {
-            // Waiting is calm background presence (post-settle background
-            // roster), not active progress, so the label keeps full strength.
-            label: "Waiting",
-            icon: null,
-            className: "text-muted-foreground",
-          }
-        : status === "approval"
-          ? {
-              label: "Approval",
-              icon: "approval" as const,
-              className: "text-warning-foreground",
-            }
-          : status === "input"
-            ? {
-                label: "Input",
-                icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
-              }
-            : status === "limited"
-              ? {
-                  label: "Limited",
-                  icon: "failed" as const,
-                  className: "text-warning",
-                }
-              : status === "failed"
-                ? {
-                    label: "Failed",
-                    icon: "failed" as const,
-                    className: "text-error",
-                  }
-                : isWoke
-                  ? {
-                      label: "Woke",
-                      icon: "woke" as const,
-                      className: "text-warning",
-                    }
-                  : isUnread
-                    ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-success",
-                      }
-                    : null;
-  const isWokeStatus = topStatus?.icon === "woke";
+  // Fork: resolved through upstream's top-status construct plus Forma's Plan
+  // Ready, which reads like a ready row for recede purposes (a settled run).
+  const topStatusKind: SidebarRowTopStatusKind | null =
+    !isInFlight && isSidebarThreadPlanReady(thread)
+      ? "plan-ready"
+      : resolveSidebarV2TopStatus({ status, isUnread, isWoke });
+  const topStatus = topStatusKind === null ? null : SIDEBAR_ROW_TOP_STATUS[topStatusKind];
+  const isWokeStatus = topStatusKind === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
@@ -1330,12 +1299,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
     : thread.modelSelection.model;
-
-  // The local environment is "this machine" and needs no marker; every other
-  // one gets its machine glyph. With no local environment (the hosted app)
-  // that is every thread, which is the point: the glyph is what tells rows on
-  // different machines apart.
-  const isRemote = thread.environmentId !== props.currentEnvironmentId;
 
   const detailsTooltip = (
     <SidebarThreadTooltip
@@ -1610,13 +1573,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       onBlur={handleRenameBlur}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
-      className="min-w-0 flex-1 rounded-sm border border-input bg-card px-1 text-sm font-medium text-card-foreground outline-none focus:border-foreground"
+      // Fork: compact rows set titles (and the rename field) in text-xs.
+      className="min-w-0 flex-1 rounded-sm border border-input bg-card px-1 text-xs font-medium text-card-foreground outline-none focus:border-foreground"
     />
   ) : (
     <span
       aria-hidden
       className={cn(
-        "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
+        "min-w-0 flex-1 text-xs transition-opacity motion-reduce:transition-none",
         shouldRecede ? "font-normal" : "font-medium",
         variant === "card"
           ? cn(
@@ -1697,7 +1661,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           />
         }
       >
-        <SquarePenIcon aria-hidden className={draftPenClassName} />
+        <NewThreadIcon aria-hidden className={draftPenClassName} />
       </TooltipTrigger>
       <TooltipPopup side="top">Unsent draft</TooltipPopup>
     </Tooltip>
@@ -1746,8 +1710,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
-          // Matches the h-9 row so unrendered rows never shift the list when they paint.
-          "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          // Matches the h-7 row so unrendered rows never shift the list when they paint.
+          // Fork: Forma's compact slim rows are h-7 (upstream h-9).
+          "list-none [content-visibility:auto] [contain-intrinsic-size:auto_28px]",
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1762,7 +1727,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 aria-current={accessibility.current}
                 data-testid="sidebar-row-slim"
                 aria-busy={isRegeneratingTitle || undefined}
-                className={cn(rowSurfaceClassName, "flex h-9 items-center gap-2.5 px-2.5")}
+                className={cn(rowSurfaceClassName, "flex h-7 items-center gap-2.5 px-2.5")}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onKeyDown={handleKeyDown}
@@ -1771,17 +1736,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             }
           >
             {accessibleTitle}
-            {/* Settled history recedes: dimmed favicon at rest, restored on
-              hover so the tail stays scannable when you're hunting. */}
-            <span
-              className={cn(
-                "shrink-0 transition-opacity",
-                (!props.isActive || variantAction === "unsettle") &&
-                  "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
-              )}
-            >
-              {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
-            </span>
+            {/* Fork: no project favicon in compact slim rows. */}
             {draftIndicator}
             {title}
             {pinIndicator}
@@ -1903,16 +1858,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     );
   }
 
-  const diff = latestRunDiff(thread);
-
   return (
     <li
       data-thread-item={threadKey}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
-        // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
-        "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        // Matches the h-7 content box plus the py-0.5 padding.
+        // Fork: Forma's single-line cards (upstream: three-line h-[4.875rem]).
+        "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_32px]",
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -1936,218 +1890,156 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           {accessibleTitle}
-          <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
-            <div className="flex h-5 min-w-0 items-center gap-1.5">
-              {draftIndicator}
-              {props.project ? (
-                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
-              ) : null}
-              {props.projectDisplayName ? (
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-secondary-label text-xs",
-                    shouldRecede ? "font-normal" : "font-medium",
-                  )}
-                >
-                  {props.projectDisplayName}
-                </span>
-              ) : (
-                <span className="flex-1" />
-              )}
-              {pinIndicator}
-              {/* The visible state owns this slot's width: status at rest,
+          {/* Fork: one compact h-7 line (title, terminal, PR, pin, status)
+              instead of upstream's project / title / branch-meta stack. The
+              project, branch, provider and machine stay in the hover card. */}
+          <div className="relative z-10 flex h-7 min-w-0 items-center gap-1.5 px-(--sidebar-row-content-inset)">
+            {draftIndicator}
+            {title}
+            {isRegeneratingTitle ? (
+              <span role="status" className="sr-only">
+                Regenerating title
+              </span>
+            ) : null}
+            {terminalStatusIcon}
+            {prBadge}
+            {pinIndicator}
+            {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
-                  the hidden state out of flow lets the project label reclaim
+                  the hidden state out of flow lets the title reclaim
                   space without either state overlapping it. */}
-              {sortable?.isDragging ? (
-                dragDestination
-              ) : (
-                <span
-                  className={cn(
-                    "group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs",
-                    props.sweepAction !== null && "hidden",
-                  )}
-                >
-                  {/* Read-only status labels yield to the hover actions. Woke is
+            {sortable?.isDragging ? (
+              dragDestination
+            ) : (
+              <span
+                className={cn(
+                  "group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs",
+                  props.sweepAction !== null && "hidden",
+                )}
+              >
+                {/* Read-only status labels yield to the hover actions. Woke is
                     itself an action, so it stays pointer-enabled and visible
                     while the other controls appear beside it. */}
-                  <span
-                    className={cn(
-                      isWokeStatus
-                        ? "pointer-events-auto"
-                        : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
-                      "flex items-center self-center justify-self-end tabular-nums text-secondary-label transition-opacity",
-                      snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
-                    )}
-                  >
-                    {topStatus ? (
-                      isWokeStatus ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label="Dismiss Woke notification"
-                                onClick={handleAcknowledgeWokeClick}
-                                className={cn(
-                                  "inline-flex cursor-pointer items-center gap-1 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring",
-                                  topStatus.className,
-                                )}
-                              >
-                                <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
-                                <span role="status">{topStatus.label}</span>
-                              </button>
-                            }
-                          />
-                          <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
-                        </Tooltip>
-                      ) : (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 font-medium",
-                            topStatus.className,
-                          )}
-                        >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                          ) : null}
-                          {/* The label alone is the live region: a role="status"
+                <span
+                  className={cn(
+                    isWokeStatus
+                      ? "pointer-events-auto"
+                      : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
+                    "flex items-center self-center justify-self-end tabular-nums text-secondary-label transition-opacity",
+                    snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
+                  )}
+                >
+                  {topStatus ? (
+                    isWokeStatus ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Dismiss Woke notification"
+                              onClick={handleAcknowledgeWokeClick}
+                              className={cn(
+                                "inline-flex cursor-pointer items-center gap-1 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring",
+                                topStatus.className,
+                              )}
+                            >
+                              <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
+                              <span role="status">{topStatus.label}</span>
+                            </button>
+                          }
+                        />
+                        <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
+                      </Tooltip>
+                    ) : (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 font-medium",
+                          topStatus.className,
+                        )}
+                      >
+                        {/* Fork: Forma status glyphs. */}
+                        {topStatusKind === null ? null : (
+                          <SidebarRowStatusGlyph kind={topStatusKind} />
+                        )}
+                        {/* The label alone is the live region: a role="status"
                             wrapper around the ticking duration would make
                             screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                            </span>
-                          ) : null}
-                        </span>
-                      )
-                    ) : (
-                      threadTimeLabel(thread)
+                        <span role="status">{topStatus.label}</span>
+                        {status === "working" ? (
+                          <span aria-hidden>
+                            <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
+                          </span>
+                        ) : null}
+                      </span>
+                    )
+                  ) : (
+                    threadTimeLabel(thread)
+                  )}
+                </span>
+                {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
+                  <span
+                    className={cn(
+                      // focus-visible, not focus-within: a mouse click leaves
+                      // the Settle button focused, and a plain focus-within
+                      // would keep the controls pinned over the status label
+                      // once the pointer moves away (e.g. after a failed
+                      // settle) instead of cross-fading back.
+                      "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:static group-any-hover/sidebar-row:opacity-100",
+                      snoozeMenuOpen && "pointer-events-auto static opacity-100",
                     )}
-                  </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
-                    <span
-                      className={cn(
-                        // focus-visible, not focus-within: a mouse click leaves
-                        // the Settle button focused, and a plain focus-within
-                        // would keep the controls pinned over the status label
-                        // once the pointer moves away (e.g. after a failed
-                        // settle) instead of cross-fading back.
-                        "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:static group-any-hover/sidebar-row:opacity-100",
-                        snoozeMenuOpen && "pointer-events-auto static opacity-100",
-                      )}
-                    >
-                      {hasUnsentDraft ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label="Discard draft"
-                                onClick={handleDiscardDraftClick}
-                                className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                              />
-                            }
-                          >
-                            <XIcon className="size-3.5" />
-                          </TooltipTrigger>
-                          <TooltipPopup side="top">Discard draft</TooltipPopup>
-                        </Tooltip>
-                      ) : null}
-                      {showSnoozeButton ? (
-                        <SnoozeMenuButton
-                          open={snoozeMenuOpen}
-                          onOpenChange={setSnoozeMenuOpen}
-                          onSnooze={handleSnoozePreset}
-                          timestampFormat={props.timestampFormat}
-                        />
-                      ) : null}
-                      {props.settlementSupported ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                aria-label="Settle thread"
-                                onClick={handleSettleClick}
-                                onPointerDown={handleActionPointerDown}
-                                className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                              />
-                            }
-                          >
-                            <CheckIcon className="size-3.5" />
-                            Settle
-                          </TooltipTrigger>
-                          <TooltipPopup>Settle thread</TooltipPopup>
-                        </Tooltip>
-                      ) : null}
-                    </span>
-                  ) : null}
-                </span>
-              )}
-              {/* A sweep hides the slot rather than unmounting it, so the
-                  pressed action button stays connected and a cancelled sweep's
-                  release click still fires and is consumed. */}
-              {props.sweepAction !== null ? dragDestination : null}
-            </div>
-            <div className="mt-1 flex min-w-0">
-              {title}
-              {isRegeneratingTitle ? (
-                <span role="status" className="sr-only">
-                  Regenerating title
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-              {/* Always the branch. The plan step used to take this slot while
-                  working, but it truncated to a half-sentence and dropped the
-                  branch, so the row lost its most stable identifier. */}
-              {thread.branch ? (
-                <>
-                  <ThreadWorktreeIndicator thread={thread} />
-                  <span className="flex min-w-0 flex-1 text-muted-foreground/40">
-                    <MiddleTruncate value={thread.branch} showTitle={false} />
-                  </span>
-                </>
-              ) : (
-                <span className="flex-1" />
-              )}
-              {terminalStatusIcon}
-              {prBadge}
-              {diff ? (
-                <span className="shrink-0 font-mono">
-                  <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
-                  <span className="text-diff-deletion-foreground">−{diff.deletions}</span>
-                </span>
-              ) : null}
-              <span
-                aria-hidden
-                className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
-              >
-                {isRemote ? (
-                  <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-                    <EnvironmentMachineIcon
-                      aria-hidden
-                      kind={props.environmentMachine}
-                      className="size-3.5"
-                    />
+                  >
+                    {hasUnsentDraft ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Discard draft"
+                              onClick={handleDiscardDraftClick}
+                              className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                            />
+                          }
+                        >
+                          <XIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">Discard draft</TooltipPopup>
+                      </Tooltip>
+                    ) : null}
+                    {showSnoozeButton ? (
+                      <SnoozeMenuButton
+                        open={snoozeMenuOpen}
+                        onOpenChange={setSnoozeMenuOpen}
+                        onSnooze={handleSnoozePreset}
+                        timestampFormat={props.timestampFormat}
+                      />
+                    ) : null}
+                    {props.settlementSupported ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Settle thread"
+                              onClick={handleSettleClick}
+                              onPointerDown={handleActionPointerDown}
+                              className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                            />
+                          }
+                        >
+                          <CheckIcon className="size-3.5" />
+                          Settle
+                        </TooltipTrigger>
+                        <TooltipPopup>Settle thread</TooltipPopup>
+                      </Tooltip>
+                    ) : null}
                   </span>
                 ) : null}
-                <SidebarProviderStack
-                  thread={thread}
-                  providerEntryByInstanceId={props.providerEntryByInstanceId}
-                />
               </span>
-            </div>
+            )}
+            {/* A sweep hides the slot rather than unmounting it, so the
+                  pressed action button stays connected and a cancelled sweep's
+                  release click still fires and is consumed. */}
+            {props.sweepAction !== null ? dragDestination : null}
           </div>
           {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
@@ -2156,15 +2048,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     </li>
   );
 });
-
-function latestRunDiff(
-  thread: SidebarThreadSummary,
-): { insertions: number; deletions: number } | null {
-  // Shells don't carry checkpoint summaries; diff stats render only when the
-  // shell projection grows them. Kept as a seam so the row layout is ready.
-  void thread;
-  return null;
-}
 
 const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   thread: SidebarThreadSummary;
@@ -2651,8 +2534,9 @@ export default function Sidebar() {
     },
     [isMobile, router, setOpenMobile],
   );
-  // Anchor for the scope popup: the header search field, not its icon trigger.
-  const headerSearchRef = useRef<HTMLDivElement | null>(null);
+  // Anchor for the scope popup: the header label row, not its icon trigger.
+  // Fork: Forma moves the scope control into a label row below the search.
+  const headerScopeAnchorRef = useRef<HTMLDivElement | null>(null);
   // Safari can send a click after Ctrl+click opens settings. Ignore that one
   // selection, then clear the guard when the picker opens again.
   const suppressNextScopeChangeRef = useRef(false);
@@ -3831,6 +3715,8 @@ export default function Sidebar() {
         items: sidebarListItems,
         enabled: !isContextDrag,
         boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
+        // Fork: Forma's compact rows (h-7 cards in py-0.5, h-7 slim rows).
+        restingRowHeights: SIDEBAR_RESTING_ROW_HEIGHTS,
         settledOrder: draggedSettledOrder,
         ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
         settledExpanded: settledShelfExpanded,
@@ -4835,7 +4721,8 @@ export default function Sidebar() {
           // header and would otherwise paint across the search row's outline.
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
-              searchFieldRef={headerSearchRef}
+              scopeAnchorRef={headerScopeAnchorRef}
+              scopeLabel={scopedProjectGroup?.displayName ?? "Projects"}
               hasProjects={projectGroups.length > 0}
               projectScope={
                 <Combobox
@@ -4873,23 +4760,19 @@ export default function Sidebar() {
                       />
                     }
                   >
-                    {scopedProjectGroup ? (
-                      // Wrapped so the button's direct-child svg color rule cannot override
-                      // a project's own icon color.
-                      <span className="flex shrink-0">
-                        <ProjectFavicon project={scopedProjectGroup} className="size-4" />
-                      </span>
-                    ) : (
-                      <FolderIcon className="size-4" />
-                    )}
+                    {/* Fork: Forma's filter mark; the label row beside it
+                        names the scoped project, so no favicon swap. */}
+                    <SidebarFilterIcon
+                      className={cn("size-3.5", scopedProjectGroup && "text-foreground")}
+                    />
                   </ComboboxTrigger>
                   <ComboboxPopup
                     align="start"
-                    // Anchored to the search field, not the 28px trigger: the
-                    // popup opens under the field, is at least as wide as it,
+                    // Anchored to the label row, not the small trigger: the
+                    // popup opens under the row, is at least as wide as it,
                     // and grows to fit project names up to a cap, past which
                     // the rows truncate.
-                    anchor={headerSearchRef}
+                    anchor={headerScopeAnchorRef}
                     className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
                   >
                     <ComboboxSearchInput
@@ -4959,7 +4842,8 @@ export default function Sidebar() {
                                   void handleProjectSettings(event, project);
                                 }}
                               >
-                                <SettingsIcon className="size-3.5" />
+                                {/* Fork: Forma's settings mark. */}
+                                <SettingsHexIcon className="size-3.5" />
                               </Button>
                             ) : null}
                           </ComboboxItem>
@@ -5058,6 +4942,12 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
+          {/* Fork: TODO(grouped projects) — the fork's all-projects view split
+              this list into collapsible, drag-reorderable per-project
+              sections. Upstream's v2 list is one section-based DnD list
+              (cross-section drags pin/settle/unsnooze, Working shelf at the
+              bottom), so per-project grouping would fight that model; it is
+              not re-implemented until it can be designed against it. */}
           {!isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
@@ -5170,7 +5060,6 @@ export default function Sidebar() {
                             jumpLabel={
                               showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null
                             }
-                            currentEnvironmentId={primaryEnvironmentId}
                             environmentLabel={
                               environmentLabelById.get(thread.environmentId) ?? null
                             }
@@ -5381,9 +5270,10 @@ export default function Sidebar() {
                         <button
                           type="button"
                           onClick={showMoreSettled}
-                          className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                          // Fork: compact like the slim rows around it.
+                          className="flex h-7 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-xs text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                         >
-                          <PlusIcon aria-hidden className="size-4 shrink-0" />
+                          <PlusIcon aria-hidden className="size-3.5 shrink-0" />
                           Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
                         </button>
                       </li>

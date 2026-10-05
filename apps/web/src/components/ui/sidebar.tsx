@@ -601,10 +601,21 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarFooter({
+  className,
+  size = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  // Fork: `inset` pads Forma's footer evenly on every side.
+  size?: "default" | "inset";
+}) {
   return (
     <div
-      className={cn("flex flex-col gap-2 px-[var(--sidebar-content-inset)] py-1", className)}
+      className={cn(
+        "flex flex-col gap-2 px-[var(--sidebar-content-inset)] py-1",
+        size === "inset" && "p-[var(--sidebar-content-inset)]",
+        className,
+      )}
       data-sidebar="footer"
       data-slot="sidebar-footer"
       {...props}
@@ -652,11 +663,19 @@ function SidebarContent({
   );
 }
 
-function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarGroup({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  // Fork: `header` is Forma's legacy sidebar search row (tighter bottom inset).
+  variant?: "default" | "header";
+}) {
   return (
     <div
       className={cn(
         "relative flex w-full min-w-0 flex-col p-[var(--sidebar-content-inset)]",
+        variant === "header" && "px-2 pt-2 pb-1",
         className,
       )}
       data-sidebar="group"
@@ -706,6 +725,13 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: "font-medium text-sidebar-muted-foreground/80",
         outline: "bg-sidebar-control-surface ring-1 ring-sidebar-border",
+        // Fork: Forma's legacy sidebar search trigger, a bordered pill on the accent surface.
+        search:
+          "h-9 gap-2 rounded-xl border border-border/60 bg-accent/70 px-2.5 py-1.5 font-medium text-muted-foreground/70 shadow-sm/5 transition-colors hover:bg-accent/85 hover:text-foreground focus-visible:ring-0",
+        // Fork: Forma's project header row; the header group keeps it lit while its
+        // overlaid actions are hovered.
+        project:
+          "gap-2 px-2 py-1.5 font-medium text-sidebar-muted-foreground/80 hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-foreground",
       },
     },
   },
@@ -764,12 +790,20 @@ function SidebarMenuButton({
   );
 }
 
-function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
+function SidebarMenuSub({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"ul"> & {
+  // Fork: `flush` is Forma's legacy thread list (no rail, tight rows).
+  variant?: "default" | "flush";
+}) {
   return (
     <ul
       className={cn(
         "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-sidebar-border border-l px-2.5 py-0.5",
         "group-data-[collapsible=icon]:hidden",
+        variant === "flush" && "gap-0.5 border-l-0 px-1.5 py-0",
         className,
       )}
       data-sidebar="menu-sub"
@@ -792,12 +826,15 @@ function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">)
 
 function SidebarMenuSubButton({
   size = "md",
+  variant = "default",
   isActive = false,
   className,
   render,
   ...props
 }: useRender.ComponentProps<"a"> & {
   size?: "sm" | "md";
+  // Fork: `subtle` is Forma's quiet "Show more / Show less" row.
+  variant?: "default" | "subtle";
   isActive?: boolean;
 }) {
   const defaultProps = {
@@ -807,6 +844,8 @@ function SidebarMenuSubButton({
       size === "sm" && "text-xs",
       size === "md" && "text-sm",
       "group-data-[collapsible=icon]:hidden",
+      variant === "subtle" &&
+        "h-6 px-2 text-left text-ui-2xs text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80",
       className,
     ),
     "data-active": isActive,

@@ -22,8 +22,8 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
-import { resolveThreadRouteRef } from "../threadRoutes";
-import { cn, isMacPlatform } from "../lib/utils";
+import { resolveThreadRouteRef, resolveThreadRouteTarget } from "../threadRoutes";
+import { isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useLegacySidebarEnabled } from "../hooks/useSettings";
 import {
@@ -87,10 +87,15 @@ function SidebarToggleKeybinding() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
-  // Fork: Forma's home and settings headers mount their own reopen button.
-  const hasInlineReopenButton = useLocation({
+  // Fork: Forma's home, settings, and chat headers mount their own reopen button.
+  const onInlineReopenPage = useLocation({
     select: (location) => location.pathname === "/" || location.pathname.startsWith("/settings"),
   });
+  const onThreadRoute = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteTarget(params) !== null,
+  });
+  const hasInlineReopenButton = onInlineReopenPage || onThreadRoute;
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle", {
     context: { usagePageOpen },
   });
@@ -306,13 +311,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           side="left"
           collapsible="offcanvas"
           data-app-sidebar=""
-          // Fork: Forma's inset sidebar card and version-scoped theme tokens.
+          // Fork: Forma's inset sidebar card and version-scoped theme tokens
+          // (index.css paints the surface and text from data-sidebar-version).
           data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
           variant="inset"
-          className={cn(
-            "bg-sidebar text-sidebar-foreground",
-            !useSidebarV2Theme && "forma-sidebar-v1",
-          )}
           role="navigation"
           aria-label={isOnSettings ? "Settings" : "Threads"}
           resizable={{

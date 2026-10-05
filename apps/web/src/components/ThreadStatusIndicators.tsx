@@ -868,7 +868,8 @@ export function SidebarStatusGlyph({
       data-status-glyph={glyph}
     >
       {glyph === "grid" ? (
-        <PixelGridLoader variant="sidebar" className="text-current" />
+        // Fork: only in-motion states animate; calm ones (Monitoring, Waiting) rest lit.
+        <PixelGridLoader variant="sidebar" animate={status.pulse} />
       ) : glyph === "file-text" ? (
         <SidebarPlanReadyIcon className="size-3" />
       ) : glyph === "check-check" ? (

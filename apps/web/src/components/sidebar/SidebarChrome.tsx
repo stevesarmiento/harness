@@ -13,7 +13,6 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
 import {
   SidebarFooter,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -32,14 +31,18 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron: boolean;
 }) {
   return (
-    <SidebarHeader
+    // Fork: Forma's titlebar row is a plain element (like upstream's), not a
+    // padded SidebarHeader: it aligns to the window controls.
+    <div
       className={cn(
-        "@container/sidebar-header relative isolate shrink-0 flex-row items-center justify-between overflow-hidden",
+        "@container/sidebar-header relative isolate flex shrink-0 flex-row items-center justify-between overflow-hidden",
         isElectron
-          ? "h-[42px] gap-2 px-3 py-0 wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]"
+          ? "h-[42px] gap-2 px-3 py-0 wco:h-[env(titlebar-area-height)] wco:pl-titlebar-area"
           : "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3",
         isElectron && "drag-region",
       )}
+      data-sidebar="header"
+      data-slot="sidebar-header"
     >
       <SidebarTrigger className="relative z-10 md:hidden" />
       <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 pl-1">
@@ -61,7 +64,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         />
         <TooltipPopup side="bottom">Collapse sidebar</TooltipPopup>
       </Tooltip>
-    </SidebarHeader>
+    </div>
   );
 });
 
@@ -222,7 +225,8 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter({
   variant: "v1" | "v2";
 }) {
   return (
-    <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+    // Fork: Forma's evenly inset footer.
+    <SidebarFooter size="inset">
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />

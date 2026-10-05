@@ -5,7 +5,7 @@ export function FinderIcon(props: SVGProps<SVGSVGElement>) {
     <svg {...props} viewBox="0 0 389 389" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M159.5 124L195.5 11.9999H303.5L341.5 22.4999L369.5 43.9999L376.5 86.9999V308L369.5 342.5L334.5 372L299.5 380H228.5L210.5 301V243L205.5 223H159.5L148.5 202L159.5 124Z"
-        fill="white"
+        fill="var(--color-white)"
         fillOpacity="0.1"
       />
       <path
