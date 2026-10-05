@@ -1,13 +1,15 @@
-import type { ThreadExtensionState } from "@t3tools/contracts";
+import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 import { proposedPlanTitle } from "../proposedPlan";
 import type { Project, Thread } from "../types";
 
 export interface ThreadMarkdownExportInput {
   readonly thread: Thread;
+  /** The thread's V2 detail projection: the transcript, plans, and checkpoints. */
+  readonly projection: OrchestrationV2ThreadProjection;
   readonly project?: Pick<Project, "id" | "title" | "workspaceRoot"> | null;
   readonly workspaceRoot?: string | null | undefined;
-  readonly extensionState?: ThreadExtensionState | null | undefined;
 }
 
 function stableSerialize(value: unknown): unknown {
@@ -29,17 +31,16 @@ function metadata(label: string, value: string | null | undefined): string {
   return `- ${label}: ${value && value.trim().length > 0 ? value : "n/a"}`;
 }
 
-function messagesSection(thread: Thread): string {
-  if (thread.messages.length === 0) return "None.";
-  return thread.messages
+function messagesSection(projection: OrchestrationV2ThreadProjection): string {
+  if (projection.messages.length === 0) return "None.";
+  return projection.messages
     .map((message, index) => {
-      const messageAttachments = message.attachments ?? [];
       const attachments =
-        messageAttachments.length === 0
+        message.attachments.length === 0
           ? ["Attachments: none"]
           : [
               "Attachments:",
-              ...messageAttachments.map((attachment) =>
+              ...message.attachments.map((attachment) =>
                 [
                   `- Type: ${attachment.type}`,
                   `  Name: ${attachment.name}`,
@@ -52,8 +53,8 @@ function messagesSection(thread: Thread): string {
         `### Message ${index + 1}`,
         metadata("Role", message.role),
         metadata("Message ID", message.id),
-        metadata("Timestamp", message.createdAt),
-        metadata("Turn ID", message.turnId ?? null),
+        metadata("Timestamp", DateTime.formatIso(message.createdAt)),
+        metadata("Run ID", message.runId),
         ...attachments,
         "Body:",
         "```md",
@@ -64,21 +65,19 @@ function messagesSection(thread: Thread): string {
     .join("\n\n");
 }
 
-function plansSection(thread: Thread): string {
-  if (thread.proposedPlans.length === 0) return "None.";
-  return thread.proposedPlans
+function plansSection(projection: OrchestrationV2ThreadProjection): string {
+  const plans = projection.plans.filter((plan) => plan.kind === "proposed_plan");
+  if (plans.length === 0) return "None.";
+  return plans
     .map((plan, index) =>
       [
-        `### Plan ${index + 1}: ${proposedPlanTitle(plan.planMarkdown) ?? "Untitled plan"}`,
+        `### Plan ${index + 1}: ${proposedPlanTitle(plan.markdown) ?? "Untitled plan"}`,
         metadata("Plan ID", plan.id),
-        metadata("Created", plan.createdAt),
-        metadata("Updated", plan.updatedAt),
-        metadata("Turn ID", plan.turnId ?? null),
-        metadata("Implemented At", plan.implementedAt),
-        metadata("Implementation Thread ID", plan.implementationThreadId),
+        metadata("Status", plan.status),
+        metadata("Run ID", plan.runId),
         "Body:",
         "```md",
-        plan.planMarkdown,
+        plan.markdown,
         "```",
       ].join("\n"),
     )
@@ -90,15 +89,14 @@ function jsonSection(title: string, value: unknown): string {
 }
 
 export function buildThreadMarkdownExport(input: ThreadMarkdownExportInput): string {
-  const latestTurn = input.thread.latestTurn;
-  const latestTurnSummary = latestTurn
+  const latestRun = input.thread.latestRun;
+  const latestRunSummary = latestRun
     ? [
-        `turn=${latestTurn.turnId}`,
-        `state=${latestTurn.state}`,
-        `requestedAt=${latestTurn.requestedAt}`,
-        `startedAt=${latestTurn.startedAt ?? "n/a"}`,
-        `completedAt=${latestTurn.completedAt ?? "n/a"}`,
-        `assistantMessageId=${latestTurn.assistantMessageId ?? "n/a"}`,
+        `run=${latestRun.runId}`,
+        `status=${latestRun.status}`,
+        `requestedAt=${latestRun.requestedAt ?? "n/a"}`,
+        `startedAt=${latestRun.startedAt ?? "n/a"}`,
+        `completedAt=${latestRun.completedAt ?? "n/a"}`,
       ].join("; ")
     : null;
 
@@ -124,31 +122,31 @@ export function buildThreadMarkdownExport(input: ThreadMarkdownExportInput): str
         : null,
     ),
     metadata("Runtime mode", input.thread.runtimeMode),
-    metadata(
-      "Interaction mode",
-      input.extensionState?.interactionModeOverride ?? input.thread.interactionMode,
-    ),
-    metadata("Session status", input.thread.session?.status),
+    metadata("Interaction mode", input.thread.interactionMode),
+    metadata("Runtime status", input.thread.runtime?.status),
     metadata("Created At", input.thread.createdAt),
     metadata("Updated At", input.thread.updatedAt),
     metadata("Archived At", input.thread.archivedAt),
-    metadata("Latest turn summary", latestTurnSummary),
+    metadata("Latest run summary", latestRunSummary),
     "",
     "## Messages",
     "",
-    messagesSection(input.thread),
+    messagesSection(input.projection),
     "",
     "## Proposed Plans",
     "",
-    plansSection(input.thread),
-    "",
-    jsonSection("Checkpoints", input.thread.checkpoints),
-    "",
-    jsonSection("Activities", input.thread.activities),
+    plansSection(input.projection),
     "",
     jsonSection(
-      "Turn Queue",
-      input.extensionState?.queue ?? { items: [], status: "unavailable", pauseReason: null },
+      "Checkpoints",
+      input.projection.checkpoints.map((checkpoint) => ({
+        id: checkpoint.id,
+        runId: checkpoint.runId,
+        status: checkpoint.status,
+        ref: checkpoint.ref,
+        capturedAt: DateTime.formatIso(checkpoint.capturedAt),
+        files: checkpoint.files,
+      })),
     ),
     "",
   ].join("\n");

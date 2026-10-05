@@ -1,42 +1,99 @@
-import { PanelBottomIcon } from "lucide-react";
-import { memo } from "react";
+import { PanelBottomIcon, SquareMenuIcon } from "lucide-react";
+import { memo, type ReactElement } from "react";
 
+import type { ThreadPanelPresentation } from "../../rightPanelLayout";
 import { HeaderIconActionButton } from "../HeaderIconActionButton";
+import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PanelCollapseIcon, PanelExpandIcon, SidebarPanelIcon } from "../icons/custom";
 
-interface PanelLayoutControlsProps {
+export interface PanelLayoutControlsProps {
+  showThreadPanelControl?: boolean;
   showTerminalControl?: boolean;
+  showRightPanelControl?: boolean;
   terminalAvailable: boolean;
   terminalOpen: boolean;
   terminalShortcutLabel: string | null;
+  threadPanelOpen: boolean;
+  threadPanelPresentation: ThreadPanelPresentation;
+  threadPanelPopoverHandle?: ReturnType<typeof PopoverCreateHandle>;
+  threadPanelShortcutLabel: string | null;
+  threadPanelHasAttention: boolean;
   rightPanelAvailable: boolean;
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
-  /** Running + waiting subagents in this thread; badges the right panel toggle. */
-  liveAgentCount: number;
+  rightPanelUnavailableLabel?: string;
+  /** Fork: running + waiting subagents in this thread; badges the right panel toggle. */
+  liveAgentCount?: number;
   onToggleTerminal: () => void;
+  onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
+  showThreadPanelControl = true,
   showTerminalControl = true,
+  showRightPanelControl = true,
   terminalAvailable,
   terminalOpen,
   terminalShortcutLabel,
+  threadPanelOpen,
+  threadPanelPresentation,
+  threadPanelPopoverHandle,
+  threadPanelShortcutLabel,
+  threadPanelHasAttention,
   rightPanelAvailable,
   rightPanelOpen,
   rightPanelShortcutLabel,
-  liveAgentCount,
+  rightPanelUnavailableLabel = "Right panel is unavailable",
+  liveAgentCount = 0,
   onToggleTerminal,
+  onToggleThreadPanel,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
+  const threadPanelToggle = (
+    <Toggle
+      className="relative shrink-0 [-webkit-app-region:no-drag]"
+      pressed={threadPanelOpen}
+      aria-label="Toggle thread details panel"
+      variant="ghost"
+      size="sm"
+    >
+      <SquareMenuIcon className="size-4" />
+      {threadPanelHasAttention ? (
+        <span
+          className="absolute right-1 top-1 size-1.5 rounded-full bg-warning ring-2 ring-background"
+          aria-hidden="true"
+        />
+      ) : null}
+    </Toggle>
+  );
+  const threadPanelTooltip = (trigger: ReactElement) => (
+    <Tooltip>
+      <TooltipTrigger
+        render={trigger}
+        {...(threadPanelPresentation === "popover" ? {} : { onClick: onToggleThreadPanel })}
+      />
+      <TooltipPopup side="bottom">
+        Toggle thread details
+        {threadPanelShortcutLabel ? ` (${threadPanelShortcutLabel})` : ""}
+      </TooltipPopup>
+    </Tooltip>
+  );
+
   return (
     <div
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
+      {showThreadPanelControl
+        ? threadPanelPresentation === "popover"
+          ? threadPanelTooltip(
+              <PopoverTrigger handle={threadPanelPopoverHandle} render={threadPanelToggle} />,
+            )
+          : threadPanelTooltip(threadPanelToggle)
+        : null}
       {showTerminalControl ? (
         <TerminalDrawerToggleControl
           available={terminalAvailable}
@@ -45,13 +102,16 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
           onToggle={onToggleTerminal}
         />
       ) : null}
-      <RightPanelToggleControl
-        available={rightPanelAvailable}
-        open={rightPanelOpen}
-        shortcutLabel={rightPanelShortcutLabel}
-        liveAgentCount={liveAgentCount}
-        onToggle={onToggleRightPanel}
-      />
+      {showRightPanelControl ? (
+        <RightPanelToggleControl
+          available={rightPanelAvailable}
+          open={rightPanelOpen}
+          shortcutLabel={rightPanelShortcutLabel}
+          unavailableLabel={rightPanelUnavailableLabel}
+          liveAgentCount={liveAgentCount}
+          onToggle={onToggleRightPanel}
+        />
+      ) : null}
     </div>
   );
 });
@@ -97,12 +157,14 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
   available,
   open,
   shortcutLabel,
+  unavailableLabel = "Right panel is unavailable",
   liveAgentCount = 0,
   onToggle,
 }: {
   available: boolean;
   open: boolean;
   shortcutLabel: string | null;
+  unavailableLabel?: string;
   liveAgentCount?: number;
   onToggle: () => void;
 }) {
@@ -144,7 +206,7 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
                 ? ` · ${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} working`
                 : ""
             }`
-          : "Right panel is unavailable"}
+          : unavailableLabel}
       </TooltipPopup>
     </Tooltip>
   );

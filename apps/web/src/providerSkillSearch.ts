@@ -1,11 +1,13 @@
 import type { ServerLocalAgentSkill, ServerProviderSkill } from "@t3tools/contracts";
 import {
+  formatProviderSkillDisplayName,
+  isProviderSkillUserInvocable,
+} from "@t3tools/client-runtime/providerSkills";
+import {
   insertRankedSearchResult,
   normalizeSearchQuery,
   scoreQueryMatch,
 } from "@t3tools/shared/searchRanking";
-
-import { formatProviderSkillDisplayName } from "./providerSkillPresentation";
 
 type SearchableSkill = ServerLocalAgentSkill | ServerProviderSkill;
 
@@ -13,7 +15,18 @@ function isLocalSkill(skill: SearchableSkill): skill is ServerLocalAgentSkill {
   return "source" in skill && skill.source === "local-agents";
 }
 
-function scoreProviderSkill(skill: SearchableSkill, query: string): number | null {
+/** dedupeProviderSkillsByName for the mixed local-agent/provider list: first name wins. */
+function dedupeSkillsByName(skills: ReadonlyArray<SearchableSkill>): SearchableSkill[] {
+  const seenNames = new Set<string>();
+  return skills.filter((skill) => {
+    const normalizedName = skill.name.trim().toLowerCase();
+    if (seenNames.has(normalizedName)) return false;
+    seenNames.add(normalizedName);
+    return true;
+  });
+}
+
+export function scoreProviderSkill(skill: SearchableSkill, query: string): number | null {
   const normalizedName = skill.name.toLowerCase();
   const normalizedLabel = formatProviderSkillDisplayName(skill).toLowerCase();
   const normalizedShortDescription = skill.shortDescription?.toLowerCase() ?? "";
@@ -77,8 +90,8 @@ export function searchProviderSkills(
   query: string,
   limit = Number.POSITIVE_INFINITY,
 ): SearchableSkill[] {
-  const enabledSkills = skills.filter((skill) => skill.enabled);
-  const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\$+/ });
+  const enabledSkills = dedupeSkillsByName(skills.filter(isProviderSkillUserInvocable));
+  const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\p{Sc}+/u });
 
   if (!normalizedQuery) {
     return enabledSkills;

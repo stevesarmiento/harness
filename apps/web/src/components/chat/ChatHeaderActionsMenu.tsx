@@ -1,4 +1,3 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type {
   EditorId,
   EnvironmentId,
@@ -7,13 +6,10 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { FileDownIcon, FolderClosedIcon, GitForkIcon, HashIcon, Trash2Icon } from "lucide-react";
-import type { RefObject } from "react";
 import { IconEllipsis as EllipsisIcon } from "symbols-react";
 
-import type { DraftId } from "~/composerDraftStore";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 
-import GitActionsControl, { type GitActionsControlHandle } from "../GitActionsControl";
 import { HeaderIconActionButton } from "../HeaderIconActionButton";
 import { MessageCopyIcon, SidebarArchiveIcon } from "../icons/custom";
 import ProjectScriptsControl, {
@@ -35,15 +31,12 @@ interface ChatHeaderActionsMenuProps {
   routeKind: "server" | "draft";
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
-  draftId?: DraftId;
   activeProjectCwd: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
-  gitActionsRef?: RefObject<GitActionsControlHandle | null> | undefined;
   availableEditors: ReadonlyArray<EditorId>;
-  gitCwd: string | null;
   workspaceRoot: string | null;
   showOpenIn: boolean;
   onRunProjectScript: (script: ProjectScript) => void;
@@ -67,11 +60,10 @@ export function resolveChatHeaderActionVisibility(input: {
   hasProjectActions: boolean;
   hasOpenInCwd: boolean;
   showOpenIn: boolean;
-  hasGitCwd: boolean;
   hasWorkspaceRoot: boolean;
 }) {
   const hasOpenInActions = input.showOpenIn && input.hasOpenInCwd;
-  const hasWorkspaceActions = input.hasProjectActions || hasOpenInActions || input.hasGitCwd;
+  const hasWorkspaceActions = input.hasProjectActions || hasOpenInActions;
   return {
     hasOpenInActions,
     hasWorkspaceActions,
@@ -83,16 +75,12 @@ export function resolveChatHeaderActionVisibility(input: {
 export function ChatHeaderActionsMenu({
   routeKind,
   activeThreadEnvironmentId,
-  activeThreadId,
-  draftId,
   activeProjectCwd,
   openInCwd,
   activeProjectScripts,
   preferredScriptId,
   keybindings,
-  gitActionsRef,
   availableEditors,
-  gitCwd,
   workspaceRoot,
   showOpenIn,
   onRunProjectScript,
@@ -107,19 +95,16 @@ export function ChatHeaderActionsMenu({
   onArchiveThread,
   onDeleteThread,
 }: ChatHeaderActionsMenuProps) {
-  const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
   const fileScripts = useT3ProjectFileScripts(
     activeThreadEnvironmentId,
     activeProjectScripts ? activeProjectCwd : null,
   );
   const hasProjectActions = activeProjectScripts !== undefined;
-  const hasGitActions = gitCwd !== null;
   const visibility = resolveChatHeaderActionVisibility({
     routeKind,
     hasProjectActions,
     hasOpenInCwd: openInCwd !== null,
     showOpenIn,
-    hasGitCwd: hasGitActions,
     hasWorkspaceRoot: workspaceRoot !== null,
   });
   const { hasOpenInActions, hasWorkspaceActions } = visibility;
@@ -136,14 +121,9 @@ export function ChatHeaderActionsMenu({
   const hasThreadActions = hasDurableThreadActions || Boolean(workspaceRoot && onCopyWorkspacePath);
 
   return (
-    <Menu
-      onOpenChange={(open) => {
-        // Refresh working-tree status when the actions menu opens so the git
-        // commit/push/PR items reflect current changes instead of a stale
-        // snapshot (the item disables itself when status shows no changes).
-        if (open) gitActionsRef?.current?.refreshStatus();
-      }}
-    >
+    // Fork: TODO the git commit/push/PR menu items lived here; upstream's GitActionsControl
+    // dropped its menu-items render mode and imperative handle (git now lives in ThreadDetailsPanel).
+    <Menu>
       <MenuTrigger
         render={<HeaderIconActionButton aria-label="More actions" title="More actions" />}
       >
@@ -166,24 +146,13 @@ export function ChatHeaderActionsMenu({
                 onDeleteScript={onDeleteProjectScript}
               />
             ) : null}
-            {hasProjectActions && (hasOpenInActions || hasGitActions) ? <MenuSeparator /> : null}
+            {hasProjectActions && hasOpenInActions ? <MenuSeparator /> : null}
             {hasOpenInActions ? (
               <OpenInMenuItems
                 environmentId={activeThreadEnvironmentId}
                 keybindings={keybindings}
                 availableEditors={availableEditors}
                 openInCwd={openInCwd}
-              />
-            ) : null}
-            {hasOpenInActions && hasGitActions ? <MenuSeparator /> : null}
-            {hasGitActions ? (
-              <GitActionsControl
-                ref={gitActionsRef}
-                renderMode="menu-items"
-                gitCwd={gitCwd}
-                activeThreadRef={activeThreadRef}
-                keybindings={keybindings}
-                {...(draftId ? { draftId } : {})}
               />
             ) : null}
           </MenuGroup>

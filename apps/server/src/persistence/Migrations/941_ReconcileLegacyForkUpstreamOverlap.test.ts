@@ -1,14 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0941 from "./941_ReconcileLegacyForkUpstreamOverlap.ts";
 
-const freshLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
-const legacyLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const freshLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const legacyLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 const settledColumns = (sql: SqlClient.SqlClient) =>
   sql<{ readonly name: string }>`
@@ -65,8 +64,12 @@ legacyLayer("941_ReconcileLegacyForkUpstreamOverlap legacy overlap database", (i
           (34, 'EnsureProviderInstanceIdColumns', '2026-05-10T00:00:00.000Z')
       `;
 
-      // Running the rest of the chain skips upstream 032-034 (ids recorded)
-      // but 941 replays their idempotent effects.
+      // Running the chain through 040 skips upstream 032-034 (ids recorded);
+      // 941 then replays their idempotent effects. Upstream 041+ (e.g. 043 and
+      // 046) read the restored settlement columns, so 941 must land first on
+      // such a database — the only live legacy database already recorded it.
+      yield* runMigrations({ toMigrationInclusive: 40 });
+      yield* Migration0941;
       yield* runMigrations();
 
       assert.deepStrictEqual(yield* settledColumns(sql), [

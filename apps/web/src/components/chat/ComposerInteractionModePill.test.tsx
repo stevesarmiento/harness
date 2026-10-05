@@ -7,7 +7,6 @@ import { composerInteractionModeConfig } from "./composerInteractionMode";
 describe("ComposerInteractionModePill", () => {
   it.each([
     ["default", "Build", "sky"],
-    ["ask", "Ask", "emerald"],
     ["plan", "Plan", "amber"],
   ] as const)("renders the %s Forma treatment", (mode, label, color) => {
     const markup = renderToStaticMarkup(<ComposerInteractionModePill interactionMode={mode} />);

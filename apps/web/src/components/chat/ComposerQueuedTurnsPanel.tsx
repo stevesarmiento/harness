@@ -1,4 +1,5 @@
-import type { ThreadExtensionState } from "@t3tools/contracts";
+import type { ThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
+import type { RunId } from "@t3tools/contracts";
 import { memo } from "react";
 import { PlayIcon, Trash2Icon } from "lucide-react";
 
@@ -10,10 +11,8 @@ import {
 } from "./composerPopoverStyles";
 
 interface ComposerQueuedTurnsPanelProps {
-  queue: ThreadExtensionState["queue"];
-  onRemoveQueuedTurn: (
-    messageId: ThreadExtensionState["queue"]["items"][number]["messageId"],
-  ) => void;
+  queue: Pick<ThreadQueueWorkflowState, "queuedRuns" | "isHeld">;
+  onRemoveQueuedTurn: (runId: RunId) => void;
   onResumeTurnQueue: () => void;
 }
 
@@ -22,9 +21,9 @@ export const ComposerQueuedTurnsPanel = memo(function ComposerQueuedTurnsPanel({
   onRemoveQueuedTurn,
   onResumeTurnQueue,
 }: ComposerQueuedTurnsPanelProps) {
-  if (queue.items.length === 0) return null;
+  if (queue.queuedRuns.length === 0) return null;
 
-  const paused = queue.status === "paused";
+  const paused = queue.isHeld;
   return (
     <div
       data-composer-queue-panel="true"
@@ -42,7 +41,7 @@ export const ComposerQueuedTurnsPanel = memo(function ComposerQueuedTurnsPanel({
             {paused ? "Paused" : "Queued"}
           </span>
           <span className="text-muted-foreground/70 text-xs">
-            {queue.items.length} {queue.items.length === 1 ? "turn" : "turns"}
+            {queue.queuedRuns.length} {queue.queuedRuns.length === 1 ? "turn" : "turns"}
           </span>
         </div>
         {paused ? (
@@ -58,11 +57,11 @@ export const ComposerQueuedTurnsPanel = memo(function ComposerQueuedTurnsPanel({
         ) : null}
       </div>
       <div className="max-h-44 overflow-y-auto px-2 pb-2">
-        {queue.items.map((turn) => {
+        {queue.queuedRuns.map((turn) => {
           const preview = turn.text.trim() || "(Image-only prompt)";
           return (
             <div
-              key={turn.messageId}
+              key={turn.run.id}
               className="group flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors duration-(--motion-duration-fast) hover:bg-accent/65 motion-reduce:transition-none"
             >
               <div className="min-w-0 flex-1 truncate text-foreground" title={preview}>
@@ -74,7 +73,7 @@ export const ComposerQueuedTurnsPanel = memo(function ComposerQueuedTurnsPanel({
                 className="shrink-0 rounded-md text-muted-foreground/70 hover:bg-transparent hover:text-foreground"
                 aria-label={`Remove queued turn: ${preview}`}
                 title="Remove queued turn"
-                onClick={() => onRemoveQueuedTurn(turn.messageId)}
+                onClick={() => onRemoveQueuedTurn(turn.run.id)}
               >
                 <Trash2Icon className="size-3.5" />
               </Button>

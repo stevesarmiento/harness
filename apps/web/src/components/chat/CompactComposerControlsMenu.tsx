@@ -1,10 +1,6 @@
-import type {
-  FormaInteractionMode,
-  ServerProviderSupportedInteractionMode,
-} from "@t3tools/contracts";
+import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
 import { IconEllipsis as EllipsisIcon } from "symbols-react";
-import { Button } from "../ui/button";
 import {
   Menu,
   MenuPopup,
@@ -13,32 +9,61 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
+import { cn } from "~/lib/utils";
+import { ComposerControl } from "./ComposerControl";
 import { composerInteractionModeConfig } from "./composerInteractionMode";
+import { useComposerMenuProps } from "./composerEventScope";
+import { useComposerMenuState } from "./useComposerMenuState";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
-  interactionMode: FormaInteractionMode;
-  supportedInteractionModes: ReadonlyArray<ServerProviderSupportedInteractionMode>;
+  interactionMode: ProviderInteractionMode;
+  runtimeMode: RuntimeMode;
+  runtimeModeOptions: ReadonlyArray<{
+    readonly mode: RuntimeMode;
+    readonly label: string;
+  }>;
   showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
-  onInteractionModeChange: (mode: FormaInteractionMode) => void;
+  size?: "sm" | "xs";
+  /**
+   * The resting strip keeps this menu mounted out of flow while every block
+   * fits inline. Its portaled popup would outlive that transition, so an
+   * open menu closes when its trigger hides.
+   */
+  hidden?: boolean;
+  onToggleInteractionMode: () => void;
+  onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const composerFloatingLayerProps = useComposerMenuProps();
+  const size = props.size ?? "sm";
+  const [open, setOpen] = useComposerMenuState(props.hidden);
   const interactionModeDescription =
     composerInteractionModeConfig[props.interactionMode].description;
+  const BuildModeIcon = composerInteractionModeConfig.default.icon;
+  const PlanModeIcon = composerInteractionModeConfig.plan.icon;
+
   return (
-    <Menu>
+    <Menu open={open} onOpenChange={setOpen}>
       <MenuTrigger
         render={
-          <Button
-            size="sm"
-            variant="ghost"
-            className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
+          <ComposerControl
+            size={size}
+            className="shrink-0"
             aria-label="More composer controls"
+            data-composer-shortcut={
+              props.traitsMenuContent ? "composer.mode composer.effort" : "composer.mode"
+            }
           />
         }
       >
-        <EllipsisIcon aria-hidden="true" className="size-4" />
+        {/* Fork: symbols-react icons don't fit ComposerControlIcon's SVGProps type. */}
+        <EllipsisIcon
+          aria-hidden="true"
+          className={cn("shrink-0 fill-current", size === "xs" ? "size-3" : "size-4")}
+          data-composer-control-icon
+        />
       </MenuTrigger>
-      <MenuPopup align="start">
+      <MenuPopup align="start" {...composerFloatingLayerProps}>
         {props.traitsMenuContent ? (
           <>
             {props.traitsMenuContent}
@@ -55,35 +80,35 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
               value={props.interactionMode}
               onValueChange={(value) => {
                 if (!value || value === props.interactionMode) return;
-                props.onInteractionModeChange(value as FormaInteractionMode);
+                props.onToggleInteractionMode();
               }}
             >
               <MenuRadioItem value="default">
-                {(() => {
-                  const Icon = composerInteractionModeConfig.default.icon;
-                  return <Icon className="size-3.5 fill-current" />;
-                })()}
+                <BuildModeIcon className="size-3.5 fill-current" />
                 Build
               </MenuRadioItem>
-              {props.supportedInteractionModes.includes("ask") ? (
-                <MenuRadioItem value="ask">
-                  {(() => {
-                    const Icon = composerInteractionModeConfig.ask.icon;
-                    return <Icon className="size-3.5 fill-current" />;
-                  })()}
-                  Ask
-                </MenuRadioItem>
-              ) : null}
               <MenuRadioItem value="plan">
-                {(() => {
-                  const Icon = composerInteractionModeConfig.plan.icon;
-                  return <Icon className="size-3.5 fill-current" />;
-                })()}
+                <PlanModeIcon className="size-3.5 fill-current" />
                 Plan
               </MenuRadioItem>
             </MenuRadioGroup>
+            <MenuDivider />
           </>
         ) : null}
+        <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
+        <MenuRadioGroup
+          value={props.runtimeMode}
+          onValueChange={(value) => {
+            if (!value || value === props.runtimeMode) return;
+            props.onRuntimeModeChange(value as RuntimeMode);
+          }}
+        >
+          {props.runtimeModeOptions.map((option) => (
+            <MenuRadioItem key={option.mode} value={option.mode}>
+              {option.label}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
       </MenuPopup>
     </Menu>
   );

@@ -14,6 +14,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private latestContents = "";
   private latestRevision = 0;
+  private confirmedRevision = 0;
   private lastChangeAt = 0;
   private saving = false;
   private disposed = false;
@@ -22,6 +23,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   constructor(private readonly options: FileSaveCoordinatorOptions<A, E>) {}
 
   change(contents: string): void {
+    if (this.disposed) return;
     this.latestContents = contents;
     this.latestRevision += 1;
     this.lastChangeAt = Date.now();
@@ -38,6 +40,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   reset(): void {
     this.clearTimer();
     this.latestRevision = 0;
+    this.confirmedRevision = 0;
     this.paused = false;
     this.options.onPendingChange(false);
   }
@@ -63,7 +66,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   }
 
   private async persistLatest(): Promise<void> {
-    if (this.saving || this.latestRevision === 0) return;
+    if (this.saving || this.latestRevision === this.confirmedRevision) return;
 
     this.saving = true;
     const contents = this.latestContents;
@@ -71,8 +74,11 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
     const result = await this.options.persist(contents);
     const succeeded = result._tag === "Success";
     if (result._tag === "Success") {
+      this.confirmedRevision = revision;
+      // Fork: surface the persist result value (e.g. the new file version).
       this.options.onConfirmed(contents, result.value);
     } else if (result._tag === "Failure") {
+      // Fork: let the owner pause autosave after a failed persist.
       this.paused = this.options.onFailed?.(result).pause ?? false;
     }
 

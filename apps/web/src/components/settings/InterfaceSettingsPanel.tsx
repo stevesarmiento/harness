@@ -5,6 +5,7 @@ import {
   DEFAULT_UNIFIED_SETTINGS,
   MAX_INTERFACE_FONT_SIZE,
   MIN_INTERFACE_FONT_SIZE,
+  type ResponseStreamingMode,
 } from "@t3tools/contracts/settings";
 import { useNavigate } from "@tanstack/react-router";
 import { IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon } from "symbols-react";
@@ -43,7 +44,6 @@ import { Button } from "../ui/button";
 import { TypographySection } from "./SettingsPanels";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { Switch } from "../ui/switch";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -58,6 +58,16 @@ const THEME_MODE_LABELS = {
   dark: "Dark",
   highContrast: "High Contrast",
 } as const;
+
+const RESPONSE_STREAMING_MODE_LABELS: Record<ResponseStreamingMode, string> = {
+  turn: "Wait for the full response",
+  paragraph: "Show finished paragraphs",
+};
+
+const RESPONSE_STREAMING_MODE_DESCRIPTIONS: Record<ResponseStreamingMode, string> = {
+  turn: "Text appears once the agent finishes its turn.",
+  paragraph: "Each paragraph or code block appears as soon as it is complete.",
+};
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
@@ -355,28 +365,42 @@ export function InterfaceSettingsPanel() {
 
         <SettingsRow
           title="Assistant output"
-          description="Show token-by-token output while a response is in progress."
+          description={RESPONSE_STREAMING_MODE_DESCRIPTIONS[settings.responseStreamingMode]}
           resetAction={
-            settings.enableLegacyTokenStreaming !==
-            DEFAULT_UNIFIED_SETTINGS.enableLegacyTokenStreaming ? (
+            settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode ? (
               <SettingResetButton
                 label="assistant output"
                 onClick={() =>
                   updateSettings({
-                    enableLegacyTokenStreaming: DEFAULT_UNIFIED_SETTINGS.enableLegacyTokenStreaming,
+                    responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
                   })
                 }
               />
             ) : null
           }
           control={
-            <Switch
-              checked={settings.enableLegacyTokenStreaming}
-              onCheckedChange={(checked) =>
-                updateSettings({ enableLegacyTokenStreaming: Boolean(checked) })
-              }
-              aria-label="Stream assistant messages"
-            />
+            <Select
+              value={settings.responseStreamingMode}
+              onValueChange={(value) => {
+                if (value === "turn" || value === "paragraph") {
+                  updateSettings({ responseStreamingMode: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-56" aria-label="Assistant output">
+                <SelectValue>
+                  {RESPONSE_STREAMING_MODE_LABELS[settings.responseStreamingMode]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="turn">
+                  {RESPONSE_STREAMING_MODE_LABELS.turn}
+                </SelectItem>
+                <SelectItem hideIndicator value="paragraph">
+                  {RESPONSE_STREAMING_MODE_LABELS.paragraph}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
           }
         />
       </SettingsSection>

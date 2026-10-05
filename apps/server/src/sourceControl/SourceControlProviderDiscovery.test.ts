@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Option } from "effect";
+import * as Option from "effect/Option";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import {

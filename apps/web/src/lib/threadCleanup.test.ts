@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ThreadCleanupThread } from "./threadCleanup";
@@ -11,12 +11,11 @@ import {
 function makeThread(id: string, overrides: Partial<ThreadCleanupThread> = {}): ThreadCleanupThread {
   return {
     id: ThreadId.make(id),
-    session: null,
+    runtime: null,
     createdAt: "2026-04-01T00:00:00.000Z",
     archivedAt: null,
     updatedAt: "2026-04-01T12:00:00.000Z",
     latestUserMessageAt: "2026-04-01T18:00:00.000Z",
-    queuedTurnCount: 0,
     ...overrides,
   };
 }
@@ -76,7 +75,14 @@ describe("bucketThreadsForCleanup", () => {
       threads: [
         makeThread("queued", {
           latestUserMessageAt: "2026-04-01T00:00:00.000Z",
-          queuedTurnCount: 2,
+          runtime: {
+            status: "queued",
+            activeRunId: null,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            providerName: null,
+            lastError: null,
+            updatedAt: "2026-04-01T00:00:00.000Z",
+          },
         }),
       ],
       inactiveDays: 1,
@@ -85,5 +91,28 @@ describe("bucketThreadsForCleanup", () => {
 
     expect(buckets.eligible).toEqual([]);
     expect(buckets.skippedQueued.map((thread) => thread.id)).toEqual([ThreadId.make("queued")]);
+  });
+
+  it("never offers a thread whose provider is mid-turn", () => {
+    const buckets = bucketThreadsForCleanup({
+      threads: [
+        makeThread("running", {
+          latestUserMessageAt: "2026-04-01T00:00:00.000Z",
+          runtime: {
+            status: "running",
+            activeRunId: "run-1" as never,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            providerName: null,
+            lastError: null,
+            updatedAt: "2026-04-01T00:00:00.000Z",
+          },
+        }),
+      ],
+      inactiveDays: 1,
+      now: Date.parse("2026-04-03T00:00:00.000Z"),
+    });
+
+    expect(buckets.eligible).toEqual([]);
+    expect(buckets.skippedRunning.map((thread) => thread.id)).toEqual([ThreadId.make("running")]);
   });
 });

@@ -18,9 +18,12 @@ const systemDark =
   typeof window.matchMedia === "function" &&
   window.matchMedia(THEME_MEDIA_QUERY).matches;
 
-applyThemePreferenceToDocument(readStoredThemeSettings(), {
-  document,
-  systemDark,
-});
+// Runs from the boot entry, so it must tolerate stub documents (boot tests).
+if (typeof document !== "undefined" && document.documentElement) {
+  applyThemePreferenceToDocument(readStoredThemeSettings(), {
+    document,
+    systemDark,
+  });
 
-applyInterfaceSettingsToDocument(readStoredInterfaceAppearanceSettings(), document);
+  applyInterfaceSettingsToDocument(readStoredInterfaceAppearanceSettings(), document);
+}

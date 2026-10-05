@@ -1,8 +1,4 @@
-import type {
-  EnvironmentApi,
-  ServerLocalAgentCommand,
-  ServerLocalAgentInventory,
-} from "@t3tools/contracts";
+import type { ServerLocalAgentCommand, ServerLocalAgentInventory } from "@t3tools/contracts";
 import {
   parseLocalAgentCommandJsonDocument,
   parseLocalAgentCommandMarkdownDocument,
@@ -42,25 +38,13 @@ function parseStandaloneLocalCommandInvocation(
   };
 }
 
-async function readProjectFile(
-  input: {
-    readonly api?: EnvironmentApi;
-    readonly readFileContents?: (relativePath: string) => Promise<string>;
-  },
-  cwd: string,
+// Fork: V2 clients read workspace files through atom commands, so callers
+// supply the reader (the old EnvironmentApi object no longer exists).
+function readProjectFile(
+  input: { readonly readFileContents: (relativePath: string) => Promise<string> },
   relativePath: string,
 ): Promise<string> {
-  if (input.readFileContents) {
-    return input.readFileContents(relativePath);
-  }
-  if (!input.api) {
-    throw new Error("Project-local prompt expansion requires a workspace file reader.");
-  }
-  const file = await input.api.projects.readFile({
-    cwd,
-    relativePath,
-  });
-  return file.contents;
+  return input.readFileContents(relativePath);
 }
 
 function buildLocalSkillContextBlock(input: {
@@ -86,8 +70,7 @@ function buildLocalSkillContextBlock(input: {
 }
 
 async function expandLocalCommandPrompt(input: {
-  api?: EnvironmentApi;
-  readFileContents?: (relativePath: string) => Promise<string>;
+  readFileContents: (relativePath: string) => Promise<string>;
   cwd: string;
   prompt: string;
   inventory: ServerLocalAgentInventory;
@@ -97,7 +80,7 @@ async function expandLocalCommandPrompt(input: {
     return input.prompt;
   }
 
-  const contents = await readProjectFile(input, input.cwd, invocation.command.path);
+  const contents = await readProjectFile(input, invocation.command.path);
   const parsed = invocation.command.path.endsWith("/command.json")
     ? parseLocalAgentCommandJsonDocument({
         contents,
@@ -122,8 +105,7 @@ async function expandLocalCommandPrompt(input: {
 }
 
 async function expandLocalSkillPrompt(input: {
-  api?: EnvironmentApi;
-  readFileContents?: (relativePath: string) => Promise<string>;
+  readFileContents: (relativePath: string) => Promise<string>;
   cwd: string;
   prompt: string;
   inventory: ServerLocalAgentInventory;
@@ -154,7 +136,7 @@ async function expandLocalSkillPrompt(input: {
   const skillDocuments = await Promise.all(
     orderedLocalSkillNames.map(async (skillName) => {
       const skill = localSkillByName.get(skillName)!;
-      const contents = await readProjectFile(input, input.cwd, skill.path);
+      const contents = await readProjectFile(input, skill.path);
       const parsed = parseLocalAgentSkillDocument({
         contents,
         defaultName: skill.name,
@@ -178,8 +160,7 @@ async function expandLocalSkillPrompt(input: {
 }
 
 export async function expandProjectLocalAgentsPrompt(input: {
-  api?: EnvironmentApi;
-  readFileContents?: (relativePath: string) => Promise<string>;
+  readFileContents: (relativePath: string) => Promise<string>;
   cwd: string;
   prompt: string;
   inventory: ServerLocalAgentInventory;

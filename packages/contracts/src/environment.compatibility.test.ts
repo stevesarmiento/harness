@@ -31,8 +31,8 @@ describe("execution environment extension compatibility", () => {
       capabilities: { repositoryIdentity: true },
     });
 
-    assert.strictEqual(descriptor.capabilities.componentPreview, undefined);
-    assert.strictEqual(descriptor.capabilities.threadExtensions, undefined);
+    assert.strictEqual(descriptor.capabilities.projectLocalAgents, undefined);
+    assert.strictEqual(descriptor.capabilities.customAppIcons, undefined);
   });
 
   it("lets a frozen upstream decoder ignore additive capability fields", () => {
@@ -43,11 +43,9 @@ describe("execution environment extension compatibility", () => {
       serverVersion: "0.0.31",
       capabilities: {
         repositoryIdentity: true,
-        componentPreview: true,
         projectLocalAgents: true,
         versionedProjectFiles: true,
         projectEntryMutations: true,
-        threadExtensions: true,
         customAppIcons: true,
       },
     });

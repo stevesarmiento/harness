@@ -32,7 +32,6 @@ import {
 import { ThreadRowLeadingStatus } from "./ThreadStatusIndicators";
 import { AddProjectIcon, HouseIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "~/components/ui/sidebar";
 import { WorkspaceHeaderTitle } from "~/components/WorkspaceHeaderTitle";
 
@@ -40,7 +39,7 @@ const SECTION_HEADING_CLASS_NAME =
   "text-ui-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/64";
 const LIST_TABLE_SHELL_CLASS_NAME = "rounded-[1.3rem] bg-foreground/5 p-1";
 const LIST_TABLE_INNER_CLASS_NAME =
-  "overflow-hidden rounded-[1.15rem] border border-border/55 bg-white dark:bg-white/5 shadow-sm";
+  "relative flex flex-col text-card-foreground overflow-hidden rounded-[1.15rem] border border-border/55 bg-white dark:bg-white/5 shadow-sm";
 const LIST_TABLE_HEADER_ROW_CLASS_NAME = "hidden items-center gap-4 px-4 py-2 md:grid";
 const LIST_TABLE_HEADER_CELL_CLASS_NAME =
   "text-ui-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/68";
@@ -133,8 +132,13 @@ function ThreadListRow({
               <ThreadBreadcrumbProjectChipContent
                 icon={
                   <ProjectFavicon
-                    environmentId={item.thread.environmentId}
-                    cwd={item.project?.workspaceRoot ?? item.thread.worktreePath ?? ""}
+                    project={
+                      item.project ?? {
+                        environmentId: item.thread.environmentId,
+                        workspaceRoot: item.thread.worktreePath ?? "",
+                        title: resolveThreadProjectLabel(item),
+                      }
+                    }
                     className="size-3 shrink-0"
                   />
                 }
@@ -188,11 +192,7 @@ function ProjectListRow({
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-2xl bg-accent/35">
-          <ProjectFavicon
-            environmentId={item.project.environmentId}
-            cwd={item.project.workspaceRoot}
-            className="size-4 rounded-sm"
-          />
+          <ProjectFavicon project={item.project} className="size-4 rounded-sm" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{item.project.title}</p>
@@ -402,14 +402,14 @@ export function NoActiveThreadState() {
                       Open
                     </div>
                   </div>
-                  <Card className={LIST_TABLE_INNER_CLASS_NAME}>
+                  <div className={LIST_TABLE_INNER_CLASS_NAME}>
                     {recentThreadItems.map((item, index) => (
                       <div key={`${item.thread.environmentId}:${item.thread.id}`}>
                         {index > 0 ? <div className="mx-4 h-px bg-border/45" /> : null}
                         <ThreadListRow item={item} onOpen={() => void openThread(item.thread)} />
                       </div>
                     ))}
-                  </Card>
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -425,7 +425,7 @@ export function NoActiveThreadState() {
                     <div className={LIST_TABLE_HEADER_CELL_CLASS_NAME}>Path</div>
                     <div className={`${LIST_TABLE_HEADER_CELL_CLASS_NAME} text-right`}>Recent</div>
                   </div>
-                  <Card className={LIST_TABLE_INNER_CLASS_NAME}>
+                  <div className={LIST_TABLE_INNER_CLASS_NAME}>
                     {projectItems.map((item, index) => (
                       <div key={`${item.project.environmentId}:${item.project.id}`}>
                         {index > 0 ? <div className="mx-4 h-px bg-border/45" /> : null}
@@ -435,7 +435,7 @@ export function NoActiveThreadState() {
                         />
                       </div>
                     ))}
-                  </Card>
+                  </div>
                 </div>
               </section>
             ) : null}

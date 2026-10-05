@@ -1,6 +1,6 @@
 import type { ServerLocalAgentInventory } from "@t3tools/contracts";
-import { Context } from "effect";
-import type { Effect } from "effect";
+import * as Context from "effect/Context";
+import type * as Effect from "effect/Effect";
 
 export interface ProjectAgentInventoryShape {
   readonly getInventory: (cwd: string) => Effect.Effect<ServerLocalAgentInventory, never>;

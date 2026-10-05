@@ -1,7 +1,4 @@
-import type {
-  FormaInteractionMode,
-  ServerProviderSupportedInteractionMode,
-} from "@t3tools/contracts";
+import type { ProviderInteractionMode } from "@t3tools/contracts";
 import { memo } from "react";
 import {
   IconBookmark as BookmarkIcon,
@@ -26,27 +23,17 @@ const ImageUploadIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const modeOrder = ["default", "ask", "plan"] as const;
-
-export function resolveComposerAddActionModes(
-  supportedInteractionModes: ReadonlyArray<ServerProviderSupportedInteractionMode>,
-) {
-  return modeOrder.filter(
-    (mode): mode is FormaInteractionMode =>
-      mode !== "ask" || supportedInteractionModes.includes("ask"),
-  );
-}
+const modeOrder: ReadonlyArray<ProviderInteractionMode> = ["default", "plan"];
 
 export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props: {
-  interactionMode: FormaInteractionMode;
-  menuHandle: MenuHandle<FormaInteractionMode>;
+  interactionMode: ProviderInteractionMode;
+  menuHandle: MenuHandle<ProviderInteractionMode>;
   triggerId: string;
-  supportedInteractionModes: ReadonlyArray<ServerProviderSupportedInteractionMode>;
   showInteractionModeActions: boolean;
   imageDisabled: boolean;
   skillDisabled: boolean;
   stashCount: number;
-  onSelectMode: (mode: FormaInteractionMode) => void;
+  onSelectMode: (mode: ProviderInteractionMode) => void;
   onSelectImage: () => void;
   onSelectSkill: () => void;
   onOpenStash: () => void;
@@ -69,7 +56,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
       </MenuTrigger>
       <MenuPopup align="start" className="w-56">
         {props.showInteractionModeActions
-          ? resolveComposerAddActionModes(props.supportedInteractionModes).map((mode) => {
+          ? modeOrder.map((mode) => {
               const option = composerInteractionModeConfig[mode];
               const OptionIcon = option.icon;
               return (

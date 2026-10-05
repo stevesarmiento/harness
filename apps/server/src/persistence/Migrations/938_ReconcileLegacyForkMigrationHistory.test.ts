@@ -1,15 +1,14 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0938 from "./938_ReconcileLegacyForkMigrationHistory.ts";
 
-const freshLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
-const currentLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
-const legacyLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const freshLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const currentLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const legacyLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 freshLayer("938_ReconcileLegacyForkMigrationHistory fresh database", (it) => {
   it.effect("is safe on a fresh database", () =>

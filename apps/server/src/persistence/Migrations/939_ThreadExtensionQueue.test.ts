@@ -1,14 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0939 from "./939_ThreadExtensionQueue.ts";
 
-const freshLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
-const legacyLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const freshLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const legacyLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 freshLayer("939_ThreadExtensionQueue fresh database", (it) => {
   it.effect("creates isolated extension state without widening threads", () =>

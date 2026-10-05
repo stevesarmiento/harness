@@ -1,4 +1,4 @@
-import { DEFAULT_APP_ICON_ID, type AppIconId } from "@t3tools/contracts";
+import { DEFAULT_APP_ICON_ID, type AppIconId, type ClientSettings } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -44,6 +44,8 @@ export const make = Effect.gen(function* () {
   return DesktopAppIcon.of({
     apply,
     applyStored: clientSettings.get.pipe(
+      // An unreadable settings file falls back to the default icon.
+      Effect.orElseSucceed(() => Option.none<ClientSettings>()),
       Effect.flatMap(
         Option.match({
           onNone: () => apply(DEFAULT_APP_ICON_ID),

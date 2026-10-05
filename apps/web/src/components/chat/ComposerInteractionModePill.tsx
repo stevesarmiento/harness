@@ -1,11 +1,11 @@
-import type { FormaInteractionMode } from "@t3tools/contracts";
+import type { ProviderInteractionMode } from "@t3tools/contracts";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
 import { composerInteractionModeConfig } from "./composerInteractionMode";
 
 export const ComposerInteractionModePill = memo(function ComposerInteractionModePill(props: {
-  interactionMode: FormaInteractionMode;
+  interactionMode: ProviderInteractionMode;
   onClick?: () => void;
 }) {
   const option = composerInteractionModeConfig[props.interactionMode];

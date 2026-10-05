@@ -10,7 +10,6 @@ describe("resolveChatHeaderActionVisibility", () => {
         hasProjectActions: true,
         hasOpenInCwd: true,
         showOpenIn: false,
-        hasGitCwd: true,
         hasWorkspaceRoot: true,
       }),
     ).toEqual({
@@ -28,7 +27,6 @@ describe("resolveChatHeaderActionVisibility", () => {
         hasProjectActions: true,
         hasOpenInCwd: true,
         showOpenIn: true,
-        hasGitCwd: true,
         hasWorkspaceRoot: true,
       }),
     ).toEqual({
@@ -46,7 +44,6 @@ describe("resolveChatHeaderActionVisibility", () => {
         hasProjectActions: false,
         hasOpenInCwd: false,
         showOpenIn: false,
-        hasGitCwd: false,
         hasWorkspaceRoot: false,
       }),
     ).toEqual({

@@ -1,18 +1,13 @@
+import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import type { ThreadCleanupInactiveDays } from "@t3tools/contracts/settings";
 
 import type { SidebarThreadSummary } from "../types";
 
 export type ThreadCleanupThread = Pick<
   SidebarThreadSummary,
-  "archivedAt" | "createdAt" | "id" | "latestUserMessageAt" | "session"
+  "archivedAt" | "createdAt" | "id" | "latestUserMessageAt" | "runtime"
 > & {
   readonly updatedAt?: string;
-  /**
-   * Queue state is a Forma-only extension and is intentionally absent from
-   * upstream-compatible shell snapshots. Callers with extension state can
-   * supply it; cleanup revalidates through the extension RPC before archiving.
-   */
-  readonly queuedTurnCount?: number;
 };
 
 export interface ThreadCleanupBuckets<TThread extends ThreadCleanupThread = ThreadCleanupThread> {
@@ -75,11 +70,13 @@ export function bucketThreadsForCleanup<TThread extends ThreadCleanupThread>(inp
     ) {
       continue;
     }
-    if (thread.session?.status === "running" && thread.session.activeTurnId != null) {
+    // A provider mid-turn must never be detached by cleanup.
+    if (!threadRuntimeCanArchive(thread.runtime)) {
       skippedRunning.push(thread);
       continue;
     }
-    if ((thread.queuedTurnCount ?? 0) > 0) {
+    // Queued follow-ups mean the user still intends work here.
+    if (thread.runtime?.status === "queued") {
       skippedQueued.push(thread);
       continue;
     }

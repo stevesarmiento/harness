@@ -3,16 +3,13 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
 import { APP_VERSION } from "../../branding";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
 import { isElectron } from "../../env";
-import {
-  primaryServerAvailableEditorsAtom,
-  primaryServerKeybindingsConfigPathAtom,
-  primaryServerObservabilityAtom,
-} from "../../state/server";
+import { primaryServerAvailableEditorsAtom, primaryServerConfigAtom } from "../../state/server";
 import { shellEnvironment } from "../../state/shell";
 import { usePrimaryEnvironment } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -32,9 +29,10 @@ function useAdvancedSettingsPanelState() {
     Partial<Record<OpenPathTarget, string | null>>
   >({});
 
-  const keybindingsConfigPath = useAtomValue(primaryServerKeybindingsConfigPathAtom);
+  const serverConfig = useAtomValue(primaryServerConfigAtom);
+  const keybindingsConfigPath = serverConfig?.keybindingsConfigPath ?? null;
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
-  const observability = useAtomValue(primaryServerObservabilityAtom);
+  const observability = serverConfig?.observability;
   const primaryEnvironment = usePrimaryEnvironment();
   const environmentId = primaryEnvironment?.environmentId ?? null;
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
@@ -198,6 +196,19 @@ export function AdvancedSettingsPanel() {
             description="Current version of the application."
           />
         )}
+        <SettingsRow
+          title="Open source licenses"
+          description="Notices for dependencies, assets, and optional tools used by Forma."
+          control={
+            <Button
+              render={<Link to="/settings/open-source-licenses" />}
+              size="xs"
+              variant="outline"
+            >
+              View licenses
+            </Button>
+          }
+        />
       </SettingsSection>
 
       <LegacyFeaturesSection />

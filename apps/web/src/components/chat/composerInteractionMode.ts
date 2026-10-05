@@ -1,9 +1,6 @@
-import type { FormaInteractionMode } from "@t3tools/contracts";
+import type { ProviderInteractionMode } from "@t3tools/contracts";
 import { createElement, type ComponentType } from "react";
-import {
-  IconCursorarrowClick2 as BuildIcon,
-  IconEllipsisMessageFill as AskIcon,
-} from "symbols-react";
+import { IconCursorarrowClick2 as BuildIcon } from "symbols-react";
 
 import { cn } from "~/lib/utils";
 
@@ -52,7 +49,7 @@ export type ComposerInteractionModeOption = {
 };
 
 export const composerInteractionModeConfig: Record<
-  FormaInteractionMode,
+  ProviderInteractionMode,
   ComposerInteractionModeOption
 > = {
   default: {
@@ -61,13 +58,6 @@ export const composerInteractionModeConfig: Record<
     icon: BuildIcon,
     pillClassName:
       "border-sky-500/35 bg-sky-500/16 text-sky-800 dark:border-sky-400/35 dark:bg-sky-400/18 dark:text-sky-100",
-  },
-  ask: {
-    label: "Ask",
-    description: "Read and explain without making changes.",
-    icon: AskIcon,
-    pillClassName:
-      "border-emerald-500/35 bg-emerald-500/16 text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-400/18 dark:text-emerald-100",
   },
   plan: {
     label: "Plan",

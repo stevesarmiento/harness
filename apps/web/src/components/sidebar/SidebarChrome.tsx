@@ -1,14 +1,30 @@
-import { memo } from "react";
-import { Link } from "@tanstack/react-router";
+import { ArrowLeftIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { memo, useCallback } from "react";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { IconArrowTriangleheadPull as PullRequestIcon } from "symbols-react";
 
 import { APP_BASE_NAME, APP_VERSION } from "../../branding";
 import { cn } from "../../lib/utils";
+import { usePullRequestsSupported } from "../../state/environments";
 import { LogomarkForma } from "../LogomarkForma";
+import { SettingsHexIcon, UsageChartIcon } from "../icons/custom";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
-import { SidebarFooter, SidebarHeader, SidebarTrigger } from "../ui/sidebar";
+import {
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+  useSidebar,
+} from "../ui/sidebar";
+import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
+import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
+import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
-import { SidebarUpdatePill } from "./SidebarUpdatePill";
+import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -49,6 +65,37 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
+// Measures the brand plus the header's padding and collapse trigger, so the
+// sidebar minimum follows font size and zoom and the wordmark never clips.
+export function SidebarBrandWidthProbe({
+  onWidthChange,
+}: {
+  onWidthChange: (width: number) => void;
+}) {
+  const observeWidth = useCallback(
+    (probe: HTMLDivElement) => {
+      const observer = new ResizeObserver(([entry]) => {
+        if (entry) onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? probe.offsetWidth);
+      });
+      observer.observe(probe);
+      return () => observer.disconnect();
+    },
+    [onWidthChange],
+  );
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none invisible fixed top-0 left-0 flex w-max items-center gap-2 border-r border-transparent px-4"
+      ref={observeWidth}
+    >
+      <FormaWordmark />
+      {/* The collapse trigger's footprint. */}
+      <span className="size-7 shrink-0" />
+    </div>
+  );
+}
+
 function SidebarBrand() {
   return (
     <Link
@@ -73,6 +120,102 @@ function FormaWordmark() {
   );
 }
 
+function SidebarUtilityItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <SidebarMenuItem className="shrink-0">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+              {icon}
+            </SidebarMenuButton>
+          }
+        />
+        <TooltipPopup side="top">{label}</TooltipPopup>
+      </Tooltip>
+    </SidebarMenuItem>
+  );
+}
+
+// Settings / Pull Requests / Usage row, swapped for a Back button on utility pages.
+// The thread sidebars carry these in the account menu instead (Forma); the settings
+// nav mounts this row directly.
+export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+  const navigate = useNavigate();
+  const navigateToMainApp = useNavigateToMainApp();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const isOnUtilityPage = useLocation({
+    select: (location) => isSidebarUtilityPage(location.pathname),
+  });
+  const pullRequestsSupported = usePullRequestsSupported();
+  const closeMobileSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+  const handlePullRequestsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({
+      to: "/pull-requests",
+      search: readPullRequestListPreferences(),
+    });
+  }, [closeMobileSidebar, navigate]);
+  const handleSettingsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/settings" });
+  }, [closeMobileSidebar, navigate]);
+  const handleUsageClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/usage" });
+  }, [closeMobileSidebar, navigate]);
+  const handleBackClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigateToMainApp();
+  }, [closeMobileSidebar, navigateToMainApp]);
+
+  return (
+    <SidebarMenu className="flex-row items-center">
+      {isOnUtilityPage ? (
+        <SidebarMenuItem className="min-w-0 flex-1">
+          <SidebarMenuButton onClick={handleBackClick}>
+            <ArrowLeftIcon />
+            <span>Back</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ) : (
+        <>
+          <SidebarUtilityItem
+            icon={<SettingsHexIcon />}
+            label="Settings"
+            onClick={handleSettingsClick}
+          />
+          {pullRequestsSupported ? (
+            <SidebarUtilityItem
+              icon={<PullRequestIcon className="fill-current" />}
+              label="Pull Requests"
+              onClick={handlePullRequestsClick}
+            />
+          ) : null}
+          <SidebarUtilityItem
+            icon={<UsageChartIcon className="fill-current" />}
+            label="Usage"
+            onClick={handleUsageClick}
+          />
+        </>
+      )}
+      <SidebarUpdatePill />
+    </SidebarMenu>
+  );
+});
+
 export const SidebarChromeFooter = memo(function SidebarChromeFooter({
   variant,
 }: {
@@ -80,9 +223,17 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter({
 }) {
   return (
     <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+      <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
-      <SidebarUpdatePill />
-      <SidebarAccountControl variant={variant} />
+      <SidebarUpdateArchitectureWarning />
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <SidebarAccountControl variant={variant} />
+        </div>
+        <SidebarMenu className="w-auto shrink-0 flex-row">
+          <SidebarUpdatePill />
+        </SidebarMenu>
+      </div>
     </SidebarFooter>
   );
 });

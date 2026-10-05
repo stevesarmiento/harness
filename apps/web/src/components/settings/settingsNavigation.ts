@@ -1,5 +1,13 @@
 import type { ComponentType } from "react";
-import { GitPullRequestIcon as SourceControlIcon, ShieldIcon } from "lucide-react";
+import {
+  BlocksIcon,
+  CalendarClockIcon,
+  createLucideIcon,
+  GitPullRequestIcon as SourceControlIcon,
+  HardDriveIcon,
+  PanelsTopLeftIcon,
+  ShieldIcon,
+} from "lucide-react";
 import {
   IconWifi as ConnectionsIcon,
   IconSwatchpalette as InterfaceIcon,
@@ -10,6 +18,18 @@ import {
   NotificationsSettingsIcon as NotificationsIcon,
   ProvidersSettingsIcon as ProvidersIcon,
 } from "../icons/custom";
+
+const SnapShotIcon = createLucideIcon("snap-shot", [
+  [
+    "path",
+    {
+      d: "M8 3H6a3 3 0 0 0-3 3v2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2",
+      key: "capture-frame",
+    },
+  ],
+  ["rect", { width: "10", height: "8", x: "7", y: "8", rx: "2", key: "window" }],
+  ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
+]);
 
 export type SettingsRestoreScope =
   | "interface"
@@ -22,9 +42,14 @@ export type SettingsSectionPath =
   | "/settings/interface"
   | "/settings/threads"
   | "/settings/notifications"
+  | "/settings/projects"
   | "/settings/providers"
+  | "/settings/integrations"
+  | "/settings/scheduled-tasks"
+  | "/settings/snap-shot"
   | "/settings/safety"
   | "/settings/source-control"
+  | "/settings/storage"
   | "/settings/connections"
   | "/settings/advanced";
 
@@ -63,12 +88,42 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
     iconUsesFill: true,
     restoreScope: "notifications",
   },
+  // Fork: Projects only shows while a project/checkout scope is selected
+  // (filtered in SettingsSidebarNav).
+  {
+    label: "Projects",
+    to: "/settings/projects",
+    icon: PanelsTopLeftIcon,
+    iconUsesFill: false,
+    restoreScope: null,
+  },
   {
     label: "Providers",
     to: "/settings/providers",
     icon: ProvidersIcon,
     iconUsesFill: true,
     restoreScope: "providers",
+  },
+  {
+    label: "Integrations",
+    to: "/settings/integrations",
+    icon: BlocksIcon,
+    iconUsesFill: false,
+    restoreScope: null,
+  },
+  {
+    label: "Scheduled Tasks",
+    to: "/settings/scheduled-tasks",
+    icon: CalendarClockIcon,
+    iconUsesFill: false,
+    restoreScope: null,
+  },
+  {
+    label: "SnapShots",
+    to: "/settings/snap-shot",
+    icon: SnapShotIcon,
+    iconUsesFill: false,
+    restoreScope: null,
   },
   {
     label: "Safety",
@@ -81,6 +136,13 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
     label: "Source Control",
     to: "/settings/source-control",
     icon: SourceControlIcon,
+    iconUsesFill: false,
+    restoreScope: null,
+  },
+  {
+    label: "Storage",
+    to: "/settings/storage",
+    icon: HardDriveIcon,
     iconUsesFill: false,
     restoreScope: null,
   },

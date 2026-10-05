@@ -1,13 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "./Migrations.ts";
-import * as NodeSqliteClient from "./NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
-const backfillLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
-const idempotencyLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const backfillLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const idempotencyLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const v2UpgradeLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 
 backfillLayer("Migrations backfill", (it) => {
   it.effect("applies upstream migrations that sort below an already-recorded fork 9xx id", () =>
@@ -42,6 +42,44 @@ backfillLayer("Migrations backfill", (it) => {
       assert.ok(ids.has(935));
       assert.ok(ids.has(940));
     }),
+  );
+});
+
+v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
+  it.effect(
+    "applies upstream 041-056, including OrchestrationV2, on a Forma 040 + 9xx ledger",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        // The live Forma ledger before the V2 merge: upstream 1-40 plus the
+        // whole fork block, so the stock Migrator's high-water mark is 941.
+        yield* runMigrations({ toMigrationInclusive: 40 });
+        yield* sql`
+          INSERT INTO effect_sql_migrations (migration_id, name)
+          VALUES
+            (935, 'ProjectionProjectComponentPreviewConfig'),
+            (936, 'ProjectionProjectComponentPreviewWorkspaceRecords'),
+            (937, 'ResetProjectComponentPreviewState'),
+            (938, 'ReconcileLegacyForkMigrationHistory'),
+            (939, 'ThreadExtensionQueue'),
+            (940, 'ProjectionThreadsForkLineage'),
+            (941, 'ReconcileLegacyForkUpstreamOverlap')
+        `.withoutTransform;
+
+        const executed = yield* runMigrations();
+        assert.deepStrictEqual(
+          executed.map(([id]) => id),
+          Array.from({ length: 16 }, (_, index) => index + 41),
+        );
+
+        const tables = yield* sql<{ readonly name: string }>`
+          SELECT name FROM sqlite_master
+          WHERE type = 'table' AND name = 'orchestration_v2_projection_threads'
+        `;
+        assert.strictEqual(tables.length, 1);
+        assert.deepStrictEqual(yield* runMigrations(), []);
+      }),
   );
 });
 
