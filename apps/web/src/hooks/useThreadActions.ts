@@ -6,16 +6,22 @@ import {
 } from "@t3tools/client-runtime/environment";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
-import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import {
+  threadRuntimeCanArchive,
+  threadRuntimeIsActive,
+} from "@t3tools/client-runtime/state/models";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  type OrchestrationV2ThreadProjection,
+  type ScopedProjectRef,
   type ScopedThreadRef,
   ThreadId,
   sessionGrantsScope,
 } from "@t3tools/contracts";
+import type { ThreadCleanupInactiveDays } from "@t3tools/contracts/settings";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
@@ -30,7 +36,15 @@ import { terminalEnvironment } from "../state/terminal";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentServerConfigsAtom } from "../state/server";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
-import { threadEnvironment } from "../state/threads";
+import { environmentThreadDetails, threadEnvironment } from "../state/threads";
+import { waitForAtomValue } from "../state/waitForAtomValue";
+import { newThreadId } from "../lib/utils";
+import {
+  buildThreadMarkdownExport,
+  downloadThreadMarkdown,
+  threadMarkdownFilename,
+} from "../lib/threadMarkdownExport";
+import { bucketThreadsForCleanup } from "../lib/threadCleanup";
 import { vcsEnvironment } from "../state/vcs";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
@@ -48,6 +62,7 @@ import {
   readProject,
   readThreadShell,
   readThreadShells,
+  waitForThreadShell,
 } from "../state/entities";
 import { useUiStateStore } from "../uiStateStore";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -253,6 +268,29 @@ export function useAcknowledgeThreadWoke() {
     [markThreadVisited, visitThreadMutation],
   );
 }
+
+// Fork: summary copy for Forma's inactive-thread cleanup toast.
+function formatThreadCount(count: number): string {
+  return `${count} thread${count === 1 ? "" : "s"}`;
+}
+
+function formatCleanupSummaryParts(input: {
+  readonly skippedRunningCount: number;
+  readonly skippedQueuedCount: number;
+  readonly failedCount: number;
+}): string[] {
+  return [
+    ...(input.skippedRunningCount > 0
+      ? [`${formatThreadCount(input.skippedRunningCount)} running`]
+      : []),
+    ...(input.skippedQueuedCount > 0
+      ? [`${formatThreadCount(input.skippedQueuedCount)} queued`]
+      : []),
+    ...(input.failedCount > 0 ? [`${formatThreadCount(input.failedCount)} failed`] : []),
+  ];
+}
+
+const THREAD_EXPORT_DETAIL_TIMEOUT_MS = 10_000;
 
 function threadOperationFailure(target: ScopedThreadRef) {
   return readEnvironmentScope(target.environmentId, AuthOrchestrationOperateScope)
@@ -1004,6 +1042,188 @@ export function useThreadActions() {
     [confirmThreadDelete, deleteThread, resolveThreadTarget],
   );
 
+  // Fork: Forma's sidebar thread actions — fork (V2 native thread.fork from the
+  // latest run), markdown export, and inactive-thread cleanup.
+  const forkThreadMutation = useOrchestrationCommand(threadEnvironment.forkFromRun, {
+    reportFailure: false,
+  });
+
+  const forkThread = useCallback(
+    async (target: ScopedThreadRef) => {
+      const permissionFailure = threadOperationFailure(target);
+      if (permissionFailure) return permissionFailure;
+      const thread = readThreadShell(target);
+      if (!thread?.latestRun) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("This thread has no turn to fork from yet.")),
+        );
+      }
+      if (threadRuntimeIsActive(thread.runtime)) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("Wait for the current turn to finish before forking.")),
+        );
+      }
+      const targetThreadRef = scopeThreadRef(target.environmentId, newThreadId());
+      const result = await forkThreadMutation({
+        environmentId: target.environmentId,
+        input: {
+          sourceThreadId: target.threadId,
+          targetThreadId: targetThreadRef.threadId,
+          runId: thread.latestRun.runId,
+          title: `${thread.title} fork`,
+        },
+      });
+      if (result._tag === "Failure") return result;
+
+      if (!(await waitForThreadShell(targetThreadRef))) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new Error(
+              "The fork was created, but its thread data did not reach this client. Reconnect and try opening it from the sidebar.",
+            ),
+          ),
+        );
+      }
+      const navigationResult = await settlePromise(() =>
+        router.navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(targetThreadRef),
+        }),
+      );
+      return navigationResult._tag === "Failure" ? navigationResult : result;
+    },
+    [forkThreadMutation, router],
+  );
+
+  const exportThread = useCallback(async (target: ScopedThreadRef) => {
+    const thread = readThreadShell(target);
+    if (!thread) {
+      return AsyncResult.failure(Cause.fail(new Error("Thread not found.")));
+    }
+    // Subscribing loads the thread's detail stream; capture the projection
+    // while subscribed, since the detail atom is released right after.
+    const captured: { projection: OrchestrationV2ThreadProjection | null } = { projection: null };
+    const loaded = await waitForAtomValue({
+      registry: appAtomRegistry,
+      atom: environmentThreadDetails.threadAtom(target),
+      predicate: (detail) => {
+        if (detail !== null) captured.projection = detail.projection;
+        return detail !== null;
+      },
+      timeoutMs: THREAD_EXPORT_DETAIL_TIMEOUT_MS,
+    });
+    const projection = captured.projection;
+    if (!loaded || projection === null) {
+      return AsyncResult.failure(
+        Cause.fail(new Error("The thread's history did not load. Try again once connected.")),
+      );
+    }
+    try {
+      const project = readProject(scopeProjectRef(target.environmentId, thread.projectId));
+      const markdown = buildThreadMarkdownExport({
+        thread,
+        projection,
+        project,
+        workspaceRoot: thread.worktreePath ?? project?.workspaceRoot,
+      });
+      downloadThreadMarkdown(threadMarkdownFilename(thread.title, thread.id), markdown);
+      return AsyncResult.success(undefined);
+    } catch (error) {
+      return AsyncResult.failure(Cause.fail(error));
+    }
+  }, []);
+
+  const cleanupInactiveThreads = useCallback(
+    async (input: {
+      readonly inactiveDays: ThreadCleanupInactiveDays;
+      readonly projectDisplayName: string;
+      readonly projectRefs: readonly ScopedProjectRef[];
+    }) => {
+      const projectIdsByEnvironment = new Map<EnvironmentId, Set<string>>();
+      for (const projectRef of input.projectRefs) {
+        const projectIds = projectIdsByEnvironment.get(projectRef.environmentId) ?? new Set();
+        projectIds.add(projectRef.projectId);
+        projectIdsByEnvironment.set(projectRef.environmentId, projectIds);
+      }
+      const threads = [...projectIdsByEnvironment].flatMap(([environmentId, projectIds]) =>
+        readEnvironmentThreadRefs(environmentId).flatMap((threadRef) => {
+          const thread = readThreadShell(threadRef);
+          return thread && projectIds.has(thread.projectId) ? [thread] : [];
+        }),
+      );
+      const buckets = bucketThreadsForCleanup({
+        threads,
+        inactiveDays: input.inactiveDays,
+      });
+      let archivedCount = 0;
+      let skippedRunningCount = buckets.skippedRunning.length;
+      let skippedQueuedCount = buckets.skippedQueued.length;
+      let failedCount = 0;
+
+      for (const thread of buckets.eligible) {
+        const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+        // Revalidate against the live shell: work may have started since bucketing.
+        const latest = resolveThreadTarget(threadRef)?.thread;
+        if (!latest) {
+          failedCount += 1;
+          continue;
+        }
+        if (!threadRuntimeCanArchive(latest.runtime)) {
+          skippedRunningCount += 1;
+          continue;
+        }
+        if (latest.runtime?.status === "queued") {
+          skippedQueuedCount += 1;
+          continue;
+        }
+        const result = await archiveThread(threadRef);
+        if (result._tag === "Failure") {
+          failedCount += 1;
+          continue;
+        }
+        archivedCount += 1;
+      }
+
+      const detailParts = formatCleanupSummaryParts({
+        skippedRunningCount,
+        skippedQueuedCount,
+        failedCount,
+      });
+      const detail =
+        detailParts.length > 0
+          ? `Skipped ${detailParts.join(", ")} in ${input.projectDisplayName}.`
+          : archivedCount > 0
+            ? `Cleaned up ${input.projectDisplayName}.`
+            : `No eligible inactive threads remained in ${input.projectDisplayName}.`;
+      toastManager.add(
+        stackedThreadToast({
+          type:
+            archivedCount > 0
+              ? failedCount > 0
+                ? "warning"
+                : "success"
+              : failedCount > 0 || detailParts.length > 0
+                ? "warning"
+                : "info",
+          title:
+            archivedCount > 0
+              ? `Archived ${formatThreadCount(archivedCount)}`
+              : "No inactive threads archived",
+          description: detail,
+        }),
+      );
+
+      return {
+        archivedCount,
+        eligibleCount: buckets.eligible.length,
+        failedCount,
+        skippedQueuedCount,
+        skippedRunningCount,
+      };
+    },
+    [archiveThread, resolveThreadTarget],
+  );
+
   return useMemo(
     () => ({
       archiveThread,
@@ -1021,9 +1241,16 @@ export function useThreadActions() {
       reorderActiveThread,
       markThreadUnread,
       setThreadAutoSettle,
+      // Fork: Forma sidebar actions.
+      forkThread,
+      exportThread,
+      cleanupInactiveThreads,
     }),
     [
       archiveThread,
+      cleanupInactiveThreads,
+      exportThread,
+      forkThread,
       confirmAndDeleteThread,
       confirmAndUnpinThread,
       deleteThread,

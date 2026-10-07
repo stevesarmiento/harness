@@ -144,6 +144,11 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectsSearchContents]: AuthFilesystemReadScope,
   [WS_METHODS.projectsSearchEntries]: AuthFilesystemReadScope,
   [WS_METHODS.projectsWriteFile]: AuthFilesystemWriteScope,
+  // Fork: local agent inventory and workspace entry mutations (Forma file panel).
+  [WS_METHODS.projectsLocalAgentInventory]: AuthFilesystemReadScope,
+  [WS_METHODS.projectsCreateDirectory]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectsRenameEntry]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectsDeleteEntry]: AuthFilesystemWriteScope,
   [WS_METHODS.projectsEnsureScratch]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsCreateNew]: AuthOrchestrationOperateScope,
   [WS_METHODS.shellOpenInEditor]: AuthOrchestrationOperateScope,

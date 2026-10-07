@@ -19,7 +19,7 @@ import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 import { readEnvironmentScope } from "./state/session";
 
-const LAST_EDITOR_KEY = "t3code:last-editor";
+const LAST_EDITOR_KEY = "forma:last-editor";
 
 export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedError<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
@@ -56,7 +56,10 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
   return [effectiveEditor, setLastEditor] as const;
 }
 
-function resolveAndPersistPreferredEditor(availableEditors: readonly EditorId[]): EditorId | null {
+// Fork: exported for the Forma Advanced settings "open in editor" rows.
+export function resolveAndPersistPreferredEditor(
+  availableEditors: readonly EditorId[],
+): EditorId | null {
   const availableEditorIds = new Set(availableEditors);
   const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
   if (stored && availableEditorIds.has(stored)) return stored;

@@ -14,7 +14,13 @@ import {
   type VcsStatusResult,
 } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { FolderGit2Icon, TerminalIcon } from "lucide-react";
+import {
+  CircleAlertIcon,
+  CircleQuestionMarkIcon,
+  FolderGit2Icon,
+  TerminalIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
@@ -40,10 +46,15 @@ import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
 import {
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
+  threadStatusGlyph,
+  threadStatusToneClass,
+  type ThreadStatusGlyph,
   type ThreadStatusPill,
   useRetainedValue,
   useSidebarRowSubscriptionLease,
 } from "./Sidebar.logic";
+import { SidebarCompletedIcon, SidebarPlanReadyIcon } from "./icons/custom";
+import { PixelGridLoader } from "./ui/pixel-grid-loader";
 
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
@@ -814,13 +825,75 @@ export function ThreadWorktreeIndicator({
   );
 }
 
-export function ThreadStatusLabel({
+// Fork: Forma status glyphs (pixel grid while working, custom marks for
+// plan-ready/completed, alert/question marks for approval/input).
+const THREAD_STATUS_ICON_BY_GLYPH: Record<
+  Exclude<ThreadStatusGlyph, "grid" | "file-text" | "check-check">,
+  LucideIcon
+> = {
+  "circle-alert": CircleAlertIcon,
+  "circle-question-mark": CircleQuestionMarkIcon,
+};
+
+export function getSidebarIndicatorClassName(input: {
+  toneClass: string;
+  className?: string | undefined;
+}) {
+  return cn(
+    "inline-flex size-4 shrink-0 items-center justify-center",
+    input.toneClass,
+    input.className,
+  );
+}
+
+export function SidebarStatusGlyph({
   status,
   compact = false,
+  className,
 }: {
   status: ThreadStatusPill;
   compact?: boolean;
+  className?: string;
 }) {
+  const glyph = threadStatusGlyph(status);
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center",
+        compact ? "size-3.5" : "size-3",
+        className,
+      )}
+      data-slot="sidebar-status-glyph"
+      data-status-glyph={glyph}
+    >
+      {glyph === "grid" ? (
+        // Fork: only in-motion states animate; calm ones (Monitoring, Waiting) rest lit.
+        <PixelGridLoader variant="sidebar" animate={status.pulse} />
+      ) : glyph === "file-text" ? (
+        <SidebarPlanReadyIcon className="size-3" />
+      ) : glyph === "check-check" ? (
+        <SidebarCompletedIcon className="size-3" />
+      ) : (
+        (() => {
+          const Icon = THREAD_STATUS_ICON_BY_GLYPH[glyph];
+          return <Icon className="size-3" strokeWidth={2.25} />;
+        })()
+      )}
+    </span>
+  );
+}
+
+export function ThreadStatusLabel({
+  status,
+  compact = false,
+  className,
+}: {
+  status: ThreadStatusPill;
+  compact?: boolean;
+  className?: string;
+}) {
+  const toneClass = threadStatusToneClass(status);
   if (compact) {
     return (
       <Tooltip>
@@ -829,15 +902,11 @@ export function ThreadStatusLabel({
             <span
               role="img"
               aria-label={status.label}
-              className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
+              className={getSidebarIndicatorClassName({ toneClass, className })}
             />
           }
         >
-          <span
-            className={`size-[9px] rounded-full ${status.dotClass} ${
-              status.pulse ? "animate-status-pulse" : ""
-            }`}
-          />
+          <SidebarStatusGlyph compact status={status} />
         </TooltipTrigger>
         <TooltipPopup side="top">{status.label}</TooltipPopup>
       </Tooltip>
@@ -851,16 +920,16 @@ export function ThreadStatusLabel({
           <span
             role="img"
             aria-label={status.label}
-            className={`inline-flex items-center gap-1 text-3xs ${status.colorClass}`}
+            className={cn("inline-flex items-center gap-1.5", className)}
           />
         }
       >
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
-            status.pulse ? "animate-status-pulse" : ""
-          }`}
-        />
-        <span className="hidden md:inline">{status.label}</span>
+        <span className={getSidebarIndicatorClassName({ toneClass })}>
+          <SidebarStatusGlyph status={status} />
+        </span>
+        <span className={cn("hidden text-ui-2xs font-medium tracking-tight md:inline", toneClass)}>
+          {status.label}
+        </span>
       </TooltipTrigger>
       <TooltipPopup side="top">{status.label}</TooltipPopup>
     </Tooltip>

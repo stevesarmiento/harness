@@ -14,6 +14,7 @@ import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
+import * as DesktopAppIcon from "./DesktopAppIcon.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
@@ -134,7 +135,7 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
-      "T3 Code failed to start",
+      "Forma failed to start",
       `Stage: ${stage}\n${message}${detail}`,
     );
   }
@@ -251,6 +252,12 @@ const bootstrap = Effect.gen(function* () {
     }
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
+    // Fork: a slow local start (a first launch can spend a minute migrating a
+    // large database) otherwise shows no window at all. The splash only
+    // appears when no window exists yet and is dismissed on first reveal.
+    yield* Effect.forkScoped(
+      Effect.sleep(Duration.seconds(2)).pipe(Effect.andThen(desktopWindow.showConnectingSplash)),
+    );
     yield* appActivation.start.pipe(
       Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
       Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
@@ -265,6 +272,7 @@ const bootstrap = Effect.gen(function* () {
 
 const startup = Effect.gen(function* () {
   const appIdentity = yield* DesktopAppIdentity.DesktopAppIdentity;
+  const appIcon = yield* DesktopAppIcon.DesktopAppIcon;
   const applicationMenu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
   const electronApp = yield* ElectronApp.ElectronApp;
   const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
@@ -314,6 +322,7 @@ const startup = Effect.gen(function* () {
   }
 
   yield* appIdentity.configure;
+  yield* appIcon.applyStored;
   yield* lifecycle.register;
   yield* clerk.configure;
 

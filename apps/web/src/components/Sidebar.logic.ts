@@ -6,7 +6,12 @@ import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  defaultAnimateLayoutChanges,
+  type AnimateLayoutChanges,
+} from "@dnd-kit/sortable";
+import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
@@ -26,6 +31,7 @@ import type { SidebarThreadSummary, Thread } from "../types";
 import { cn } from "../lib/utils";
 import { isLatestRunSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { legacyProjectCwdPreferenceKey, resolveProjectExpanded } from "../uiStateStore";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -486,6 +492,234 @@ type LogicalSidebarProject = SidebarProject & {
 
 export type ThreadTraversalDirection = "previous" | "next";
 
+// Fork: Forma's legacy sidebar lets a drag reorder projects in any sort mode
+// (it flips the setting to manual afterwards), so the reorder is resolved from
+// the currently displayed order rather than the stored manual order.
+type ReorderableSidebarProject = {
+  projectKey: string;
+  memberProjects: readonly {
+    physicalProjectKey: string;
+  }[];
+};
+
+export function resolveSidebarProjectReorder(
+  projects: readonly ReorderableSidebarProject[],
+  activeProjectKey: string,
+  targetProjectKey: string,
+): {
+  currentProjectOrder: readonly string[];
+  draggedProjectKeys: readonly string[];
+  targetProjectKeys: readonly string[];
+} | null {
+  if (activeProjectKey === targetProjectKey) return null;
+  const activeProject = projects.find((project) => project.projectKey === activeProjectKey);
+  const targetProject = projects.find((project) => project.projectKey === targetProjectKey);
+  if (!activeProject || !targetProject) return null;
+
+  return {
+    currentProjectOrder: projects.flatMap((project) =>
+      project.memberProjects.map((member) => member.physicalProjectKey),
+    ),
+    draggedProjectKeys: activeProject.memberProjects.map((member) => member.physicalProjectKey),
+    targetProjectKeys: targetProject.memberProjects.map((member) => member.physicalProjectKey),
+  };
+}
+
+// Fork: both sidebars read a project's collapse state through this one key
+// chain (logical key, then physical keys, then legacy cwd keys), so
+// collapsing a project in one sidebar collapses it in the other.
+export function projectExpansionPreferenceKeys(project: {
+  readonly projectKey: string;
+  readonly memberProjects: ReadonlyArray<{
+    readonly physicalProjectKey: string;
+    readonly workspaceRoot: string;
+  }>;
+}): string[] {
+  return [
+    project.projectKey,
+    ...project.memberProjects.map((member) => member.physicalProjectKey),
+    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
+  ];
+}
+
+type SidebarSectionThread = {
+  readonly environmentId: EnvironmentId;
+  readonly id: ThreadId;
+  readonly projectId: string;
+};
+
+type SidebarSectionProject = {
+  readonly projectKey: string;
+  readonly memberProjects: ReadonlyArray<{
+    readonly physicalProjectKey: string;
+    readonly workspaceRoot: string;
+  }>;
+  readonly memberProjectRefs: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly projectId: string;
+  }>;
+};
+
+export type SidebarProjectSectionPart = "pinned" | "active" | "snoozed";
+
+/** One project's slice of the all-projects (grouped) sidebar view. */
+export interface SidebarProjectSection<TGroup, TThread> {
+  readonly group: TGroup;
+  readonly expanded: boolean;
+  readonly threadCount: number;
+  readonly pinned: readonly TThread[];
+  readonly active: readonly TThread[];
+  readonly snoozed: readonly TThread[];
+  readonly snoozedExpanded: boolean;
+  /** Snoozed rows on screen: all when the shelf is open, else only the route thread. */
+  readonly visibleSnoozed: readonly TThread[];
+  /** The open thread, kept under the header of a collapsed section. */
+  readonly collapsedRoute: {
+    readonly thread: TThread;
+    readonly section: SidebarProjectSectionPart;
+  } | null;
+}
+
+// Fork: Forma's all-projects view. Splits the already-sorted lifecycle
+// partitions into one section per logical project, in project order. Settled
+// and Working threads stay in their global shelves after the sections.
+// Threads whose project is not in the catalog have no section and are left
+// out. The open thread never hides behind a collapsed section or a collapsed
+// snoozed shelf.
+export function buildSidebarProjectSections<
+  TGroup extends SidebarSectionProject,
+  TThread extends SidebarSectionThread,
+>(input: {
+  readonly projectGroups: readonly TGroup[];
+  readonly pinned: readonly TThread[];
+  readonly active: readonly TThread[];
+  readonly snoozed: readonly TThread[];
+  readonly projectExpandedById: Readonly<Record<string, boolean>>;
+  readonly snoozedExpandedKeys: ReadonlySet<string>;
+  readonly routeThreadKey: string | null;
+}): SidebarProjectSection<TGroup, TThread>[] {
+  const logicalKeyByProjectRef = new Map<string, string>();
+  for (const group of input.projectGroups) {
+    for (const ref of group.memberProjectRefs) {
+      logicalKeyByProjectRef.set(`${ref.environmentId}:${ref.projectId}`, group.projectKey);
+    }
+  }
+  const partsByProjectKey = new Map<string, Record<SidebarProjectSectionPart, TThread[]>>();
+  const collect = (threads: readonly TThread[], part: SidebarProjectSectionPart) => {
+    for (const thread of threads) {
+      const projectKey = logicalKeyByProjectRef.get(`${thread.environmentId}:${thread.projectId}`);
+      if (projectKey === undefined) continue;
+      let parts = partsByProjectKey.get(projectKey);
+      if (parts === undefined) {
+        parts = { pinned: [], active: [], snoozed: [] };
+        partsByProjectKey.set(projectKey, parts);
+      }
+      parts[part].push(thread);
+    }
+  };
+  collect(input.pinned, "pinned");
+  collect(input.active, "active");
+  collect(input.snoozed, "snoozed");
+
+  const { routeThreadKey } = input;
+  const findRouteThread = (threads: readonly TThread[]) =>
+    routeThreadKey === null
+      ? undefined
+      : threads.find(
+          (thread) =>
+            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+        );
+
+  return input.projectGroups.map((group) => {
+    const parts = partsByProjectKey.get(group.projectKey) ?? {
+      pinned: [],
+      active: [],
+      snoozed: [],
+    };
+    const expanded = resolveProjectExpanded(
+      input.projectExpandedById,
+      projectExpansionPreferenceKeys(group),
+    );
+    const snoozedExpanded = input.snoozedExpandedKeys.has(group.projectKey);
+    const snoozedRouteThread = snoozedExpanded ? undefined : findRouteThread(parts.snoozed);
+    let collapsedRoute: SidebarProjectSection<TGroup, TThread>["collapsedRoute"] = null;
+    if (!expanded) {
+      for (const section of ["pinned", "active", "snoozed"] as const) {
+        const thread = findRouteThread(parts[section]);
+        if (thread !== undefined) {
+          collapsedRoute = { thread, section };
+          break;
+        }
+      }
+    }
+    return {
+      group,
+      expanded,
+      threadCount: parts.pinned.length + parts.active.length + parts.snoozed.length,
+      pinned: parts.pinned,
+      active: parts.active,
+      snoozed: parts.snoozed,
+      snoozedExpanded,
+      visibleSnoozed: snoozedExpanded
+        ? parts.snoozed
+        : snoozedRouteThread === undefined
+          ? []
+          : [snoozedRouteThread],
+      collapsedRoute,
+    };
+  });
+}
+
+// Fork: the grouped sections' rows in on-screen order, so jump hints, range
+// selection and forward navigation follow what the user sees.
+export function orderedThreadsForSections<TThread>(
+  sections: ReadonlyArray<SidebarProjectSection<unknown, TThread>>,
+): TThread[] {
+  return sections.flatMap((section) =>
+    section.expanded
+      ? [...section.pinned, ...section.active, ...section.visibleSnoozed]
+      : section.collapsedRoute === null
+        ? []
+        : [section.collapsedRoute.thread],
+  );
+}
+
+// Fork: drop target inside a grouped project section. Rows reorder within
+// their own block (pinned among pinned, active among active) of their own
+// project; lifecycle moves stay in the context menu, as in Forma's grouped
+// view. The orders are the global displayed orders, so the result feeds
+// planSidebarThreadDrop exactly like a flat-list drop.
+export function resolveSidebarSectionReorderTarget(input: {
+  readonly activeKey: string;
+  readonly overKey: string;
+  readonly pinnedOrder: readonly string[];
+  readonly activeOrder: readonly string[];
+  readonly projectKeyByThreadKey: ReadonlyMap<string, string>;
+}): SidebarDropTarget | null {
+  const { activeKey, overKey, pinnedOrder, activeOrder } = input;
+  const section = pinnedOrder.includes(activeKey)
+    ? "pinned"
+    : activeOrder.includes(activeKey)
+      ? "active"
+      : null;
+  if (section === null) return null;
+  if (overKey === activeKey) return { section, pinnedOrder, activeOrder };
+  const order = section === "pinned" ? pinnedOrder : activeOrder;
+  const overIndex = order.indexOf(overKey);
+  const projectKey = input.projectKeyByThreadKey.get(activeKey);
+  if (
+    overIndex === -1 ||
+    projectKey === undefined ||
+    input.projectKeyByThreadKey.get(overKey) !== projectKey
+  ) {
+    return null;
+  }
+  const moved = arrayMove([...order], order.indexOf(activeKey), overIndex);
+  return section === "pinned"
+    ? { section, pinnedOrder: moved, activeOrder }
+    : { section, pinnedOrder, activeOrder: moved };
+}
+
 /**
  * Shared-worktree checks must exclude only successful deletions, never the
  * whole batch. A null result skips an entry that the caller can no longer find.
@@ -635,6 +869,45 @@ export interface ThreadStatusPill {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+}
+
+// Fork: Forma renders status as a toned glyph (pixel grid while working,
+// custom marks for plan-ready/completed) instead of upstream's dot.
+export type ThreadStatusGlyph =
+  | "grid"
+  | "circle-alert"
+  | "circle-question-mark"
+  | "file-text"
+  | "check-check";
+
+const THREAD_STATUS_TONE_BY_LABEL: Record<ThreadStatusPill["label"], string> = {
+  "Pending Approval": "text-amber-600 dark:text-amber-300/90",
+  "Awaiting Input": "text-indigo-600 dark:text-indigo-300/90",
+  Working: "text-sky-600 dark:text-sky-300/80",
+  Connecting: "text-sky-600 dark:text-sky-300/80",
+  Waiting: "text-muted-foreground",
+  "Plan Ready": "text-violet-600 dark:text-violet-300/90",
+  Completed: "text-emerald-600 dark:text-emerald-300/90",
+};
+
+const THREAD_STATUS_GLYPH_BY_LABEL: Record<ThreadStatusPill["label"], ThreadStatusGlyph> = {
+  "Pending Approval": "circle-alert",
+  "Awaiting Input": "circle-question-mark",
+  Working: "grid",
+  Connecting: "grid",
+  Waiting: "grid",
+  "Plan Ready": "file-text",
+  Completed: "check-check",
+};
+
+// Fork: Forma tone (text color) for a status pill's glyph and label.
+export function threadStatusToneClass(status: Pick<ThreadStatusPill, "label">): string {
+  return THREAD_STATUS_TONE_BY_LABEL[status.label];
+}
+
+// Fork: Forma glyph for a status pill.
+export function threadStatusGlyph(status: Pick<ThreadStatusPill, "label">): ThreadStatusGlyph {
+  return THREAD_STATUS_GLYPH_BY_LABEL[status.label];
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
@@ -906,38 +1179,37 @@ export function isContextMenuPointerDown(input: {
   return input.isMac && input.button === 0 && input.ctrlKey;
 }
 
+// Fork: Forma's legacy thread rows: compact h-7, accent for the open thread,
+// primary tint for multi-selection.
 export function resolveThreadRowClassName(input: {
   isActive: boolean;
   isSelected: boolean;
 }): string {
   const baseClassName =
-    "h-8 w-full translate-x-0 cursor-pointer justify-start rounded-md px-2 text-left text-sm select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+    "h-7 w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
 
   if (input.isSelected && input.isActive) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-active text-sidebar-foreground font-medium hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-primary/22 text-foreground font-medium hover:bg-primary/26 hover:text-foreground dark:bg-primary/30 dark:hover:bg-primary/36",
     );
   }
 
   if (input.isSelected) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-selected text-sidebar-foreground hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-primary/15 text-foreground hover:bg-primary/19 hover:text-foreground dark:bg-primary/22 dark:hover:bg-primary/28",
     );
   }
 
   if (input.isActive) {
     return cn(
       baseClassName,
-      "bg-sidebar-row-active text-sidebar-foreground font-medium hover:bg-sidebar-row-active hover:text-sidebar-foreground",
+      "bg-accent/85 text-foreground font-medium hover:bg-accent hover:text-foreground dark:bg-accent/55 dark:hover:bg-accent/70",
     );
   }
 
-  return cn(
-    baseClassName,
-    "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-  );
+  return cn(baseClassName, "text-muted-foreground hover:bg-accent hover:text-foreground");
 }
 
 // ── Sidebar v2 status model ─────────────────────────────────────────
@@ -1000,6 +1272,30 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
     return thread.runtime.lastErrorClass === "usage_limit" ? "limited" : "failed";
   }
   return "ready";
+}
+
+// Fork: plan mode is live in Forma, so an actionable proposed plan on a
+// settled plan-mode thread reads as its own "plan ready" state. Kept beside
+// (not inside) resolveSidebarThreadStatus so notifications, which treat a
+// proposed plan as ready, keep upstream semantics.
+export function isSidebarThreadPlanReady(
+  thread: Pick<
+    SidebarThreadSummary,
+    | "hasActionableProposedPlan"
+    | "hasPendingApprovals"
+    | "hasPendingUserInput"
+    | "interactionMode"
+    | "latestRun"
+    | "runtime"
+  >,
+): boolean {
+  return (
+    !thread.hasPendingApprovals &&
+    !thread.hasPendingUserInput &&
+    thread.interactionMode === "plan" &&
+    thread.hasActionableProposedPlan &&
+    isLatestRunSettled(thread.latestRun, thread.runtime)
+  );
 }
 
 export type SidebarV2TopStatusKind =

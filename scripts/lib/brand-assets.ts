@@ -7,7 +7,7 @@ export const BRAND_ASSET_PATHS = {
   productionIosIconPng: "assets/prod/black-ios-1024.png",
   productionMacIconPng: "assets/prod/black-macos-1024.png",
   productionLinuxIconPng: "assets/prod/black-universal-1024.png",
-  productionWindowsIconIco: "assets/prod/t3-black-windows.ico",
+  productionWindowsIconIco: "assets/prod/forma-black-windows.ico",
   productionWebFaviconIco: "assets/prod/t3-black-web-favicon.ico",
   productionWebFavicon16Png: "assets/prod/t3-black-web-favicon-16x16.png",
   productionWebFavicon32Png: "assets/prod/t3-black-web-favicon-32x32.png",

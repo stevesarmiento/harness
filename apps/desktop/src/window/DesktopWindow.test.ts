@@ -117,6 +117,7 @@ function makeFakeBrowserWindow() {
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
     setAutoHideCursor: vi.fn(),
+    setWindowButtonVisibility: vi.fn(),
     setFullScreen: vi.fn(),
     setOpacity: vi.fn(),
     setTitle: vi.fn(),
@@ -143,6 +144,7 @@ function makeFakeBrowserWindow() {
     setWindowButtonPosition: window.setWindowButtonPosition,
     setBackgroundThrottling: webContents.setBackgroundThrottling,
     setAutoHideCursor: window.setAutoHideCursor,
+    setWindowButtonVisibility: window.setWindowButtonVisibility,
     setFullScreen: window.setFullScreen,
     setOpacity: window.setOpacity,
     webContentsListeners,
@@ -166,6 +168,7 @@ const layerDesktopAssets = Layer.succeed(DesktopAssets.DesktopAssets, {
     png: Option.none<string>(),
   }),
   resolveResourcePath: () => Effect.succeed(Option.none<string>()),
+  resolveAppIconPath: () => Effect.succeed(Option.none<string>()),
 } satisfies DesktopAssets.DesktopAssets["Service"]);
 
 const layerDesktopServerExposure = Layer.succeed(DesktopServerExposure.DesktopServerExposure, {
@@ -638,8 +641,11 @@ describe("DesktopWindow", () => {
         assert.isUndefined(createdWindowOptions[0]?.x);
         assert.isUndefined(createdWindowOptions[0]?.y);
         assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
+        assert.equal(createdWindowOptions[0]?.titleBarStyle, "hidden");
+        assert.isUndefined(createdWindowOptions[0]?.trafficLightPosition);
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
+        assert.deepEqual(fakeWindow.setWindowButtonVisibility.mock.calls, [[false]]);
         assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));

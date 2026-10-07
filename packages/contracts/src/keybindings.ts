@@ -56,6 +56,15 @@ const MODEL_PICKER_KEYBINDING_COMMANDS = [
 ] as const;
 export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number];
 
+export const GIT_KEYBINDING_COMMANDS = [
+  "git.init",
+  "git.commit",
+  "git.push",
+  "git.pr",
+  "git.publish",
+] as const;
+export type GitKeybindingCommand = (typeof GIT_KEYBINDING_COMMANDS)[number];
+
 export const STATIC_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
   "navigation.back",
@@ -85,7 +94,6 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "usage.open",
   "theme.select",
   "appearance.cycle",
-  "themeEditor.toggle",
   "composer.stash",
   "composer.sendAlternate",
   "composer.sendBackground",
@@ -108,6 +116,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "usage.period.week",
   "usage.period.month",
   "usage.period.quarter",
+  ...GIT_KEYBINDING_COMMANDS,
   ...MODEL_PICKER_KEYBINDING_COMMANDS,
   ...THREAD_KEYBINDING_COMMANDS,
 ] as const;

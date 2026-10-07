@@ -7,9 +7,10 @@ import {
 import type { ComposerCommandItem } from "./ComposerCommandMenu";
 import { scoreProviderSkill } from "../../providerSkillSearch";
 
+// Fork: include project-local agent commands in slash search.
 type SlashSearchItem = Extract<
   ComposerCommandItem,
-  { type: "slash-command" | "provider-slash-command" | "skill" }
+  { type: "slash-command" | "local-slash-command" | "provider-slash-command" | "skill" }
 >;
 
 /**
@@ -102,9 +103,12 @@ export function searchSlashCommandItems(
         tieBreaker:
           item.type === "slash-command"
             ? `0\u0000${item.command}`
-            : item.type === "provider-slash-command"
-              ? `1\u0000${item.command.name}\u0000${item.provider}`
-              : `2\u0000${item.skill.name}\u0000${item.provider}`,
+            : item.type === "local-slash-command"
+              ? // Fork: project-local commands rank between built-ins and provider commands.
+                `1\u0000${item.command.name}\u0000${item.command.path}`
+              : item.type === "provider-slash-command"
+                ? `2\u0000${item.command.name}\u0000${item.provider}`
+                : `3\u0000${item.skill.name}\u0000${item.provider}`,
       },
       Number.POSITIVE_INFINITY,
     );

@@ -42,6 +42,19 @@ node_modules/
 *.log
 .env*
 !.env.example
+references/
+.agents/
+.claude
+.codex
+.cursor
+.repos
+.plans
+.turbo
+.vite-hooks
+.vscode
+.t3
+.macroscope
+
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/

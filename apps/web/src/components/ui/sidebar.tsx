@@ -1,12 +1,11 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeft, PanelLeftClose } from "lucide";
 import * as React from "react";
+import { SidebarPanelIcon } from "~/components/icons/custom";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { Input, type InputProps } from "~/components/ui/input";
-import { MorphIcon } from "~/components/MorphIcon";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Sheet,
@@ -156,9 +155,9 @@ function SidebarProvider({
   return (
     <SidebarContext value={contextValue}>
       <div
-        // Inset layouts opt into bg-sidebar through className.
+        // Inset layouts paint the window chrome behind the inset card.
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full max-sm:[--workspace-titlebar-control-size:--spacing(8)]",
+          "group/sidebar-wrapper relative flex min-h-svh w-full has-data-[variant=inset]:bg-(--app-chrome-background) max-sm:[--workspace-titlebar-control-size:--spacing(8)]",
           className,
         )}
         data-sidebar-state={state}
@@ -237,7 +236,7 @@ function Sidebar({
         <Sheet onOpenChange={setOpenMobile} open={openMobile}>
           <SheetPopup
             className={cn(
-              "w-(--sidebar-width) max-w-none bg-sidebar surface-grain p-0 text-sidebar-foreground",
+              "w-(--sidebar-width) max-w-none bg-sidebar surface-grain p-0 text-sidebar-foreground transition-none",
               className,
             )}
             data-mobile="true"
@@ -287,7 +286,7 @@ function Sidebar({
             "[[data-panel-animations=true]_&]:transition-[width] [[data-panel-animations=true]_&]:[transition-duration:var(--panel-animation-duration)] [[data-panel-animations=true]_&]:ease-out",
             "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
+            variant === "floating"
               ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
           )}
@@ -300,10 +299,14 @@ function Sidebar({
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
-            // Adjust the padding for floating and inset variants.
-            variant === "floating" || variant === "inset"
+            // The floating variant pads its own container; inset leaves the
+            // sidebar flush against the window edges and lets SidebarInset
+            // carry the gap, so the traffic-light/controls insets stay valid.
+            variant === "floating"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              : variant === "inset"
+                ? "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className,
           )}
           data-slot="sidebar-container"
@@ -323,13 +326,15 @@ function Sidebar({
 }
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar();
+  const { isMobile, toggleSidebar } = useSidebar();
   const isOpen = useSidebarVisibility();
+  const defaultLabel = isOpen ? (isMobile ? "Close sidebar" : "Collapse sidebar") : "Open sidebar";
+  const ariaLabel = props["aria-label"] ?? defaultLabel;
 
   return (
     <Button
       className={cn(
-        "size-[var(--workspace-titlebar-control-size)]! [-webkit-app-region:no-drag]",
+        "size-[var(--workspace-titlebar-control-size)]! text-foreground/55 transition-colors [-webkit-app-region:no-drag] hover:text-foreground focus-visible:text-foreground [&_svg]:opacity-100",
         className,
       )}
       data-sidebar="trigger"
@@ -342,9 +347,11 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       size="icon"
       variant="ghost"
       {...props}
+      aria-label={ariaLabel}
+      title={props.title ?? defaultLabel}
     >
-      <MorphIcon className="size-4" icon={isOpen ? PanelLeftClose : PanelLeft} />
-      <span className="sr-only">Toggle Sidebar</span>
+      <SidebarPanelIcon />
+      <span className="sr-only">{ariaLabel}</span>
     </Button>
   );
 }
@@ -489,7 +496,7 @@ function SidebarRail({
             aria-label={railLabel}
             className={cn(
               /* disable pointer events only when offcanvas sidebar is collapsed, that's when the rail sits over the native scrollbar on windows and linux. icon mode stays fully clickable. */
-              "-translate-x-1/2 group-data-[side=left]:-right-4 absolute inset-y-0 z-20 hidden w-4 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=right]:left-0 sm:flex [[data-collapsible=offcanvas][data-state=collapsed]_&]:pointer-events-none",
+              "-translate-x-1/2 group-data-[side=left]:-right-4 absolute inset-y-0 z-20 hidden w-4 transition-[background-color,transform] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-in-out)] after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:transition-colors after:[transition-duration:var(--motion-duration-ui)] after:[transition-timing-function:var(--motion-ease-in-out)] hover:after:bg-sidebar-border group-data-[side=right]:left-0 sm:flex [[data-collapsible=offcanvas][data-state=collapsed]_&]:pointer-events-none",
               "[[data-panel-animations=true]_&]:transition-all [[data-panel-animations=true]_&]:[transition-duration:var(--panel-animation-duration)] [[data-panel-animations=true]_&]:ease-out",
               "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
               "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
@@ -551,11 +558,33 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
   return (
     <main
       className={cn(
-        "relative flex min-w-0 w-full flex-1 flex-col bg-background surface-grain",
-        "md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2 md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm/5",
+        // Transparent positioning column. The route header renders directly on
+        // the window chrome; SidebarInsetCard below it carries the card chrome.
+        // bg-background remains for <md where the layout is full-bleed.
+        "relative flex min-w-0 w-full flex-1 flex-col bg-background",
+        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:bg-transparent",
         className,
       )}
       data-slot="sidebar-inset"
+      {...props}
+    />
+  );
+}
+
+function SidebarInsetCard({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background surface-grain",
+        // Full-bleed and chromeless below md; rounded inset card on desktop.
+        // Plain md: (not peer-scoped): this is a child of SidebarInset and the
+        // app only uses the inset sidebar variant. corner-shape draws
+        // Apple-style continuous (squircle) corners; unsupported engines fall
+        // back to the plain radius.
+        "md:rounded-2xl md:[corner-shape:squircle] md:border md:border-border md:shadow-sm/5",
+        className,
+      )}
+      data-slot="sidebar-inset-card"
       {...props}
     />
   );
@@ -572,10 +601,21 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarFooter({
+  className,
+  size = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  // Fork: `inset` pads Forma's footer evenly on every side.
+  size?: "default" | "inset";
+}) {
   return (
     <div
-      className={cn("flex flex-col gap-2 px-[var(--sidebar-content-inset)] py-1", className)}
+      className={cn(
+        "flex flex-col gap-2 px-[var(--sidebar-content-inset)] py-1",
+        size === "inset" && "p-[var(--sidebar-content-inset)]",
+        className,
+      )}
       data-sidebar="footer"
       data-slot="sidebar-footer"
       {...props}
@@ -623,11 +663,19 @@ function SidebarContent({
   );
 }
 
-function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarGroup({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  // Fork: `header` is Forma's legacy sidebar search row (tighter bottom inset).
+  variant?: "default" | "header";
+}) {
   return (
     <div
       className={cn(
         "relative flex w-full min-w-0 flex-col p-[var(--sidebar-content-inset)]",
+        variant === "header" && "px-2 pt-2 pb-1",
         className,
       )}
       data-sidebar="group"
@@ -660,7 +708,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full cursor-pointer items-center gap-[var(--sidebar-control-gap)] overflow-hidden text-left outline-hidden ring-ring transition-[width,height,padding] hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 active:bg-sidebar-row-active active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-64 aria-disabled:pointer-events-none aria-disabled:opacity-64 data-[active=true]:bg-sidebar-row-selected data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground data-[state=open]:hover:bg-sidebar-row-hover data-[state=open]:hover:text-sidebar-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-[var(--sidebar-content-inset)]! [&>span:last-child]:truncate [&>svg:not([class*='size-'])]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--sidebar-icon-color)] hover:[&>svg]:text-sidebar-foreground active:[&>svg]:text-sidebar-foreground data-[active=true]:[&>svg]:text-sidebar-foreground",
+  "peer/menu-button flex w-full cursor-pointer items-center gap-[var(--sidebar-control-gap)] overflow-hidden text-left outline-hidden ring-ring transition-[width,height,padding] [transition-duration:var(--motion-duration-ui)] [transition-timing-function:var(--motion-ease-in-out)] hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 active:bg-sidebar-row-active active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-64 aria-disabled:pointer-events-none aria-disabled:opacity-64 data-[active=true]:bg-sidebar-row-selected data-[active=true]:font-medium data-[active=true]:text-sidebar-foreground data-[state=open]:hover:bg-sidebar-row-hover data-[state=open]:hover:text-sidebar-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-[var(--sidebar-content-inset)]! [&>span:last-child]:truncate [&>svg:not([class*='size-'])]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--sidebar-icon-color)] [&>svg]:opacity-60 hover:[&>svg]:text-sidebar-foreground hover:[&>svg]:opacity-100 active:[&>svg]:opacity-100 data-[active=true]:[&>svg]:opacity-100 active:[&>svg]:text-sidebar-foreground data-[active=true]:[&>svg]:text-sidebar-foreground",
   {
     defaultVariants: {
       size: "default",
@@ -677,6 +725,13 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: "font-medium text-sidebar-muted-foreground/80",
         outline: "bg-sidebar-control-surface ring-1 ring-sidebar-border",
+        // Fork: Forma's legacy sidebar search trigger, a bordered pill on the accent surface.
+        search:
+          "h-9 gap-2 rounded-xl border border-border/60 bg-accent/70 px-2.5 py-1.5 font-medium text-muted-foreground/70 shadow-sm/5 transition-colors hover:bg-accent/85 hover:text-foreground focus-visible:ring-0",
+        // Fork: Forma's project header row; the header group keeps it lit while its
+        // overlaid actions are hovered.
+        project:
+          "gap-2 px-2 py-1.5 font-medium text-sidebar-muted-foreground/80 hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-foreground",
       },
     },
   },
@@ -735,12 +790,20 @@ function SidebarMenuButton({
   );
 }
 
-function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
+function SidebarMenuSub({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"ul"> & {
+  // Fork: `flush` is Forma's legacy thread list (no rail, tight rows).
+  variant?: "default" | "flush";
+}) {
   return (
     <ul
       className={cn(
         "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-sidebar-border border-l px-2.5 py-0.5",
         "group-data-[collapsible=icon]:hidden",
+        variant === "flush" && "gap-0.5 border-l-0 px-1.5 py-0",
         className,
       )}
       data-sidebar="menu-sub"
@@ -763,12 +826,15 @@ function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">)
 
 function SidebarMenuSubButton({
   size = "md",
+  variant = "default",
   isActive = false,
   className,
   render,
   ...props
 }: useRender.ComponentProps<"a"> & {
   size?: "sm" | "md";
+  // Fork: `subtle` is Forma's quiet "Show more / Show less" row.
+  variant?: "default" | "subtle";
   isActive?: boolean;
 }) {
   const defaultProps = {
@@ -778,6 +844,8 @@ function SidebarMenuSubButton({
       size === "sm" && "text-xs",
       size === "md" && "text-sm",
       "group-data-[collapsible=icon]:hidden",
+      variant === "subtle" &&
+        "h-6 px-2 text-left text-ui-2xs text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80",
       className,
     ),
     "data-active": isActive,
@@ -801,6 +869,7 @@ export {
   SidebarGroup,
   SidebarHeader,
   SidebarInset,
+  SidebarInsetCard,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,

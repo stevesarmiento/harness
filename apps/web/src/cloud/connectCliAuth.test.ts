@@ -18,6 +18,9 @@ describe("connectCliAuth", () => {
     vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", TEST_PUBLISHABLE_KEY);
     vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
     vi.stubEnv("VITE_T3CODE_RELAY_URL", "https://relay.example.com");
+    // A repo-root .env can bake a real client id into import.meta.env; stub it
+    // empty so "not configured" is what this test actually exercises.
+    vi.stubEnv("VITE_CLERK_CLI_OAUTH_CLIENT_ID", "");
     expect(hasConnectCliAuthConfig()).toBe(false);
 
     vi.stubEnv("VITE_CLERK_CLI_OAUTH_CLIENT_ID", "oauthapp_123");
@@ -46,6 +49,7 @@ describe("connectCliAuth", () => {
 
   it("returns null when the CLI OAuth client id is not configured", () => {
     vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", TEST_PUBLISHABLE_KEY);
+    vi.stubEnv("VITE_CLERK_CLI_OAUTH_CLIENT_ID", "");
     expect(
       buildConnectCliClerkAuthorizeUrl({
         state: "state-1",
@@ -72,6 +76,7 @@ describe("connectCliAuth", () => {
 
   it("falls back to the current URL when the authorize URL cannot be built", () => {
     vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", TEST_PUBLISHABLE_KEY);
+    vi.stubEnv("VITE_CLERK_CLI_OAUTH_CLIENT_ID", "");
 
     const connectUrl =
       "https://app.t3.codes/connect#state=state-1&challenge=challenge-1&port=34338";

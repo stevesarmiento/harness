@@ -363,11 +363,12 @@ describe("ClientSettings load balancing", () => {
 });
 
 describe("ClientSettings composer context strip", () => {
-  it("defaults to draft-only and accepts a persistent strip preference", () => {
-    expect(decodeClientSettings({}).persistComposerContextStrip).toBe(false);
+  // Fork: Forma keeps the meta row in active threads by default.
+  it("defaults to persistent and accepts a draft-only strip preference", () => {
+    expect(decodeClientSettings({}).persistComposerContextStrip).toBe(true);
     expect(
-      decodeClientSettingsPatch({ persistComposerContextStrip: true }).persistComposerContextStrip,
-    ).toBe(true);
+      decodeClientSettingsPatch({ persistComposerContextStrip: false }).persistComposerContextStrip,
+    ).toBe(false);
   });
 });
 
@@ -609,17 +610,39 @@ describe("ClientSettings environment identification", () => {
   });
 });
 
-describe("ClientSettings sidebar", () => {
-  it("defaults to the current sidebar", () => {
-    expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
+describe("ClientSettings app icon", () => {
+  it("defaults to the build-specific icon", () => {
+    expect(decodeClientSettings({}).appIcon).toBe("default");
   });
 
-  it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
+  it.each(["forma-arc", "forma-fluted", "forma-foil", "forma-blueprint"] as const)(
+    "accepts %s",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe(appIcon);
+      expect(decodeClientSettingsPatch({ appIcon }).appIcon).toBe(appIcon);
+    },
+  );
+
+  it.each(["forma-prod", "forma-dev", "forma-nightly"] as const)(
+    "normalizes the legacy %s build icon to default",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe("default");
+    },
+  );
+});
+
+describe("ClientSettings sidebar", () => {
+  // Fork: the Forma sidebar is the legacy implementation and stays the default.
+  it("defaults to the Forma (legacy) sidebar", () => {
+    expect(decodeClientSettings({}).legacySidebarEnabled).toBe(true);
+  });
+
+  it("drops the retired sidebar v2 beta keys, resetting everyone to the Forma default", () => {
     const decoded = decodeClientSettings({
       sidebarV2Enabled: false,
       sidebarV2ConfiguredByUser: true,
     });
-    expect(decoded.legacySidebarEnabled).toBe(false);
+    expect(decoded.legacySidebarEnabled).toBe(true);
     expect(decoded).not.toHaveProperty("sidebarV2Enabled");
     expect(decoded).not.toHaveProperty("sidebarV2ConfiguredByUser");
   });
@@ -632,10 +655,10 @@ describe("ClientSettings sidebar", () => {
     expect(decodeClientSettingsPatch(stored)).toEqual({});
   });
 
-  it("preserves an explicit legacy sidebar opt-in", () => {
-    expect(decodeClientSettings({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(true);
-    expect(decodeClientSettingsPatch({ legacySidebarEnabled: true }).legacySidebarEnabled).toBe(
-      true,
+  it("preserves an explicit sidebar v2 opt-out of the legacy sidebar", () => {
+    expect(decodeClientSettings({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ legacySidebarEnabled: false }).legacySidebarEnabled).toBe(
+      false,
     );
   });
 
@@ -647,8 +670,9 @@ describe("ClientSettings sidebar", () => {
 });
 
 describe("ClientSettings context window meter", () => {
-  it("defaults off and preserves an explicit legacy opt-in", () => {
-    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(false);
+  // Fork: Forma shows the meter by default.
+  it("defaults on and preserves an explicit opt-in", () => {
+    expect(decodeClientSettings({}).contextWindowMeterEnabled).toBe(true);
     expect(
       decodeClientSettings({ contextWindowMeterEnabled: true }).contextWindowMeterEnabled,
     ).toBe(true);
@@ -683,16 +707,17 @@ describe("ClientSettings follow-up behavior", () => {
 });
 
 describe("ClientSettings composer collapse", () => {
-  it("collapses on scroll by default and accepts opting out", () => {
-    expect(decodeClientSettings({}).composerCollapseOnScroll).toBe(true);
+  // Fork: the Forma composer stays expanded unless the user opts in.
+  it("stays expanded by default and accepts opting in", () => {
+    expect(decodeClientSettings({}).composerCollapseOnScroll).toBe(false);
     expect(
-      decodeClientSettingsPatch({ composerCollapseOnScroll: false }).composerCollapseOnScroll,
-    ).toBe(false);
+      decodeClientSettingsPatch({ composerCollapseOnScroll: true }).composerCollapseOnScroll,
+    ).toBe(true);
   });
 
   it("drops the retired blur trigger key", () => {
-    const decoded = decodeClientSettings({ composerCollapseOnBlur: false });
-    expect(decoded.composerCollapseOnScroll).toBe(true);
+    const decoded = decodeClientSettings({ composerCollapseOnBlur: true });
+    expect(decoded.composerCollapseOnScroll).toBe(false);
     expect(decoded).not.toHaveProperty("composerCollapseOnBlur");
   });
 });
@@ -741,6 +766,26 @@ describe("ClientSettings pull request merge methods", () => {
         pullRequestMergeMethodOverrides: { project: "fast-forward" },
       }),
     ).toThrow();
+  });
+});
+
+describe("ClientSettings thread cleanup", () => {
+  it("defaults cleanup to one inactive day", () => {
+    expect(decodeClientSettings({}).threadCleanupInactiveDays).toBe(1);
+  });
+
+  it.each([1, 3, 7, 14, 30] as const)("accepts the %s day cleanup window", (value) => {
+    expect(
+      decodeClientSettings({ threadCleanupInactiveDays: value }).threadCleanupInactiveDays,
+    ).toBe(value);
+    expect(
+      decodeClientSettingsPatch({ threadCleanupInactiveDays: value }).threadCleanupInactiveDays,
+    ).toBe(value);
+  });
+
+  it.each([0, 2, 31])("rejects an unsupported cleanup window: %s", (value) => {
+    expect(() => decodeClientSettings({ threadCleanupInactiveDays: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ threadCleanupInactiveDays: value })).toThrow();
   });
 });
 

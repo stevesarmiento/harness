@@ -22,10 +22,10 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
-import { resolveThreadRouteRef } from "../threadRoutes";
-import { cn, isMacPlatform } from "../lib/utils";
+import { resolveThreadRouteRef, resolveThreadRouteTarget } from "../threadRoutes";
+import { isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useLegacySidebarEnabled } from "../hooks/useSettings";
+import { useLegacySidebarEnabled } from "../hooks/useSettings";
 import {
   PanelAnimationSuppressionProvider,
   usePanelAnimationSettings,
@@ -37,7 +37,6 @@ import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
-import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
   clampThreadSidebarWidth,
@@ -80,15 +79,23 @@ function readInitialThreadSidebarWidth(): number {
   }
 }
 
-function SidebarControl() {
+// Fork: Forma's sidebar header owns the collapse trigger while the sidebar is
+// open; the layout listens for the toggle shortcut and floats upstream's
+// trigger only while collapsed, so the sidebar can always be reopened.
+function SidebarToggleKeybinding() {
   const usagePageOpen = useLocation({ select: (location) => location.pathname === "/usage" });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const stageBackdropVariant = useSidebarStageBackdropVariant(
-    environmentIdentificationMode === "artwork",
-  );
+  // Fork: Forma's home, settings, and chat headers mount their own reopen button.
+  const onInlineReopenPage = useLocation({
+    select: (location) => location.pathname === "/" || location.pathname.startsWith("/settings"),
+  });
+  const onThreadRoute = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteTarget(params) !== null,
+  });
+  const hasInlineReopenButton = onInlineReopenPage || onThreadRoute;
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle", {
     context: { usagePageOpen },
   });
@@ -127,31 +134,18 @@ function SidebarControl() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar, usagePageOpen]);
 
+  if (isSidebarVisible || hasInlineReopenButton) return null;
   return (
-    // The right-side layout controls carry mr-px (border compensation inside
-    // the panel), so the trigger mirrors it: both clusters sit one extra pixel
-    // off their edge and the titlebar reads symmetric.
     <div
       className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
       data-sidebar-control=""
     >
       <Tooltip>
         <TooltipTrigger
-          render={
-            <SidebarTrigger
-              // Over the stage artwork the trigger is a control on imagery, like the media
-              // viewer's arrows; that variant positions itself, so the layout is reset here.
-              variant={isSidebarVisible && stageBackdropVariant ? "media-navigation" : "ghost"}
-              className={cn(
-                "pointer-events-auto",
-                isSidebarVisible && stageBackdropVariant && "relative top-auto translate-y-0",
-              )}
-              aria-label="Toggle main sidebar"
-            />
-          }
+          render={<SidebarTrigger className="pointer-events-auto" aria-label="Open sidebar" />}
         />
         <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+          Open sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
         </TooltipPopup>
       </Tooltip>
     </div>
@@ -229,6 +223,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  // Fork: Forma paints the legacy (v1) sidebar by default; v2 theme only for upstream's sidebar.
+  const useSidebarV2Theme = !legacySidebarEnabled && !isOnSettings;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
   // Subscribed rather than read once: the clamp must track live window size,
@@ -301,6 +297,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
       <SidebarProvider
         className="h-dvh! min-h-0!"
+        // Fork: data-shell-theme (not data-sidebar-version) scopes only the chrome
+        // token; the sidebar-version blocks repaint --background/--card and
+        // would blacken the whole content area if placed on the wrapper.
+        data-shell-theme={useSidebarV2Theme ? "v2" : "v1"}
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
         defaultOpen
         style={sidebarProviderStyle}
@@ -311,6 +311,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           side="left"
           collapsible="offcanvas"
           data-app-sidebar=""
+          // Fork: Forma's inset sidebar card and version-scoped theme tokens
+          // (index.css paints the surface and text from data-sidebar-version).
+          data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+          variant="inset"
           role="navigation"
           aria-label={isOnSettings ? "Settings" : "Threads"}
           resizable={{
@@ -336,7 +340,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           <SidebarRail onDoubleClick={resetSidebarWidth} />
         </Sidebar>
         {children}
-        <SidebarControl />
+        <SidebarToggleKeybinding />
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />
       </SidebarProvider>

@@ -31,9 +31,10 @@ export function ThreadDetailsSection({
           !showHeading && "hidden",
         )}
       >
+        {/* Fork: Forma UI type token. */}
         <h3
           id={headingId}
-          className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none"
+          className="text-ui-2xs min-w-0 truncate font-medium text-muted-foreground select-none"
         >
           {title}
         </h3>

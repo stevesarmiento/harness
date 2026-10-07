@@ -15,7 +15,8 @@ export const THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS = "gap-2.5 px-2.5 text-left"
 // The row supplies the first tint; the hovered or open segment adds a second tint.
 const THREAD_DETAILS_PANEL_SPLIT_BUTTON_SURFACE_CLASS = `${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS} data-popup-open:!bg-black/[0.055] dark:data-popup-open:!bg-white/[0.075]`;
 
-const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-[13px] font-medium text-foreground/80`;
+// Fork: Forma's scalable UI type token instead of a fixed 13px.
+const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-foreground/80`;
 const THREAD_DETAILS_PANEL_SPLIT_GROUP_SURFACE_CLASS = `${THREAD_DETAILS_PANEL_HOVER_SURFACE_CLASS} has-[[data-popup-open]]:bg-black/[0.055] dark:has-[[data-popup-open]]:bg-white/[0.075]`;
 
 export const THREAD_DETAILS_PANEL_ROW_CLASS = `${THREAD_DETAILS_PANEL_CONTROL_CLASS} w-full justify-start ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
@@ -29,7 +30,8 @@ export const THREAD_DETAILS_PANEL_LINK_SPLIT_GROUP_CLASS = `group/thread-details
 
 export const THREAD_DETAILS_PANEL_LINK_SPLIT_PRIMARY_CLASS = `${THREAD_DETAILS_PANEL_CONTROL_CLASS} flex-1 justify-start rounded-e-none ${THREAD_DETAILS_PANEL_SPLIT_BUTTON_SURFACE_CLASS}`;
 
-export const THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS = `h-8 w-full min-w-0 justify-start rounded-lg border border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-[13px] font-medium text-foreground/80 sm:h-8 sm:text-[13px]`;
+// Fork: Forma UI type token (its unlayered rule also beats the button's sm: size).
+export const THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS = `h-8 w-full min-w-0 justify-start rounded-lg border border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-foreground/80 sm:h-8`;
 
 export const THREAD_DETAILS_PANEL_ICON_CLASS = "size-4 shrink-0 text-muted-foreground";
 

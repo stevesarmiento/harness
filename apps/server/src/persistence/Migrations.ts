@@ -73,6 +73,15 @@ import Migration0056 from "./Migrations/056_RemoveRedundantProjectionIndexes.ts"
 import Migration0057 from "./Migrations/057_ScheduledTaskWebhooks.ts";
 import Migration0058 from "./Migrations/058_WebhookRelayDeliveries.ts";
 import Migration0059 from "./Migrations/059_McpAppModelContext.ts";
+// Fork: fork-only migrations live in the reserved 9xx id block (935+) so
+// upstream can keep shipping 057, 058, ... without ever colliding with us.
+import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
+import Migration0936 from "./Migrations/936_ProjectionProjectComponentPreviewWorkspaceRecords.ts";
+import Migration0937 from "./Migrations/937_ResetProjectComponentPreviewState.ts";
+import Migration0938 from "./Migrations/938_ReconcileLegacyForkMigrationHistory.ts";
+import Migration0939 from "./Migrations/939_ThreadExtensionQueue.ts";
+import Migration0940 from "./Migrations/940_ProjectionThreadsForkLineage.ts";
+import Migration0941 from "./Migrations/941_ReconcileLegacyForkUpstreamOverlap.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -146,6 +155,21 @@ export const migrationEntries = [
   [57, "ScheduledTaskWebhooks", Migration0057],
   [58, "WebhookRelayDeliveries", Migration0058],
   [59, "McpAppModelContext", Migration0059],
+  // Fork: ids 935-941 are the reserved fork block; lower ids belong to
+  // upstream. 935-937 and 939-940 back V1-era fork features that V2 dropped;
+  // they stay registered because existing Forma databases recorded them. These migrations briefly shipped locally as ids 35-40, but no
+  // real database ever recorded those ids (the only live fork database was
+  // still on the legacy 26-31 history), so no renumbering compat is needed.
+  // Exception: if ~/.t3 (the official t3 app's data dir) was ever run against
+  // this fork it may carry recorded rows 35-40 with these names — that
+  // database must be cleaned up manually, never migrated by this fork.
+  [935, "ProjectionProjectComponentPreviewConfig", Migration0935],
+  [936, "ProjectionProjectComponentPreviewWorkspaceRecords", Migration0936],
+  [937, "ResetProjectComponentPreviewState", Migration0937],
+  [938, "ReconcileLegacyForkMigrationHistory", Migration0938],
+  [939, "ThreadExtensionQueue", Migration0939],
+  [940, "ProjectionThreadsForkLineage", Migration0940],
+  [941, "ReconcileLegacyForkUpstreamOverlap", Migration0941],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -170,10 +194,57 @@ export interface RunMigrationsOptions {
 }
 
 /**
+ * Fork: the standard Migrator only applies ids greater than the highest
+ * recorded id. Because fork migrations live in the reserved 9xx block, a fork
+ * database's latest id is always >= 935, which would silently skip every new
+ * upstream migration (035, 036, ...) that arrives via merges. After the
+ * standard run, this pass applies any registered migration whose id is absent
+ * from the tracking table, in ascending id order. Consequence: fork 9xx
+ * migrations may run before pending upstream ones on an existing database, so
+ * fork migrations must never depend on upstream migrations newer than the
+ * merge they shipped with.
+ */
+const backfillSkippedMigrations = Effect.fn("backfillSkippedMigrations")(function* (
+  throughId?: number,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = (yield* sql`SELECT migration_id FROM effect_sql_migrations`
+    .withoutTransform) as ReadonlyArray<{ migration_id: number }>;
+  const applied = new Set(rows.map((row) => Number(row.migration_id)));
+  const executed: Array<readonly [id: number, name: string]> = [];
+  for (const [id, name, migration] of migrationEntries) {
+    if ((throughId !== undefined && id > throughId) || applied.has(id)) {
+      continue;
+    }
+    yield* sql
+      .withTransaction(
+        Effect.gen(function* () {
+          yield* sql`INSERT INTO effect_sql_migrations ${sql.insert([{ migration_id: id, name }])}`
+            .withoutTransform;
+          yield* Effect.catch(migration, (error) =>
+            Effect.die(
+              new Migrator.MigrationError({
+                cause: error,
+                kind: "Failed",
+                message: `Backfilled migration "${id}_${name}" failed`,
+              }),
+            ),
+          );
+        }),
+      )
+      .pipe(Effect.withSpan(`Migrator backfill ${id}_${name}`));
+    executed.push([id, name] as const);
+  }
+  return executed;
+});
+
+/**
  * Run all pending migrations.
  *
  * Creates the migrations tracking table (effect_sql_migrations) if it doesn't exist,
- * then runs any migrations with ID greater than the latest recorded migration.
+ * then runs any migrations with ID greater than the latest recorded migration,
+ * followed by a fork-aware backfill pass for upstream migrations whose ids sort
+ * below the fork's reserved 9xx block (see backfillSkippedMigrations).
  *
  * Returns array of [id, name] tuples for migrations that were run.
  *
@@ -189,6 +260,7 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   const executedMigrations = [
     ...previewMigrations,
     ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
+    ...(yield* backfillSkippedMigrations(toMigrationInclusive)),
   ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0

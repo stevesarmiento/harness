@@ -8,6 +8,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
+import { cn } from "~/lib/utils";
 import { shortcutLabelForCommand } from "~/keybindings";
 import { projectIconColorClassName } from "~/projectIconColors";
 import { primaryServerKeybindingsAtom } from "~/state/server";
@@ -25,6 +26,7 @@ import {
 } from "~/sidebarProjectGrouping";
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
+import { LogomarkFormaAnimated } from "../LogomarkFormaAnimated";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
@@ -330,6 +332,10 @@ export function DraftHeroHeadline({
         ? `${activeProjectDisplayName ?? "Choose a project"} to start`
         : "Add a project to start";
 
+  // Forma shows the hero headline only while no real project is chosen; a
+  // resolved project leaves just the logomark above the composer.
+  const showHeadline = !hasResolvedProject || isScratchDraft;
+
   // One click out of the project, phrased as the alternative to the question
   // above it. Focus moves to the project picker once this line has gone.
   const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
@@ -358,28 +364,42 @@ export function DraftHeroHeadline({
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
-      <h1
-        aria-label={headingLabel}
-        className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl"
-      >
-        {isScratchDraft ? (
-          <>What should we work on?</>
-        ) : hasResolvedProject ? (
-          <>What should we build in {projectSelector}?</>
-        ) : canChooseProject ? (
-          <>{projectSelector} to start</>
-        ) : (
-          <>Add a project to start</>
-        )}
-      </h1>
-      {/* Reserved whenever threads can skip a project, so the heading does not
-          move. Without a project, the picker moves here to choose one. */}
-      {scratchWorkspaceRoot === null ? null : (
-        <p className="mt-2 flex h-6 items-center text-sm">
-          {isScratchDraft ? projectSelector : orStartWithoutProject}
-        </p>
+    <div
+      className={cn(
+        "flex w-full flex-col items-center",
+        // With no headline the logo slides down to tuck slightly behind the
+        // composer (the hero block is z-0, the composer z-10); with the
+        // headline it keeps the classic gap above the composer.
+        showHeadline ? "pb-8" : "-mb-14",
       )}
+    >
+      <LogomarkFormaAnimated
+        aria-hidden
+        className="pointer-events-none h-80 w-auto text-foreground/5 [mask-image:linear-gradient(to_bottom,black_30%,transparent_80%)] sm:h-80"
+      />
+      {showHeadline ? (
+        <>
+          <h1
+            aria-label={headingLabel}
+            className="mx-auto mt-5 w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl"
+          >
+            {isScratchDraft ? (
+              <>What should we work on?</>
+            ) : canChooseProject ? (
+              <>{projectSelector} to start</>
+            ) : (
+              <>Add a project to start</>
+            )}
+          </h1>
+          {/* Reserved whenever threads can skip a project, so the heading does not
+              move. Without a project, the picker moves here to choose one. */}
+          {scratchWorkspaceRoot === null ? null : (
+            <p className="mt-2 flex h-6 items-center text-sm">
+              {isScratchDraft ? projectSelector : orStartWithoutProject}
+            </p>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }

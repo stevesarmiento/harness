@@ -1,6 +1,6 @@
 import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { ChevronRightIcon } from "lucide-react";
+import { IconChevronRight as ChevronRightIcon } from "symbols-react";
 import { type RefObject, useCallback, useState } from "react";
 import { cn } from "~/lib/utils";
 import { shortcutLabelForCommand } from "../keybindings";
@@ -240,7 +240,7 @@ function CommandPaletteResultRow(props: {
       ) : null}
       {shortcutLabel ? <CommandShortcut>{shortcutLabel}</CommandShortcut> : null}
       {props.item.kind === "submenu" ? (
-        <ChevronRightIcon className="-me-0.5 ms-auto size-4 shrink-0 text-muted-foreground/70" />
+        <ChevronRightIcon className="ml-auto size-2.5 shrink-0 fill-muted-foreground/50" />
       ) : null}
     </CommandItem>
   );

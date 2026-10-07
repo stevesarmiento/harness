@@ -1,19 +1,16 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { IconArrowTriangleheadPull as PullRequestIcon } from "symbols-react";
 
-import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { APP_BASE_NAME, APP_VERSION } from "../../branding";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
-import { T3Wordmark } from "../T3Wordmark";
-import {
-  resolveEnvironmentIdentificationPillLabel,
-  resolveSidebarStageBackdropVariant,
-  SidebarStageBackdrop,
-  useEnvironmentStageLabel,
-} from "../SidebarStageBackdrop";
-import { Badge } from "../ui/badge";
+import { LogomarkForma } from "../LogomarkForma";
+import { SettingsHexIcon, UsageChartIcon } from "../icons/custom";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
 import {
   SidebarFooter,
   SidebarMenu,
@@ -22,62 +19,57 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "../ui/sidebar";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
-import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
 }: {
   isElectron: boolean;
 }) {
-  const stageLabel = useEnvironmentStageLabel();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const backdropVariant = resolveSidebarStageBackdropVariant(
-    stageLabel,
-    environmentIdentificationMode === "artwork",
-  );
-  const pillLabel =
-    environmentIdentificationMode === "pill"
-      ? resolveEnvironmentIdentificationPillLabel(stageLabel)
-      : null;
-
   return (
-    // The titlebar row, not a padded SidebarHeader: it aligns to the window controls.
+    // Fork: Forma's titlebar row is a plain element (like upstream's), not a
+    // padded SidebarHeader: it aligns to the window controls.
     <div
       className={cn(
-        "relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 px-3 md:pl-0",
+        "@container/sidebar-header relative isolate flex shrink-0 flex-row items-center justify-between overflow-hidden",
+        isElectron
+          ? "h-[42px] gap-2 px-3 py-0 wco:h-[env(titlebar-area-height)] wco:pl-titlebar-area"
+          : "gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3",
         isElectron && "drag-region",
       )}
+      data-sidebar="header"
+      data-slot="sidebar-header"
     >
-      {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
-      <SidebarTrigger
-        // Over the stage artwork: the media viewer's control-on-imagery treatment.
-        variant={backdropVariant ? "media-navigation" : "ghost"}
-        className="relative top-auto z-10 translate-y-0 md:hidden"
-      />
-      {/* One visible line: the pill wraps onto the clipped second line once it no longer fits.
-          The padding keeps the brand's focus ring inside the clip. */}
-      <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
-        <SidebarBrand onBackdrop={backdropVariant !== null} />
-        {pillLabel ? (
-          <div className="ml-1 flex h-7 items-center">
-            <Badge data-environment-identification="pill" size="sm" variant="secondary">
-              {pillLabel}
-            </Badge>
-          </div>
-        ) : null}
+      <SidebarTrigger className="relative z-10 md:hidden" />
+      <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 pl-1">
+        <Tooltip>
+          <TooltipTrigger render={<SidebarBrand />} />
+          <TooltipPopup side="bottom" sideOffset={2}>
+            Version {APP_VERSION}
+          </TooltipPopup>
+        </Tooltip>
       </div>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarTrigger
+              className="relative z-10 hidden shrink-0 md:-mr-2 md:inline-flex"
+              data-testid="desktop-sidebar-collapse-trigger"
+            />
+          }
+        />
+        <TooltipPopup side="bottom">Collapse sidebar</TooltipPopup>
+      </Tooltip>
     </div>
   );
 });
 
-// Measures the brand at its titlebar inset, plus the header's right padding and the
-// sidebar border, so the sidebar minimum follows font size, zoom and macOS window controls.
+// Measures the brand plus the header's padding and collapse trigger, so the
+// sidebar minimum follows font size and zoom and the wordmark never clips.
 export function SidebarBrandWidthProbe({
   onWidthChange,
 }: {
@@ -97,44 +89,36 @@ export function SidebarBrandWidthProbe({
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none invisible fixed top-0 left-0 flex w-max border-r border-transparent pr-3"
+      className="pointer-events-none invisible fixed top-0 left-0 flex w-max items-center gap-2 border-r border-transparent px-4"
       ref={observeWidth}
     >
-      <div className="ml-[var(--workspace-titlebar-content-left)] flex">
-        <SidebarBrandMark onBackdrop={false} />
-      </div>
+      <FormaWordmark />
+      {/* The collapse trigger's footprint. */}
+      <span className="size-7 shrink-0" />
     </div>
   );
 }
 
-function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+function SidebarBrand() {
   return (
     <Link
       aria-label="Go to threads"
-      className={cn(
-        "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
-        onBackdrop ? "text-white" : "text-foreground",
-      )}
+      className="sidebar-brand h-7 w-fit min-w-0 shrink-0 items-center gap-2 overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2"
       to="/"
     >
-      <SidebarBrandMark onBackdrop={onBackdrop} />
+      <FormaWordmark />
     </Link>
   );
 }
 
-function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
+function FormaWordmark() {
   return (
-    // Center the visible capitals, without the font's ascender/descender space.
-    <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-      <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
-      <span
-        className={cn(
-          "truncate [text-box:trim-both_cap_alphabetic]",
-          onBackdrop ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        Code
-      </span>
+    <span
+      aria-label={APP_BASE_NAME}
+      className="inline-flex shrink-0 items-center gap-2 font-semibold text-lg lowercase tracking-tight"
+    >
+      <LogomarkForma aria-hidden="true" className="h-5 w-auto shrink-0" />
+      <span className="sidebar-brand-name truncate">{APP_BASE_NAME}</span>
     </span>
   );
 }
@@ -164,6 +148,9 @@ function SidebarUtilityItem({
   );
 }
 
+// Settings / Pull Requests / Usage row, swapped for a Back button on utility pages.
+// The thread sidebars carry these in the account menu instead (Forma); the settings
+// nav mounts this row directly.
 export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
@@ -188,14 +175,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     closeMobileSidebar();
     void navigate({ to: "/settings" });
   }, [closeMobileSidebar, navigate]);
-
   const handleUsageClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+    closeMobileSidebar();
     void navigate({ to: "/usage" });
-  }, [isMobile, navigate, setOpenMobile]);
-
+  }, [closeMobileSidebar, navigate]);
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
     void navigateToMainApp();
@@ -213,19 +196,19 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       ) : (
         <>
           <SidebarUtilityItem
-            icon={<SettingsIcon />}
+            icon={<SettingsHexIcon />}
             label="Settings"
             onClick={handleSettingsClick}
           />
           {pullRequestsSupported ? (
             <SidebarUtilityItem
-              icon={<PullRequestGlyph.pullRequest />}
+              icon={<PullRequestIcon className="fill-current" />}
               label="Pull Requests"
               onClick={handlePullRequestsClick}
             />
           ) : null}
           <SidebarUtilityItem
-            icon={<ChartNoAxesColumnIcon />}
+            icon={<UsageChartIcon className="fill-current" />}
             label="Usage"
             onClick={handleUsageClick}
           />
@@ -236,13 +219,25 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   );
 });
 
-export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
+export const SidebarChromeFooter = memo(function SidebarChromeFooter({
+  variant,
+}: {
+  variant: "v1" | "v2";
+}) {
   return (
-    <SidebarFooter>
+    // Fork: Forma's evenly inset footer.
+    <SidebarFooter size="inset">
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      <SidebarUtilityMenu />
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <SidebarAccountControl variant={variant} />
+        </div>
+        <SidebarMenu className="w-auto shrink-0 flex-row">
+          <SidebarUpdatePill />
+        </SidebarMenu>
+      </div>
     </SidebarFooter>
   );
 });

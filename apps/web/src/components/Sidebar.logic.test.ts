@@ -23,6 +23,7 @@ import {
   hasUnseenCompletion,
   isContextMenuPointerDown,
   isSidebarSubagentThread,
+  isSidebarThreadPlanReady,
   isSidebarThreadWorking,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
@@ -47,6 +48,13 @@ import {
   sortLogicalProjectsForSidebar,
   sortInboxThreadsByReturn,
   resolveSidebarDropTarget,
+  resolveSidebarProjectReorder,
+  buildSidebarProjectSections,
+  orderedThreadsForSections,
+  projectExpansionPreferenceKeys,
+  resolveSidebarSectionReorderTarget,
+  threadStatusGlyph,
+  threadStatusToneClass,
   planSidebarThreadDrop,
   sortPinnedThreadsForSidebar,
   sortProjectsForSidebar,
@@ -1352,6 +1360,31 @@ describe("resolveThreadStatusPill", () => {
   });
 });
 
+// Fork: Forma's legacy row palette.
+describe("resolveThreadRowClassName", () => {
+  it("uses the darker selected palette when a thread is both selected and active", () => {
+    const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
+    expect(className).toContain("bg-primary/22");
+    expect(className).toContain("hover:bg-primary/26");
+    expect(className).toContain("dark:bg-primary/30");
+    expect(className).not.toContain("bg-accent/85");
+  });
+
+  it("uses selected hover colors for selected threads", () => {
+    const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
+    expect(className).toContain("bg-primary/15");
+    expect(className).toContain("hover:bg-primary/19");
+    expect(className).toContain("dark:bg-primary/22");
+    expect(className).not.toContain("hover:bg-accent");
+  });
+
+  it("keeps the accent palette for active-only threads", () => {
+    const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
+    expect(className).toContain("bg-accent/85");
+    expect(className).toContain("hover:bg-accent");
+  });
+});
+
 describe("resolveProjectStatusIndicator", () => {
   it("returns null when no threads have a notable status", () => {
     expect(resolveProjectStatusIndicator([null, null])).toBeNull();
@@ -2314,5 +2347,213 @@ describe("Working shelf (beta)", () => {
         unsnooze: false,
       });
     });
+  });
+});
+
+// Fork: Forma sidebar additions.
+describe("resolveSidebarProjectReorder", () => {
+  const projects = [
+    {
+      projectKey: "a",
+      memberProjects: [{ physicalProjectKey: "a1" }, { physicalProjectKey: "a2" }],
+    },
+    { projectKey: "b", memberProjects: [{ physicalProjectKey: "b1" }] },
+  ];
+
+  it("reorders physical members from the displayed order", () => {
+    expect(resolveSidebarProjectReorder(projects, "b", "a")).toEqual({
+      currentProjectOrder: ["a1", "a2", "b1"],
+      draggedProjectKeys: ["b1"],
+      targetProjectKeys: ["a1", "a2"],
+    });
+  });
+
+  it("ignores self drops and unknown projects", () => {
+    expect(resolveSidebarProjectReorder(projects, "a", "a")).toBeNull();
+    expect(resolveSidebarProjectReorder(projects, "a", "missing")).toBeNull();
+  });
+});
+
+describe("isSidebarThreadPlanReady", () => {
+  const settled = {
+    hasActionableProposedPlan: true,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    interactionMode: "plan" as const,
+    latestRun: makeLatestRun(),
+    runtime: null,
+  };
+
+  it("flags a settled plan-mode thread with an actionable plan", () => {
+    expect(isSidebarThreadPlanReady(settled)).toBe(true);
+  });
+
+  it("yields to attention states and non-plan modes", () => {
+    expect(isSidebarThreadPlanReady({ ...settled, hasPendingUserInput: true })).toBe(false);
+    expect(isSidebarThreadPlanReady({ ...settled, interactionMode: "default" })).toBe(false);
+    expect(isSidebarThreadPlanReady({ ...settled, hasActionableProposedPlan: false })).toBe(false);
+  });
+});
+
+describe("thread status presentation", () => {
+  it("maps every pill label to a Forma glyph and tone", () => {
+    expect(threadStatusGlyph({ label: "Working" })).toBe("grid");
+    expect(threadStatusGlyph({ label: "Plan Ready" })).toBe("file-text");
+    expect(threadStatusGlyph({ label: "Completed" })).toBe("check-check");
+    expect(threadStatusToneClass({ label: "Pending Approval" })).toContain("text-amber");
+  });
+});
+
+describe("grouped project sections", () => {
+  const env = EnvironmentId.make("env");
+  const thread = (id: string, projectId: string) => ({
+    environmentId: env,
+    id: ThreadId.make(id),
+    projectId,
+  });
+  const group = (projectKey: string, projectIds: readonly string[]) => ({
+    projectKey,
+    memberProjects: projectIds.map((projectId) => ({
+      physicalProjectKey: `env:${projectId}`,
+      workspaceRoot: `/repo/${projectId}`,
+    })),
+    memberProjectRefs: projectIds.map((projectId) => ({ environmentId: env, projectId })),
+  });
+  const alpha = group("alpha", ["a1", "a2"]);
+  const beta = group("beta", ["b1"]);
+  const empty = group("empty", ["e1"]);
+  const base = {
+    projectGroups: [alpha, beta, empty],
+    pinned: [thread("p-a", "a2"), thread("p-b", "b1")],
+    active: [thread("x-b", "b1"), thread("x-a", "a1"), thread("x-orphan", "gone")],
+    snoozed: [thread("s-a", "a1"), thread("s-a2", "a1")],
+    projectExpandedById: {},
+    snoozedExpandedKeys: new Set<string>(),
+    routeThreadKey: null,
+  };
+  const ids = (threads: ReadonlyArray<{ readonly id: string }>) => threads.map((t) => t.id);
+
+  it("reads collapse state through logical, physical, then legacy cwd keys", () => {
+    expect(projectExpansionPreferenceKeys(alpha)).toEqual([
+      "alpha",
+      "env:a1",
+      "env:a2",
+      "legacy-project-cwd:/repo/a1",
+      "legacy-project-cwd:/repo/a2",
+    ]);
+  });
+
+  it("groups each partition per logical project in project order", () => {
+    const sections = buildSidebarProjectSections(base);
+    expect(sections.map((section) => section.group.projectKey)).toEqual(["alpha", "beta", "empty"]);
+    const [a, b, e] = sections;
+    expect(ids(a!.pinned)).toEqual(["p-a"]);
+    expect(ids(a!.active)).toEqual(["x-a"]);
+    expect(ids(a!.snoozed)).toEqual(["s-a", "s-a2"]);
+    expect(a!.threadCount).toBe(4);
+    expect(ids(b!.pinned)).toEqual(["p-b"]);
+    expect(ids(b!.active)).toEqual(["x-b"]);
+    expect(e!.threadCount).toBe(0);
+    // Threads of projects outside the catalog have no section.
+    expect(sections.flatMap((section) => ids(section.active))).not.toContain("x-orphan");
+  });
+
+  it("keeps the snoozed shelf collapsed except for the open thread", () => {
+    const [collapsed] = buildSidebarProjectSections({ ...base, routeThreadKey: "env:s-a2" });
+    expect(collapsed!.snoozedExpanded).toBe(false);
+    expect(ids(collapsed!.visibleSnoozed)).toEqual(["s-a2"]);
+    const [expanded] = buildSidebarProjectSections({
+      ...base,
+      snoozedExpandedKeys: new Set(["alpha"]),
+    });
+    expect(ids(expanded!.visibleSnoozed)).toEqual(["s-a", "s-a2"]);
+  });
+
+  it("collapses through any preference key and keeps the open thread under the header", () => {
+    const [byPhysicalKey] = buildSidebarProjectSections({
+      ...base,
+      projectExpandedById: { "env:a2": false },
+    });
+    expect(byPhysicalKey!.expanded).toBe(false);
+    expect(byPhysicalKey!.collapsedRoute).toBeNull();
+
+    const [withRoute] = buildSidebarProjectSections({
+      ...base,
+      projectExpandedById: { alpha: false },
+      routeThreadKey: "env:s-a",
+    });
+    expect(withRoute!.collapsedRoute).toEqual({ thread: thread("s-a", "a1"), section: "snoozed" });
+  });
+
+  it("orders rows as rendered: expanded sections in full, collapsed ones by route only", () => {
+    const sections = buildSidebarProjectSections({
+      ...base,
+      projectExpandedById: { beta: false },
+      routeThreadKey: "env:x-b",
+    });
+    expect(ids(orderedThreadsForSections(sections))).toEqual(["p-a", "x-a", "x-b"]);
+  });
+});
+
+describe("resolveSidebarSectionReorderTarget", () => {
+  const projectKeyByThreadKey = new Map([
+    ["p1", "alpha"],
+    ["p2", "beta"],
+    ["p3", "alpha"],
+    ["a1", "alpha"],
+    ["a2", "alpha"],
+    ["a3", "beta"],
+  ]);
+  const base = {
+    pinnedOrder: ["p1", "p2", "p3"],
+    activeOrder: ["a1", "a2", "a3"],
+    projectKeyByThreadKey,
+  };
+
+  it("reorders pinned rows within a project across the global order", () => {
+    expect(resolveSidebarSectionReorderTarget({ ...base, activeKey: "p3", overKey: "p1" })).toEqual(
+      { section: "pinned", pinnedOrder: ["p3", "p1", "p2"], activeOrder: base.activeOrder },
+    );
+    expect(resolveSidebarSectionReorderTarget({ ...base, activeKey: "p1", overKey: "p3" })).toEqual(
+      { section: "pinned", pinnedOrder: ["p2", "p3", "p1"], activeOrder: base.activeOrder },
+    );
+  });
+
+  it("reorders active rows within a project", () => {
+    expect(resolveSidebarSectionReorderTarget({ ...base, activeKey: "a2", overKey: "a1" })).toEqual(
+      { section: "active", pinnedOrder: base.pinnedOrder, activeOrder: ["a2", "a1", "a3"] },
+    );
+  });
+
+  it("rejects other projects, other blocks, and rows outside both blocks", () => {
+    expect(
+      resolveSidebarSectionReorderTarget({ ...base, activeKey: "p1", overKey: "p2" }),
+    ).toBeNull();
+    expect(
+      resolveSidebarSectionReorderTarget({ ...base, activeKey: "p1", overKey: "a1" }),
+    ).toBeNull();
+    expect(
+      resolveSidebarSectionReorderTarget({ ...base, activeKey: "snoozed", overKey: "a1" }),
+    ).toBeNull();
+  });
+
+  it("resolves hovering the lifted row itself to an unchanged plan", () => {
+    const target = resolveSidebarSectionReorderTarget({ ...base, activeKey: "a1", overKey: "a1" });
+    expect(target).toEqual({
+      section: "active",
+      pinnedOrder: base.pinnedOrder,
+      activeOrder: base.activeOrder,
+    });
+    expect(
+      planSidebarThreadDrop({
+        activeKey: "a1",
+        activeSection: "active",
+        target: target!,
+        pinnedOrder: base.pinnedOrder,
+        pinnedKeysById: new Map(),
+        activeOrder: base.activeOrder,
+        activeKeysById: new Map(),
+      }),
+    ).toEqual({ kind: "none" });
   });
 });

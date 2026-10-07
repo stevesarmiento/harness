@@ -10,6 +10,11 @@ import PullRequestFilesViewed from "./Migrations/053_PullRequestFilesViewed.ts";
 import RemoveRedundantProjectionIndexes from "./Migrations/056_RemoveRedundantProjectionIndexes.ts";
 import OrchestrationV2 from "./Migrations/055_OrchestrationV2.ts";
 
+// Fork: Forma's reserved 9xx migrations run alongside upstream's; these
+// assertions cover upstream's ids only.
+const upstreamOnly = <T extends readonly [number, string]>(executed: ReadonlyArray<T>) =>
+  executed.filter(([id]) => id < 900);
+
 // The V2 schema is unchanged from the published September 15–16 previews.
 const seedPreview = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -33,7 +38,7 @@ describe("V2 preview upgrade", () => {
       const sql = yield* SqlClient.SqlClient;
       yield* seedPreview;
       const imports = yield* sql`SELECT * FROM orchestration_v2_legacy_imports`;
-      assert.deepStrictEqual(yield* runMigrations(), [
+      assert.deepStrictEqual(upstreamOnly(yield* runMigrations()), [
         [53, "PullRequestFilesViewed"],
         [54, "ProjectionThreadsAutoSettleDisabledAt"],
         [56, "RemoveRedundantProjectionIndexes"],
@@ -115,7 +120,7 @@ describe("V2 preview upgrade", () => {
       );
       assert.strictEqual((yield* sql`SELECT * FROM orchestration_v2_legacy_imports`).length, 1);
       yield* sql`DROP TRIGGER fail_preview_upgrade`;
-      assert.deepStrictEqual(yield* runMigrations(), [
+      assert.deepStrictEqual(upstreamOnly(yield* runMigrations()), [
         [53, "PullRequestFilesViewed"],
         [54, "ProjectionThreadsAutoSettleDisabledAt"],
         [56, "RemoveRedundantProjectionIndexes"],

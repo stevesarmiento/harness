@@ -52,7 +52,6 @@ vi.mock("~/state/server", () => ({
 }));
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => state.persist }));
 vi.mock("~/components/ui/toast", () => ({ toastManager: { add: state.toast } }));
-vi.mock("~/themePalette", () => ({}));
 vi.mock("./useTheme", () => ({}));
 
 import { useUpdatePrimarySettings } from "./useSettings";

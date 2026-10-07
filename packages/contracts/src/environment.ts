@@ -150,6 +150,14 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.pin / thread.unpin commands. Same
       version-skew contract as threadSettlement. */
   threadPinning: Schema.optionalKey(Schema.Boolean),
+  /** Project-local agent skills and commands are available over extension RPCs. */
+  projectLocalAgents: Schema.optionalKey(Schema.Boolean),
+  /** Project file reads and writes support optimistic version checks. */
+  versionedProjectFiles: Schema.optionalKey(Schema.Boolean),
+  /** Project entries can be created, renamed, and deleted. */
+  projectEntryMutations: Schema.optionalKey(Schema.Boolean),
+  /** Clients may select a Forma application icon. */
+  customAppIcons: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.pin.reorder (and orderKey on thread.pin).
       Same version-skew contract as threadSettlement. */
   threadPinReorder: Schema.optionalKey(Schema.Boolean),

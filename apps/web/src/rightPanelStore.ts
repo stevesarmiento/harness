@@ -175,6 +175,18 @@ interface RightPanelStoreState {
     hiddenTabIds?: ReadonlySet<string>,
   ) => void;
   reconcileFileSurfaces: (ref: ScopedThreadRef, workspaceAvailable: boolean) => void;
+  // Fork: keep open file tabs in step with file-browser renames and deletes.
+  renameFileSurfaces: (
+    ref: ScopedThreadRef,
+    fromRelativePath: string,
+    toRelativePath: string,
+    kind: "file" | "directory",
+  ) => void;
+  removeFileSurfaces: (
+    ref: ScopedThreadRef,
+    relativePath: string,
+    kind: "file" | "directory",
+  ) => void;
   show: (ref: ScopedThreadRef) => void;
   close: (ref: ScopedThreadRef) => void;
   toggleVisibility: (ref: ScopedThreadRef) => void;
@@ -926,6 +938,75 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               isOpen: surfaces.length > 0 ? current.isOpen : false,
               surfaces,
               activeSurfaceId: activeStillExists
+                ? current.activeSurfaceId
+                : (surfaces.at(-1)?.id ?? null),
+            };
+          }),
+        ),
+      // Fork: file-browser rename/delete follow-through for open file tabs.
+      renameFileSurfaces: (ref, fromRelativePath, toRelativePath, kind) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) => {
+            const matches = (relativePath: string) =>
+              relativePath === fromRelativePath ||
+              (kind === "directory" && relativePath.startsWith(`${fromRelativePath}/`));
+            const renamePath = (relativePath: string) =>
+              relativePath === fromRelativePath
+                ? toRelativePath
+                : `${toRelativePath}${relativePath.slice(fromRelativePath.length)}`;
+            if (
+              !current.surfaces.some(
+                (surface) =>
+                  surface.kind === "file" &&
+                  surface.attachment === undefined &&
+                  matches(surface.relativePath),
+              )
+            ) {
+              return current;
+            }
+            let activeSurfaceId = current.activeSurfaceId;
+            const surfaces = current.surfaces.flatMap<RightPanelSurface>((surface) => {
+              if (
+                surface.kind !== "file" ||
+                surface.attachment !== undefined ||
+                !matches(surface.relativePath)
+              ) {
+                return [surface];
+              }
+              const relativePath = renamePath(surface.relativePath);
+              const renamed = { ...surface, id: `file:${relativePath}` as const, relativePath };
+              if (surface.id === current.activeSurfaceId) activeSurfaceId = renamed.id;
+              return [renamed];
+            });
+            const deduped = surfaces.filter(
+              (surface, index) =>
+                surfaces.findIndex((candidate) => candidate.id === surface.id) === index,
+            );
+            return {
+              ...current,
+              surfaces: deduped,
+              activeSurfaceId: deduped.some((surface) => surface.id === activeSurfaceId)
+                ? activeSurfaceId
+                : (deduped.at(-1)?.id ?? null),
+            };
+          }),
+        ),
+      removeFileSurfaces: (ref, relativePath, kind) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) => {
+            const surfaces = current.surfaces.filter(
+              (surface) =>
+                surface.kind !== "file" ||
+                surface.attachment !== undefined ||
+                (surface.relativePath !== relativePath &&
+                  !(kind === "directory" && surface.relativePath.startsWith(`${relativePath}/`))),
+            );
+            if (surfaces.length === current.surfaces.length) return current;
+            return {
+              ...current,
+              isOpen: surfaces.length > 0 && current.isOpen,
+              surfaces,
+              activeSurfaceId: surfaces.some((surface) => surface.id === current.activeSurfaceId)
                 ? current.activeSurfaceId
                 : (surfaces.at(-1)?.id ?? null),
             };

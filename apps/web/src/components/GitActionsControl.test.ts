@@ -28,6 +28,8 @@ vi.mock("react", async (importOriginal) => ({
   useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}],
   useRef: (current: unknown) => ({ current }),
   useEffect: () => {},
+  // Fork: GitActionsControl exposes an imperative handle for git keybindings.
+  useImperativeHandle: () => {},
   useEffectEvent: (callback: typeof state.run) => {
     state.run = callback;
     return callback;

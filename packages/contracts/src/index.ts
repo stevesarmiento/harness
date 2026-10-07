@@ -28,6 +28,8 @@ export * from "./model.ts";
 export * from "./keybindings.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
+// Fork: project-local agents (Forma feature)
+export * from "./localAgents.ts";
 export * from "./git.ts";
 export * from "./vcs.ts";
 export * from "./sourceControl.ts";
@@ -55,6 +57,7 @@ export * from "./browserProfile.ts";
 export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
+// Fork: component preview harness (Forma feature, distinct from webview preview)
 export * from "./resourceTelemetry.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";

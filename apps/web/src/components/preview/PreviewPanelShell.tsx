@@ -110,11 +110,9 @@ function PreviewPanelShellFrame(
       ref={hostRef}
       className={cn(
         "relative flex h-full min-h-0 min-w-0 max-w-full flex-col self-stretch bg-background",
-        isInline
-          ? maximized
-            ? "flex-1 border-l border-border"
-            : "shrink-0 border-l border-border"
-          : "w-full",
+        // No border-l when maximized: the chat column collapses to zero width,
+        // so the divider would paint as a stray line at the card's left edge.
+        isInline ? (maximized ? "flex-1" : "shrink-0 border-l border-border") : "w-full",
         collapsible &&
           "[[data-panel-animations=true]_&]:transition-[width] [[data-panel-animations=true]_&]:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:ease-out",
         collapsible && open && "[[data-panel-animations=true]_&]:starting:w-0!",

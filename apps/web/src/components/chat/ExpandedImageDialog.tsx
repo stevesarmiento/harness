@@ -7,7 +7,11 @@ import {
   type ReactNode,
   type KeyboardEvent,
 } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import {
+  IconChevronLeft as ChevronLeftIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconXmark as XIcon,
+} from "symbols-react";
 import { Image as ImageGlyph, Text as TextGlyph } from "lucide";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -198,7 +202,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             aria-label="Previous media"
             onClick={() => navigateImage(-1)}
           >
-            <ChevronLeftIcon className="size-5" />
+            <ChevronLeftIcon className="size-2.5" />
           </Button>
         )}
         <MediaActions source={actionsSource}>
@@ -284,7 +288,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
             aria-label="Next media"
             onClick={() => navigateImage(1)}
           >
-            <ChevronRightIcon className="size-5" />
+            <ChevronRightIcon className="size-2.5" />
           </Button>
         )}
       </DialogPopup>

@@ -78,6 +78,7 @@ const layerAssets = (png: Option.Option<string>) =>
       png,
     }),
     resolveResourcePath: () => Effect.succeedNone,
+    resolveAppIconPath: () => Effect.succeedNone,
   } satisfies DesktopAssets.DesktopAssets["Service"]);
 
 const layerEnvironment = (overrides: TestEnvironmentInput = {}) => {
@@ -132,7 +133,7 @@ const withIdentity = <A, E, R>(
               input.legacyPathProbeError
                 ? Effect.fail(input.legacyPathProbeError)
                 : Effect.succeed(
-                    input.legacyPathExists === true && /T3 Code \((Alpha|Dev)\)/.test(path),
+                    input.legacyPathExists === true && /Forma \((Alpha|Dev)\)/.test(path),
                   ),
             readFileString: () =>
               Effect.succeed(input.packageJson ?? '{"t3codeCommitHash":"abcdef1234567890"}'),
@@ -153,7 +154,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         const userDataPath = yield* identity.resolveUserDataPath;
 
-        assert.equal(userDataPath, "/Users/alice/Library/Application Support/t3code-v2");
+        assert.equal(userDataPath, "/Users/alice/Library/Application Support/forma-v2");
       }),
       { legacyPathExists: true },
     ),
@@ -165,7 +166,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         assert.equal(
           yield* identity.resolveUserDataPath,
-          "/Users/alice/Library/Application Support/T3 Code (Dev)",
+          "/Users/alice/Library/Application Support/Forma (Dev)",
         );
       }),
       {
@@ -176,7 +177,7 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect("preserves failures while inspecting the legacy userData path", () => {
-    const legacyPath = "/Users/alice/Library/Application Support/T3 Code (Dev)";
+    const legacyPath = "/Users/alice/Library/Application Support/Forma (Dev)";
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",
@@ -217,8 +218,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["T3 Code (Alpha)"]);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Code (Alpha)");
+        assert.deepEqual(calls.setName, ["Forma (Alpha)"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Forma (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
         // Packaged: the bundle's own icon stands, so a custom one the user

@@ -6,13 +6,18 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { migrationEntries, runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
+// Fork: Forma's reserved 9xx migrations run alongside upstream's; these
+// assertions cover upstream's ids only.
+const upstreamOnly = <T extends readonly [number, string]>(executed: ReadonlyArray<T>) =>
+  executed.filter(([id]) => id < 900);
+
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("055_OrchestrationV2", (it) => {
   it.effect("keeps released migrations contiguous", () =>
     Effect.sync(() => {
       assert.deepStrictEqual(
-        migrationEntries.map(([id]) => id),
+        migrationEntries.map(([id]) => id).filter((id) => id < 900),
         Array.from({ length: 59 }, (_, index) => index + 1),
       );
     }),
@@ -24,7 +29,7 @@ layer("055_OrchestrationV2", (it) => {
       yield* runMigrations({ toMigrationInclusive: 53 });
 
       const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed, [
+      assert.deepStrictEqual(upstreamOnly(executed), [
         [54, "ProjectionThreadsAutoSettleDisabledAt"],
         [55, "OrchestrationV2"],
         [56, "RemoveRedundantProjectionIndexes"],
@@ -40,7 +45,7 @@ layer("055_OrchestrationV2", (it) => {
       }>`
         SELECT migration_id, name
         FROM effect_sql_migrations
-        WHERE migration_id >= 48
+        WHERE migration_id >= 48 AND migration_id < 900
         ORDER BY migration_id
       `;
       assert.deepStrictEqual(migrations, [

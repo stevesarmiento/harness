@@ -55,7 +55,7 @@ import {
 import { Separator } from "./ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
-import { ComposerSurface } from "./chat/ComposerSurface";
+import { ComposerSurface, useComposerMetaSlotRef } from "./chat/ComposerSurface";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { measureRestingComposerControls } from "./chat/restingComposerControlsMeasurement";
 import { resolveRestingComposerControlsNaturalWidth } from "./composerFooterLayout";
@@ -611,6 +611,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   });
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
+  const composerMetaSlotRef = useComposerMetaSlotRef();
 
   if (!hasActiveThread || !activeProject) return null;
 
@@ -724,23 +725,19 @@ export const BranchToolbar = memo(function BranchToolbar({
         </div>
       ) : null}
 
-      {composerControlsHostRef ? (
-        // The host takes whatever the workspace and branch controls leave
-        // over, in both strip layouts, so a collapsed composer can show its
-        // model and mode controls wherever they fit.
-        <div
-          ref={composerControlsHostRef}
+      {/* Fork: Forma's meta row keeps the branch beside the workspace and run settings on the right. */}
+      {showGitControls ? (
+        <Separator
+          orientation="vertical"
+          className="mx-0.5 hidden h-3.5! @3xl/composer-surface:block"
           data-composer-context-control
-          data-chat-resting-composer-controls-host="true"
-          className="flex min-w-0 flex-1 items-center justify-start overflow-x-clip overflow-y-visible"
         />
       ) : null}
-
       {showGitControls ? (
         <BranchToolbarBranchSelector
           forceNewWorktree={forceNewWorktree}
           ref={branchSelectorRef}
-          className="min-w-0 flex-initial justify-end @3xl/composer-surface:ml-auto"
+          className="min-w-0 flex-initial justify-start"
           environmentId={environmentId}
           threadId={threadId}
           {...(draftId ? { draftId } : {})}
@@ -754,6 +751,25 @@ export const BranchToolbar = memo(function BranchToolbar({
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
       ) : null}
+
+      {composerControlsHostRef ? (
+        // The host takes whatever the workspace and branch controls leave
+        // over, in both strip layouts, so a collapsed composer can show its
+        // model and mode controls wherever they fit.
+        <div
+          ref={composerControlsHostRef}
+          data-composer-context-control
+          data-chat-resting-composer-controls-host="true"
+          className="flex min-w-0 flex-1 items-center justify-start overflow-x-clip overflow-y-visible"
+        />
+      ) : null}
+      <div
+        ref={contextStripVisible ? composerMetaSlotRef : undefined}
+        data-composer-meta-slot="true"
+        data-composer-context-control
+        data-chat-composer-collapsed-controls="true"
+        className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 empty:hidden"
+      />
     </ComposerSurface.ContextStrip>
   );
 });

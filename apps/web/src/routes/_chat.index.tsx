@@ -1,23 +1,15 @@
-import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
 
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
-import { isElectron } from "../env";
-import { NoProjectsHero } from "../components/NoProjectsHero";
-import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
+import { NoActiveThreadState } from "../components/NoActiveThreadState";
+import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
-import { SidebarInset } from "../components/ui/sidebar";
-import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
-import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import {
-  useAllEnvironmentShellsBootstrapped,
-  useProjects,
-  useThreadShells,
-} from "../state/entities";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
+import { LogomarkForma } from "../components/LogomarkForma";
+import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
+import { useAllEnvironmentShellsBootstrapped } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 import { APP_DISPLAY_NAME } from "~/branding";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
@@ -31,83 +23,20 @@ function ChatIndexRouteView() {
     if (environments.length === 0) return <HostedStaticOnboardingState />;
   }
 
-  return <IndexDraftLanding />;
+  return <IndexOverview />;
 }
 
 /**
- * Landing on the index route drops straight into a draft thread for the most
- * recently active project, so the first screen is a prompt instead of a dead
- * end. Falls back to an add-project hero when no project exists yet.
+ * Landing on the index route shows the workspace overview: quick actions,
+ * open pull requests, and recent threads or projects.
  */
-function IndexDraftLanding() {
-  const projects = useProjects();
-  const threads = useThreadShells();
+function IndexOverview() {
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
-  const handleNewThread = useNewThreadHandler();
-  const startingRef = useRef(false);
-  const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
-
-  const mostRecentProject = useMemo(
-    () =>
-      bootstrapped
-        ? (sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null)
-        : null,
-    [bootstrapped, projects, threads],
-  );
-
-  useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
-      return;
-    }
-    startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
-      replace: true,
-    }).catch(() => {
-      startingRef.current = false;
-      setStartState((state) => ({ ...state, failed: true }));
-    });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
 
   if (!bootstrapped) {
     return null;
   }
-  if (mostRecentProject !== null) {
-    return startState.failed ? (
-      <DraftStartError
-        onRetry={() => {
-          setStartState((state) => ({
-            failed: false,
-            retryRequest: state.retryRequest + 1,
-          }));
-        }}
-      />
-    ) : null;
-  }
-  // First-run routing to the welcome wizard happens in FirstRunGate at the
-  // root, before this route ever renders.
-  return <NoProjectsHero />;
-}
-
-function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      {isElectron ? <WorkspacePageHeader electron /> : null}
-      <Empty className="flex-1">
-        <EmptyHeader className="max-w-md">
-          <EmptyTitle>Couldn’t start a new thread</EmptyTitle>
-          <EmptyDescription>
-            The project is still available. Try opening the draft again.
-          </EmptyDescription>
-          <div className="mt-5 flex justify-center">
-            <Button size="sm" onClick={onRetry}>
-              <RefreshIcon size="md" />
-              Try again
-            </Button>
-          </div>
-        </EmptyHeader>
-      </Empty>
-    </SidebarInset>
-  );
+  return <NoActiveThreadState />;
 }
 
 export const Route = createFileRoute("/_chat/")({
@@ -124,16 +53,20 @@ function HostedStaticOnboardingState() {
       : "Open Connections and add that machine using its pairing link. This app must be able to reach it.";
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground md:text-muted-foreground/60">
-              {APP_DISPLAY_NAME}
-            </span>
-          </div>
-        </WorkspacePageHeader>
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground md:h-auto">
+      <header className="workspace-topbar border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+          <DesktopSidebarReopenButton className="md:ml-0" />
+          <WorkspaceHeaderTitle
+            icon={<LogomarkForma className="size-3.5 shrink-0 opacity-50" aria-hidden />}
+          >
+            {APP_DISPLAY_NAME}
+          </WorkspaceHeaderTitle>
+        </div>
+      </header>
 
+      <SidebarInsetCard className="overflow-x-hidden">
         <Empty className="flex-1">
           <div className="w-full max-w-xl rounded-3xl border border-border/55 bg-card/20 px-8 py-12 shadow-sm/5">
             <EmptyHeader className="max-w-none">
@@ -155,7 +88,7 @@ function HostedStaticOnboardingState() {
             </EmptyHeader>
           </div>
         </Empty>
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }

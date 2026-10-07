@@ -2,7 +2,6 @@ import { SettingsGroup } from "./SettingsGroup";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -70,13 +69,7 @@ import {
 } from "../SidebarStageBackdrop";
 import { isElectron } from "../../env";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
-import { useCustomThemes } from "../../hooks/useCustomThemes";
-import {
-  readAppearanceModePreference,
-  readThemeHalves,
-  readThemePreference,
-  useTheme,
-} from "../../hooks/useTheme";
+import { useTheme } from "../../hooks/useTheme";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import {
   useScopedSettings,
@@ -140,7 +133,6 @@ import { Switch } from "../ui/switch";
 import { ScopedSwitch } from "./ScopedSwitch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { ThemeLibrary } from "./ThemeSettings";
 import {
   backgroundActivityOverrideSettings,
   backgroundActivitySharedPolicySettings,
@@ -277,7 +269,7 @@ function AboutVersionTitle() {
   );
 }
 
-function AboutVersionSection() {
+export function AboutVersionSection() {
   const updateState = useDesktopUpdateState();
   const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
@@ -514,15 +506,7 @@ function AboutVersionSection() {
 }
 
 export function useSettingsRestore(onRestored?: () => void) {
-  const {
-    theme,
-    setTheme,
-    followSystem,
-    setFollowSystem,
-    setThemeHalf,
-    clearThemeHalves,
-    themeHalves,
-  } = useTheme();
+  const { theme, setTheme } = useTheme();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
 
@@ -535,8 +519,6 @@ export function useSettingsRestore(onRestored?: () => void) {
   const changedSettingLabels = useMemo(
     () => [
       ...(theme !== "system" ? ["Theme"] : []),
-      ...(!followSystem ? ["Follow system"] : []),
-      ...(themeHalves !== null ? ["Theme mix"] : []),
       ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
         ? ["Contrast"]
         : []),
@@ -717,9 +699,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.notificationMode,
       settings.inAppNotificationsEnabled,
       settings.wordWrap,
-      followSystem,
       theme,
-      themeHalves,
     ],
   );
 
@@ -734,57 +714,8 @@ export function useSettingsRestore(onRestored?: () => void) {
     );
     if (!confirmed) return;
 
-    // Only touch the theme keys that are actually dirty, so a theme-storage
-    // failure cannot block restoring unrelated settings. Preferences are
-    // re-read after the confirmation dialog: they may have changed (another
-    // tab, an OS flip) while it was open, and rollback must restore the live
-    // values rather than the ones captured at render time.
-    let previousTheme = theme;
-    try {
-      previousTheme = readThemePreference();
-    } catch {
-      // Storage is unreadable; the render-time value is the best rollback.
-    }
-    // The mix may have changed while the confirmation dialog was open; both
-    // the dirty check and the rollback must see the live value.
-    const liveHalves = readThemeHalves();
-    const needsThemeReset = previousTheme !== "system";
-    const needsMixReset = liveHalves !== null;
-    // Same for the appearance mode: trusting the render-time value would skip
-    // the reset and report success while a non-system mode stayed in storage.
-    const needsFollowSystemReset = readAppearanceModePreference(previousTheme) !== "system";
-    const notifyThemeRestoreFailure = () => {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Couldn’t restore theme settings",
-          description: "Try again.",
-        }),
-      );
-    };
-    // Rollback restores the base preference first (which clears any mix) and
-    // then re-applies the captured mix on top, so no failure path can leave
-    // the pair of keys half-restored.
-    const previousHalves = liveHalves;
-    const rollbackThemeState = () => {
-      if (needsThemeReset) setTheme(previousTheme);
-      if (previousHalves?.light) setThemeHalf("light", previousHalves.light);
-      if (previousHalves?.dark) setThemeHalf("dark", previousHalves.dark);
-    };
-    if (needsThemeReset && !setTheme("system")) {
-      notifyThemeRestoreFailure();
-      return;
-    }
-    if (needsMixReset && !clearThemeHalves()) {
-      rollbackThemeState();
-      notifyThemeRestoreFailure();
-      return;
-    }
-    if (needsFollowSystemReset && !setFollowSystem(true)) {
-      rollbackThemeState();
-      notifyThemeRestoreFailure();
-      return;
-    }
+    // Fork: Forma theme is a single local preference; reset it alongside settings.
+    if (theme !== "system") setTheme("system");
     updateSettings({
       appearanceContrast: DEFAULT_UNIFIED_SETTINGS.appearanceContrast,
       diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme,
@@ -852,17 +783,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       enableAgentBrowserAccess: DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess,
     });
     onRestored?.();
-  }, [
-    changedSettingLabels,
-    clearThemeHalves,
-    onRestored,
-    setFollowSystem,
-    setTheme,
-    setThemeHalf,
-    theme,
-    themeHalves,
-    updateSettings,
-  ]);
+  }, [changedSettingLabels, onRestored, setTheme, theme, updateSettings]);
 
   return {
     changedSettingLabels,
@@ -1147,19 +1068,16 @@ function BackgroundActivityAdvancedDialog({
   );
 }
 
+// Fork: Forma's theme system replaces upstream's theme library; this panel only
+// picks the light/dark/system mode (hue and saturation live in Interface).
+const THEME_OPTIONS = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+] as const;
+
 export function AppearanceSettingsPanel() {
-  const {
-    appearanceMode,
-    refreshTheme,
-    resolvedTheme,
-    setAppearanceMode,
-    setTheme,
-    setThemeHalf,
-    theme,
-    themeHalves,
-  } = useTheme();
-  const customThemes = useCustomThemes();
-  const [isImportThemeOpen, setIsImportThemeOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const environmentStageLabel = useEnvironmentStageLabel();
@@ -1189,21 +1107,38 @@ export function AppearanceSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="appearance" title="Colors & themes" variant="plain" hideTitle>
-        <div id={searchableSetting("theme").id}>
-          <ThemeLibrary
-            appearanceMode={appearanceMode}
-            customThemes={customThemes}
-            initialAppearance={resolvedTheme}
-            refreshTheme={refreshTheme}
-            isImportOpen={isImportThemeOpen}
-            setAppearanceMode={setAppearanceMode}
-            setTheme={setTheme}
-            setThemeHalf={setThemeHalf}
-            theme={theme}
-            themeHalves={themeHalves}
-            onImportOpenChange={setIsImportThemeOpen}
-          />
-        </div>
+        <SettingsRow
+          {...searchableSetting("theme")}
+          description="Choose how Forma looks across the app."
+          resetAction={
+            theme !== "system" ? (
+              <SettingResetButton label="theme" onClick={() => setTheme("system")} />
+            ) : null
+          }
+          control={
+            <Select
+              value={theme}
+              onValueChange={(value) => {
+                if (value === "system" || value === "light" || value === "dark") {
+                  setTheme(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
+                <SelectValue>
+                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
       </SettingsSection>
 
       <SettingsSection id="appearance-interface" title="Interface">
@@ -1798,7 +1733,7 @@ const ADVANCED_TYPOGRAPHY_TARGET_IDS: ReadonlySet<string> = new Set([
  * and a settings-search jump to an override row flips Advanced on so the
  * target exists to scroll to.
  */
-function TypographySection() {
+export function TypographySection() {
   const [advanced, setAdvanced] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
     false,
@@ -2091,7 +2026,7 @@ const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
  * default so they stay out of the everyday settings path; a settings-search
  * jump to one of the rows unfolds the section.
  */
-function LegacyFeaturesSection() {
+export function LegacyFeaturesSection() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const [open, setOpen] = useState(false);
@@ -3349,19 +3284,6 @@ export function GeneralSettingsPanel() {
             {IS_NIGHTLY_BUILD ? <NightlyMobileBetaRow /> : null}
           </>
         )}
-        <SettingsRow
-          {...searchableSetting("privacy-policy")}
-          description="How we handle your data, including the anonymous usage data T3 Code collects."
-          control={
-            <Button
-              render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
-              size="sm"
-              variant="outline"
-            >
-              View policy
-            </Button>
-          }
-        />
       </SettingsSection>
       <SettingsSection title="Diagnostics">
         <SettingsRow
@@ -3385,7 +3307,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by T3 Code."
+          description="Notices for dependencies, assets, and optional tools used by Forma."
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

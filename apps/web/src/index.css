@@ -148,6 +148,71 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+.chat-composer-surface {
+  border-radius: 40px;
+  corner-shape: squircle;
+  background: var(--composer-surface-fill);
+  border-color: var(--composer-surface-border);
+  box-shadow: var(--composer-surface-overlay-shadow), var(--composer-surface-shadow);
+}
+
+.chat-composer-surface:focus-within {
+  border-color: color-mix(in srgb, var(--ring) 45%, transparent);
+  box-shadow: var(--composer-surface-overlay-shadow), var(--composer-surface-focus-shadow);
+}
+
+/* Hairline between the composer prompt and its footer controls. */
+.chat-composer-footer-separator {
+  height: 2px;
+  border-top: 1px solid
+    color-mix(
+      in srgb,
+      var(--composer-footer-separator-border-color) var(--composer-footer-separator-border-opacity),
+      transparent
+    );
+  background-color: color-mix(
+    in srgb,
+    var(--composer-footer-separator-background-color)
+      var(--composer-footer-separator-background-opacity),
+    transparent
+  );
+}
+
+.chat-composer-banner {
+  background: var(--composer-banner-background);
+  border-color: var(--composer-banner-border);
+  box-shadow: var(--composer-banner-shadow);
+}
+
+/* Solid dock under the composer + meta bar; soft fade into the timeline so
+   scrolled messages do not collide with the lower chrome controls. */
+.chat-composer-dock-fade {
+  --chat-composer-dock-fade-height: 1.75rem;
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 0;
+  height: calc(100% + var(--chat-composer-dock-fade-height));
+  margin-inline-end: var(--app-scrollbar-width);
+  background-color: var(--background);
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  -webkit-mask-image: linear-gradient(
+    to top,
+    black 0%,
+    black calc(100% - var(--chat-composer-dock-fade-height)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    black 0%,
+    black calc(100% - var(--chat-composer-dock-fade-height)),
+    transparent 100%
+  );
+}
+
 .wco {
   --workspace-topbar-height: max(40px, env(titlebar-area-height, 52px));
   --workspace-controls-top: env(titlebar-area-y, 0px);
@@ -183,6 +248,21 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --text-4xs--line-height: 1;
   --text-5xs: 0.4375rem;
   --text-5xs--line-height: 1;
+  /* Fork: Forma's appearance-driven type sizes, registered so Tailwind and the
+     class linter know text-ui-* / text-code-* are font sizes. The unlayered
+     .text-ui-* / .text-code-* rules below still win, exactly as before. */
+  --text-ui-2xs: var(--app-ui-text-2xs);
+  --text-ui-xs: var(--app-ui-text-xs);
+  --text-ui-sm: var(--app-ui-text-sm);
+  --text-code-body: var(--app-code-font-size);
+  --text-code-compact: var(--app-code-font-size-compact);
+  /* Fork: Forma's unified motion tokens as theme utilities (duration-micro,
+     ease-motion-out, ...), so app code needs no arbitrary transition values. */
+  --transition-duration-micro: var(--motion-duration-micro);
+  --transition-duration-ui: var(--motion-duration-ui);
+  --transition-duration-modal: var(--motion-duration-modal);
+  --ease-motion-out: var(--motion-ease-out);
+  --ease-motion-in-out: var(--motion-ease-in-out);
   /* Motion. drawer is the decelerating curve for surfaces that slide or pop in
      (composer context, pills). */
   --inset-shadow-control-highlight: 0 1px rgb(255 255 255 / 16%);
@@ -876,14 +956,17 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 
   [data-settings-page-scroll] div.settings-search-target-pulse,
-  [data-settings-page-scroll] section.settings-search-target-pulse > div:first-child {
+  [data-settings-page-scroll] section.settings-search-target-pulse > div:first-child,
+  .settings-page-scroll-fade div.settings-search-target-pulse,
+  .settings-page-scroll-fade section.settings-search-target-pulse > div:first-child {
     animation: settings-search-target-pulse 650ms ease-in-out 2;
     border-radius: 0.75rem;
   }
 
   /* The pulse is the destination indicator; without it (reduced motion), the
      focus outline takes over, so exactly one indicator shows at a time. */
-  [data-settings-page-scroll] .settings-search-target-pulse:focus {
+  [data-settings-page-scroll] .settings-search-target-pulse:focus,
+  .settings-page-scroll-fade .settings-search-target-pulse:focus {
     outline: none;
   }
 
@@ -903,6 +986,102 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     width: 100%;
     min-width: 0;
     max-width: var(--chat-content-max-width);
+  }
+
+  /* Desktop keeps the logomark at every sidebar width; only the wordmark
+     text collapses away when the header container gets narrow. */
+  .sidebar-brand {
+    display: none;
+  }
+
+  .sidebar-brand-name {
+    display: none;
+  }
+
+  @media (min-width: 48rem) {
+    .sidebar-brand {
+      display: flex;
+    }
+
+    @container sidebar-header (min-width: 13.5rem) {
+      .sidebar-brand-name {
+        display: inline;
+      }
+    }
+  }
+
+  .workspace-topbar {
+    display: flex;
+    height: var(--workspace-topbar-height);
+    min-height: var(--workspace-topbar-height);
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  /* Fade rows themselves as they pass beneath the top chrome. A mask remains
+     visible even when the header and timeline share the same background. */
+  .chat-timeline-scroll-fade,
+  .settings-page-scroll-fade,
+  .pull-requests-scroll-fade {
+    --topbar-scroll-fade-height: 2.5rem;
+    -webkit-mask-image:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgb(0 0 0 / 10%) 10%,
+        rgb(0 0 0 / 30%) 24%,
+        rgb(0 0 0 / 58%) 42%,
+        rgb(0 0 0 / 82%) 62%,
+        rgb(0 0 0 / 96%) 82%,
+        black 100%
+      ),
+      linear-gradient(black, black), linear-gradient(black, black);
+    -webkit-mask-position: top, bottom, right;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-size:
+      100% var(--topbar-scroll-fade-height),
+      100% calc(100% - var(--topbar-scroll-fade-height)),
+      var(--app-scrollbar-width) 100%;
+    mask-image:
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgb(0 0 0 / 10%) 10%,
+        rgb(0 0 0 / 30%) 24%,
+        rgb(0 0 0 / 58%) 42%,
+        rgb(0 0 0 / 82%) 62%,
+        rgb(0 0 0 / 96%) 82%,
+        black 100%
+      ),
+      linear-gradient(black, black), linear-gradient(black, black);
+    mask-position: top, bottom, right;
+    mask-repeat: no-repeat;
+    mask-size:
+      100% var(--topbar-scroll-fade-height),
+      100% calc(100% - var(--topbar-scroll-fade-height)),
+      var(--app-scrollbar-width) 100%;
+  }
+
+  /* The pull request list sits directly under its topbar, so the tall band the chat and
+     settings pages fade under would read as empty padding here. A shorter band keeps the
+     fade while letting the controls start near the chrome. */
+  .pull-requests-scroll-fade {
+    --topbar-scroll-fade-height: 1.5rem;
+  }
+
+  .chat-composer-horizontal-inset {
+    padding-inline-start: calc(env(safe-area-inset-left) + 0.75rem);
+    padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);
+  }
+
+  .model-picker-surface.model-picker-surface {
+    @variant dark {
+      background: color-mix(
+        in srgb,
+        var(--popover) 18%,
+        color-mix(in srgb, var(--popover) var(--glass-opacity), transparent)
+      );
+    }
   }
 
   .messages-timeline-row-frame {
@@ -1023,6 +1202,18 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
       all: revert;
     }
   }
+
+  @media (min-width: 40rem) {
+    .chat-timeline-scroll-fade,
+    .settings-page-scroll-fade {
+      --topbar-scroll-fade-height: 3rem;
+    }
+
+    .chat-composer-horizontal-inset {
+      padding-inline-start: calc(env(safe-area-inset-left) + 1.25rem);
+      padding-inline-end: calc(env(safe-area-inset-right) + 1.25rem);
+    }
+  }
 }
 
 /* Safe-area inset utilities for surfaces that opt into edge-to-edge rendering.
@@ -1039,6 +1230,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 }
 @utility pr-safe {
   padding-right: max(env(safe-area-inset-right), 0px);
+}
+/* Fork: Forma's sidebar titlebar row clears the window-controls overlay. */
+@utility pl-titlebar-area {
+  padding-left: calc(env(titlebar-area-x) + 1em);
 }
 
 /* Grain texture for chrome surfaces that float above the body (see the
@@ -1063,7 +1258,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   color-scheme: light;
   --radius: 0.625rem;
   --background: var(--color-zinc-25);
-  --app-chrome-background: var(--background);
+  /* Fork: chrome follows the Forma sidebar surface, not the plain background. */
+  --app-chrome-background: var(--sidebar);
   --toolbar-background: var(--app-chrome-background);
   --toolbar-foreground: var(--foreground);
   --toolbar-border: var(--border);
@@ -1134,6 +1330,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     /* Keep controls and floating surfaces close to the neutral-black canvas.
        Borders and hover states provide separation without milky gray fills. */
     --background: var(--color-neutral-950);
+    --app-chrome-background: color-mix(in srgb, var(--background) 55%, black);
     --surface-raised: color-mix(in srgb, var(--background) 97%, var(--color-white));
     --foreground: var(--color-neutral-100);
     --card: color-mix(in srgb, var(--background) 97%, var(--color-white));
@@ -1170,10 +1367,36 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
-/* Keep both sidebar implementations (default and legacy) on the same quiet
-   zinc hierarchy: zinc-50 navigation, zinc-25 hover, and white selected/raised
-   surfaces. */
-[data-app-sidebar] {
+/* Forma's project-grouped sidebar inherits the selected theme exactly as PR #1
+   did. Its surface is the theme card, with no extra grain or zinc palette
+   substitution. Sidebar v2 keeps upstream's independent navigation palette. */
+[data-sidebar-version="v1"] {
+  --sidebar: var(--app-chrome-background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-muted-foreground: var(--muted-foreground);
+  --sidebar-control-surface: var(--secondary);
+  /* Alpha mixes instead of the theme accent/muted surfaces: the sidebar now
+     sits on the chrome background, where opaque zinc surfaces can vanish. */
+  --sidebar-row-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --sidebar-row-active: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --sidebar-row-selected: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+  --surface-grain: none;
+  background-color: var(--sidebar);
+  color: var(--sidebar-foreground);
+}
+/* The v2 sidebar pins an independent zinc/black palette; the shell wrapper
+   (the gap chrome around the inset content card) must match it. */
+[data-shell-theme="v2"] {
+  --app-chrome-background: var(--color-zinc-50);
+
+  @variant dark {
+    --app-chrome-background: #000;
+  }
+}
+
+[data-sidebar-version="v2"] {
   --background: var(--color-zinc-25);
   --foreground: var(--color-zinc-800);
   --card: var(--color-white);
@@ -1193,6 +1416,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --sidebar-row-selected: var(--color-white);
   --sidebar-border: var(--color-zinc-200);
   --sidebar-stage-fade: var(--sidebar);
+  background-color: var(--sidebar);
+  color: var(--sidebar-foreground);
 
   @variant dark {
     --background: #000;
@@ -1213,288 +1438,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --sidebar-row-active: color-mix(in srgb, var(--contrast-foreground) 11%, transparent);
     --sidebar-row-selected: color-mix(in srgb, var(--contrast-foreground) 7%, transparent);
     --sidebar-border: var(--border);
+    /* The stage-channel header art must ramp to THIS panel's surface, not the
+       global chrome background, or the fade shows a seam (same rule as the
+       light palette above). */
     --sidebar-stage-fade: var(--card);
-  }
-}
-
-/* Theme files are expressed in app color roles and mapped to the existing
-   semantic surface tokens here. Keep this block after the sidebar-version
-   compatibility overrides so both navigation implementations receive the
-   same palette. Success, info, provider, and channel identity colors remain
-   independent; error, warning, and update roles are themeable below. */
-/* The non-empty marker adds enough specificity to outrank the generated root
-   dark variant without reintroducing raw `.dark` selectors. */
-html[data-theme-id]:not([data-theme-id=""]) {
-  --background: var(--app-theme-canvas);
-  --app-chrome-background: var(--app-theme-chrome);
-  --toolbar-background: var(--app-theme-toolbar);
-  --toolbar-foreground: var(--app-theme-toolbar-foreground);
-  --toolbar-border: var(--app-theme-toolbar-border);
-  --toolbar-control: var(--app-theme-toolbar-control);
-  --toolbar-control-foreground: var(--app-theme-toolbar-control-foreground);
-  --toolbar-control-hover: var(--app-theme-toolbar-control-hover);
-  --surface-raised: var(--app-theme-surface-raised);
-  --foreground: var(--app-theme-text);
-  --card: var(--app-theme-surface);
-  --card-foreground: var(--app-theme-text);
-  --popover: var(--app-theme-surface-overlay);
-  --popover-foreground: var(--app-theme-text);
-  /* Solid controls (CTAs, switches, sliders, the send button) all share the
-     theme's action color so every "act now" affordance reads consistently;
-     the accent keeps driving surfaces, selection, and focus. Palettes without
-     a distinct action color make these identical. */
-  --primary: var(--app-theme-message-action);
-  --primary-foreground: var(--app-theme-message-action-foreground);
-  --secondary: var(--app-theme-secondary);
-  --secondary-foreground: var(--app-theme-secondary-foreground);
-  --muted: var(--app-theme-muted);
-  --muted-foreground: var(--app-theme-muted-foreground);
-  --placeholder: var(--app-theme-placeholder);
-  --secondary-label: var(--app-theme-secondary-label);
-  --icon-muted: var(--app-theme-icon-muted);
-  --accent: var(--app-theme-accent-surface);
-  --accent-foreground: var(--app-theme-accent-surface-foreground);
-  --message-surface: var(--app-theme-message-surface);
-  --message-foreground: var(--app-theme-message-foreground);
-  --message-action: var(--app-theme-message-action);
-  --message-action-foreground: var(--app-theme-message-action-foreground);
-  --message-action-hover: var(--app-theme-message-action-hover);
-  --error: var(--app-theme-error);
-  --error-foreground: var(--app-theme-error-foreground);
-  --tool-error-icon: var(--error-foreground);
-  --error-surface: var(--app-theme-error-surface);
-  --destructive: var(--error);
-  --destructive-foreground: var(--error-foreground);
-  --warning: var(--app-theme-warning);
-  --warning-foreground: var(--app-theme-warning-foreground);
-  --warning-surface: var(--app-theme-warning-surface);
-  --update: var(--app-theme-update);
-  --update-foreground: var(--app-theme-update-foreground);
-  --update-surface: var(--app-theme-update-surface);
-  --border: var(--app-theme-border);
-  --input: var(--app-theme-input);
-  --ring: var(--app-theme-focus);
-  --sidebar: var(--app-theme-sidebar);
-  --sidebar-foreground: var(--app-theme-sidebar-foreground);
-  --sidebar-muted-foreground: var(--app-theme-sidebar-muted-foreground);
-  --sidebar-control-surface: var(--app-theme-sidebar-control-surface);
-  --sidebar-row-hover: var(--app-theme-sidebar-row-hover);
-  --sidebar-row-active: var(--app-theme-sidebar-row-active);
-  --sidebar-row-selected: var(--app-theme-sidebar-row-selected);
-  --sidebar-border: var(--app-theme-sidebar-border);
-  --sidebar-stage-fade: var(--app-theme-sidebar);
-  --code-background: var(--app-theme-code-background);
-  --code-foreground: var(--app-theme-code-foreground);
-  --terminal-background: var(--app-theme-terminal-background);
-  --terminal-foreground: var(--app-theme-terminal-foreground);
-  --terminal-cursor: var(--app-theme-terminal-cursor);
-  --terminal-selection-background: var(--app-theme-terminal-selection-background);
-}
-
-/* Theme-token dependency probes are restored synchronously, before paint. Keep
-   transitions from observing the temporary sentinel color in between. */
-html[data-theme-token-probe],
-html[data-theme-token-probe] *,
-html[data-theme-token-probe] *::before,
-html[data-theme-token-probe] *::after {
-  transition: none !important;
-}
-
-#theme-inspector-spotlight {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
-  overflow: visible;
-  pointer-events: none;
-}
-
-[data-slot="popover-positioner"]:has([data-theme-editor-panel]),
-[data-slot="tooltip-positioner"]:has([data-theme-editor-panel]) {
-  z-index: 120;
-}
-
-.theme-inspector-spotlight-dimmer {
-  fill: rgb(2 3 8 / 54%);
-}
-
-.theme-inspector-spotlight-glow {
-  fill: color-mix(in oklab, var(--ring) 9%, transparent);
-  stroke: color-mix(in oklab, var(--ring) 72%, white);
-  stroke-width: 2px;
-  opacity: 0.92;
-  vector-effect: non-scaling-stroke;
-}
-
-#theme-inspector-hover {
-  position: fixed;
-  z-index: 101;
-  pointer-events: none;
-  background: color-mix(in oklab, var(--ring) 7%, transparent);
-  border: 1px solid color-mix(in oklab, var(--ring) 70%, white);
-  box-shadow:
-    0 0 0 3px color-mix(in oklab, var(--ring) 16%, transparent),
-    0 0 18px color-mix(in oklab, var(--ring) 38%, transparent);
-}
-
-#theme-inspector-hover [data-theme-inspector-hover-label] {
-  position: absolute;
-  left: 0;
-  max-width: 12rem;
-  overflow: hidden;
-  padding: 0.2rem 0.45rem;
-  border: 1px solid color-mix(in oklab, var(--ring) 48%, var(--contrast-border));
-  border-radius: 0.4rem;
-  background: var(--popover);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 24%);
-  color: var(--contrast-popover-foreground);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  line-height: 1rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#theme-inspector-hover[data-placement="above"] [data-theme-inspector-hover-label] {
-  bottom: calc(100% + 0.35rem);
-}
-
-#theme-inspector-hover[data-placement="below"] [data-theme-inspector-hover-label] {
-  top: calc(100% + 0.35rem);
-}
-
-/* Workspace actions use a small, separate chrome hierarchy. Keeping these
-   roles explicit prevents the thread toolbar from falling back to the default
-   dark-mode whites while preserving the same theme file across clients. */
-html[data-theme-id] [data-chat-header] {
-  background-color: var(--toolbar-background);
-  color: var(--contrast-toolbar-foreground);
-}
-
-html[data-theme-id] [data-chat-header] [data-slot="button"],
-html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"],
-html[data-theme-id] [data-chat-header] [data-toolbar-control] {
-  --control-icon-color: var(--contrast-toolbar-control-foreground);
-  background-color: var(--toolbar-control);
-  border-color: var(--contrast-toolbar-border);
-  color: var(--contrast-toolbar-control-foreground);
-}
-
-/* The panel layout toggles stay ghost: they render both inside the header and
-   in the titlebar strip, so filling them would make them change appearance as
-   the panel opens. They only take the themed foreground; hover and pressed
-   keep the base ghost accent. The tooltip trigger's data-slot wins over the
-   toggle's when the trigger renders the toggle, so match both. */
-html[data-theme-id] [data-panel-layout-controls] [data-slot="toggle"],
-html[data-theme-id] [data-panel-layout-controls] [data-slot="tooltip-trigger"],
-html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="toggle"],
-html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="tooltip-trigger"] {
-  --control-icon-color: var(--contrast-toolbar-foreground);
-  color: var(--contrast-toolbar-foreground);
-}
-
-html[data-theme-id] [data-panel-layout-controls] [data-slot="toggle"]:disabled,
-html[data-theme-id] [data-panel-layout-controls] [data-slot="tooltip-trigger"]:disabled,
-html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="toggle"]:disabled,
-html[data-theme-id] [data-workspace-titlebar-controls] [data-slot="tooltip-trigger"]:disabled {
-  --control-icon-color: color-mix(
-    in oklab,
-    var(--contrast-toolbar-foreground) 55%,
-    var(--toolbar-background)
-  );
-  color: color-mix(in oklab, var(--contrast-toolbar-foreground) 55%, var(--toolbar-background));
-}
-
-html[data-theme-id] [data-chat-header] [data-slot="button"]:hover,
-html[data-theme-id] [data-chat-header] [data-slot="button"][data-pressed],
-html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"]:hover,
-html[data-theme-id] [data-chat-header] [data-slot="menu-trigger"][data-pressed],
-html[data-theme-id] [data-chat-header] [data-toolbar-control]:hover,
-html[data-theme-id] [data-chat-header] [data-toolbar-control][data-pressed] {
-  background-color: var(--toolbar-control-hover);
-}
-
-html[data-theme-id] [data-chat-header] [data-slot="separator"] {
-  background-color: var(--contrast-toolbar-border);
-}
-
-/* Chat code blocks join the other code surfaces on the code tokens. The
-   default look keeps its secondary/input tints; themed palettes tint those
-   surfaces with the accent, which fights syntax highlighting. */
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock {
-  background-color: var(--code-background);
-  border-color: var(--contrast-border);
-  color: var(--code-foreground);
-}
-
-html[data-theme-id] .chat-markdown pre {
-  background-color: var(--code-background);
-  color: var(--code-foreground);
-}
-
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock pre {
-  background-color: transparent;
-}
-
-html[data-theme-id] .chat-markdown .chat-markdown-codeblock-header {
-  color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
-}
-
-/* T3 Chat renders inline code and compact chat artifacts with its translucent
-   secondary surface flattened over the light chat canvas. The raw muted and
-   secondary tokens are substantially darker than those visible pixels. */
-html[data-theme-id="t3-chat"] {
-  @variant light {
-    & .chat-markdown :not(pre) > code,
-    & [data-changed-files-state],
-    & [data-changed-files-header] {
-      background-color: var(--message-surface);
-    }
-
-    & .chat-markdown :not(pre) > code,
-    & [data-changed-files-state] {
-      border-color: transparent;
-    }
-
-    & .chat-markdown :not(pre) > code {
-      color: var(--contrast-message-foreground);
-    }
-  }
-}
-
-html[data-theme-id] [data-app-sidebar] {
-  --background: var(--app-theme-canvas);
-  --foreground: var(--app-theme-text);
-  --card: var(--app-theme-surface);
-  --card-foreground: var(--app-theme-text);
-  --accent: var(--app-theme-accent-surface);
-  --accent-foreground: var(--app-theme-accent-surface-foreground);
-  --muted: var(--app-theme-muted);
-  --muted-foreground: var(--app-theme-muted-foreground);
-  --border: var(--app-theme-border);
-  --input: var(--app-theme-input);
-  --sidebar: var(--app-theme-sidebar);
-  --sidebar-foreground: var(--app-theme-sidebar-foreground);
-  --sidebar-muted-foreground: var(--app-theme-sidebar-muted-foreground);
-  --sidebar-control-surface: var(--app-theme-sidebar-control-surface);
-  --sidebar-row-hover: var(--app-theme-sidebar-row-hover);
-  --sidebar-row-active: var(--app-theme-sidebar-row-active);
-  --sidebar-row-selected: var(--app-theme-sidebar-row-selected);
-  --sidebar-border: var(--app-theme-sidebar-border);
-  --sidebar-stage-fade: var(--app-theme-sidebar);
-  border-color: color-mix(in srgb, var(--contrast-sidebar-foreground) 10%, transparent);
-
-  @variant dark {
-    border-color: color-mix(in srgb, var(--contrast-sidebar-foreground) 8%, transparent);
-  }
-}
-
-/* T3 Chat's panel divider is deliberately pink, and its resize affordance
-   keeps that color while hovered. Do not neutralize this branded edge. */
-html[data-theme-id="t3-chat"] [data-app-sidebar] {
-  @variant dark {
-    border-color: var(--contrast-sidebar-border);
   }
 }
 
@@ -1738,6 +1685,288 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--app-scrollbar-thumb-hover);
+}
+
+/* Settings -> Appearance can point the composer at its own face (for example a
+   mono font); default follows the sans stack. Applied on the surface wrapper so
+   the editor and its placeholder inherit together. */
+.composer-editor-surface {
+  font-family: var(--font-composer, var(--font-sans));
+  font-size: var(--font-size-prompt, 0.875rem);
+}
+
+/* Touch browsers zoom the page when a focused field is under 16px, so keep
+   the floor there regardless of the preference. Gated on a coarse pointer:
+   the zoom quirk does not exist on desktop, where a narrow window must not
+   silently override a smaller chosen prompt size. */
+@media (max-width: 39.999rem) and (pointer: coarse) {
+  .composer-editor-surface {
+    font-size: max(var(--font-size-prompt, 1rem), 16px);
+  }
+}
+
+.model-picker-list::-webkit-scrollbar-track {
+  margin-block: 0.5rem;
+}
+
+.model-picker-list-scroll-fade-top,
+.model-picker-list-scroll-fade-bottom {
+  -webkit-mask-image: var(--model-picker-list-scroll-mask), linear-gradient(black, black);
+  -webkit-mask-position: left, right;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size:
+    calc(100% - var(--app-scrollbar-width)) 100%,
+    var(--app-scrollbar-width) 100%;
+  mask-image: var(--model-picker-list-scroll-mask), linear-gradient(black, black);
+  mask-position: left, right;
+  mask-repeat: no-repeat;
+  mask-size:
+    calc(100% - var(--app-scrollbar-width)) 100%,
+    var(--app-scrollbar-width) 100%;
+}
+
+.model-picker-list-scroll-fade-top {
+  --model-picker-list-scroll-mask: linear-gradient(to bottom, transparent, black var(--fade-size));
+}
+
+.model-picker-list-scroll-fade-bottom {
+  --model-picker-list-scroll-mask: linear-gradient(
+    to bottom,
+    black calc(100% - var(--fade-size)),
+    transparent
+  );
+}
+
+.model-picker-list-scroll-fade-top.model-picker-list-scroll-fade-bottom {
+  --model-picker-list-scroll-mask: linear-gradient(
+    to bottom,
+    transparent,
+    black var(--fade-size),
+    black calc(100% - var(--fade-size)),
+    transparent
+  );
+}
+
+.pixel-grid,
+.pixel-grid-loader {
+  display: inline-grid;
+  grid-template-columns: repeat(3, var(--pixel-grid-cell-size, 3px));
+  grid-template-rows: repeat(3, var(--pixel-grid-cell-size, 3px));
+  gap: var(--pixel-grid-gap, 1px);
+}
+
+.pixel-grid__cell,
+.pixel-grid-loader__cell {
+  border-radius: 1px;
+  background-color: var(--pixel-off);
+  box-shadow: none;
+  transition:
+    background-color 300ms ease-out,
+    box-shadow 300ms ease-out;
+}
+
+.pixel-grid__cell.is-on,
+.pixel-grid-loader__cell.is-on {
+  background-color: var(--pixel-on);
+  box-shadow:
+    0 0 3px var(--pixel-glow),
+    0 0 6px var(--pixel-glow);
+}
+
+:root {
+  --pixel-grid-chat-off: color-mix(in oklch, var(--primary) 18%, var(--background));
+  --pixel-grid-chat-on: color-mix(in oklch, var(--primary) 76%, var(--color-white));
+  --pixel-grid-chat-glow: color-mix(in oklch, var(--primary) 56%, transparent);
+  --pixel-grid-sidebar-off: color-mix(in oklch, currentColor 18%, var(--background));
+  --pixel-grid-sidebar-on: color-mix(in oklch, currentColor 76%, var(--color-white));
+  --pixel-grid-sidebar-glow: color-mix(in oklch, currentColor 58%, transparent);
+  --pixel-off: var(--pixel-grid-chat-off);
+  --pixel-on: var(--pixel-grid-chat-on);
+  --pixel-glow: var(--pixel-grid-chat-glow);
+}
+
+.pixel-grid-loader[data-pixel-grid-variant="chat"] {
+  --pixel-off: var(--pixel-grid-chat-off);
+  --pixel-on: var(--pixel-grid-chat-on);
+  --pixel-glow: var(--pixel-grid-chat-glow);
+}
+
+.pixel-grid-loader[data-pixel-grid-variant="sidebar"] {
+  --pixel-off: var(--pixel-grid-sidebar-off);
+  --pixel-on: var(--pixel-grid-sidebar-on);
+  --pixel-glow: var(--pixel-grid-sidebar-glow);
+}
+
+.pixel-grid--cyan {
+  --pixel-off: oklch(40% 0.08 195 / 0.4);
+  --pixel-on: oklch(90% 0.2 195);
+  --pixel-glow: oklch(80% 0.25 195 / 0.9);
+}
+
+.pixel-grid--magenta {
+  --pixel-off: oklch(40% 0.08 330 / 0.4);
+  --pixel-on: oklch(85% 0.25 330);
+  --pixel-glow: oklch(75% 0.3 330 / 0.9);
+}
+
+.pixel-grid--yellow {
+  --pixel-off: oklch(50% 0.08 90 / 0.4);
+  --pixel-on: oklch(95% 0.2 90);
+  --pixel-glow: oklch(90% 0.25 90 / 0.9);
+}
+
+.pixel-grid--green {
+  --pixel-off: oklch(40% 0.08 145 / 0.4);
+  --pixel-on: oklch(90% 0.25 145);
+  --pixel-glow: oklch(80% 0.3 145 / 0.9);
+}
+
+.pixel-grid--orange {
+  --pixel-off: oklch(45% 0.08 50 / 0.4);
+  --pixel-on: oklch(85% 0.22 50);
+  --pixel-glow: oklch(75% 0.28 50 / 0.9);
+}
+
+.pixel-grid--blue {
+  --pixel-off: oklch(40% 0.08 260 / 0.4);
+  --pixel-on: oklch(80% 0.22 260);
+  --pixel-glow: oklch(70% 0.28 260 / 0.9);
+}
+
+.pixel-grid--red {
+  --pixel-off: oklch(40% 0.08 25 / 0.4);
+  --pixel-on: oklch(70% 0.25 25);
+  --pixel-glow: oklch(60% 0.3 25 / 0.9);
+}
+
+.pixel-grid--purple {
+  --pixel-off: oklch(40% 0.08 300 / 0.4);
+  --pixel-on: oklch(75% 0.22 300);
+  --pixel-glow: oklch(65% 0.28 300 / 0.9);
+}
+
+.pixel-grid--white {
+  --pixel-off: oklch(50% 0 0 / 0.3);
+  --pixel-on: oklch(98% 0 0);
+  --pixel-glow: oklch(95% 0 0 / 0.8);
+}
+
+.pixel-grid--teal {
+  --pixel-off: oklch(40% 0.08 175 / 0.4);
+  --pixel-on: oklch(82% 0.18 175);
+  --pixel-glow: oklch(72% 0.24 175 / 0.9);
+}
+
+.pixel-grid--pink {
+  --pixel-off: oklch(45% 0.08 350 / 0.4);
+  --pixel-on: oklch(80% 0.2 350);
+  --pixel-glow: oklch(70% 0.26 350 / 0.9);
+}
+
+.pixel-grid--lime {
+  --pixel-off: oklch(45% 0.08 120 / 0.4);
+  --pixel-on: oklch(88% 0.22 120);
+  --pixel-glow: oklch(80% 0.28 120 / 0.9);
+}
+
+.pixel-grid__cell--cyan {
+  --pixel-off: oklch(40% 0.08 195 / 0.4);
+  --pixel-on: oklch(90% 0.2 195);
+  --pixel-glow: oklch(80% 0.25 195 / 0.9);
+}
+
+.pixel-grid__cell--magenta {
+  --pixel-off: oklch(40% 0.08 330 / 0.4);
+  --pixel-on: oklch(85% 0.25 330);
+  --pixel-glow: oklch(75% 0.3 330 / 0.9);
+}
+
+.pixel-grid__cell--yellow {
+  --pixel-off: oklch(50% 0.08 90 / 0.4);
+  --pixel-on: oklch(95% 0.2 90);
+  --pixel-glow: oklch(90% 0.25 90 / 0.9);
+}
+
+.pixel-grid__cell--green {
+  --pixel-off: oklch(40% 0.08 145 / 0.4);
+  --pixel-on: oklch(90% 0.25 145);
+  --pixel-glow: oklch(80% 0.3 145 / 0.9);
+}
+
+.pixel-grid__cell--orange {
+  --pixel-off: oklch(45% 0.08 50 / 0.4);
+  --pixel-on: oklch(85% 0.22 50);
+  --pixel-glow: oklch(75% 0.28 50 / 0.9);
+}
+
+.pixel-grid__cell--blue {
+  --pixel-off: oklch(40% 0.08 260 / 0.4);
+  --pixel-on: oklch(80% 0.22 260);
+  --pixel-glow: oklch(70% 0.28 260 / 0.9);
+}
+
+.pixel-grid__cell--red {
+  --pixel-off: oklch(40% 0.08 25 / 0.4);
+  --pixel-on: oklch(70% 0.25 25);
+  --pixel-glow: oklch(60% 0.3 25 / 0.9);
+}
+
+.pixel-grid__cell--purple {
+  --pixel-off: oklch(40% 0.08 300 / 0.4);
+  --pixel-on: oklch(75% 0.22 300);
+  --pixel-glow: oklch(65% 0.28 300 / 0.9);
+}
+
+.pixel-grid__cell--white {
+  --pixel-off: oklch(50% 0 0 / 0.3);
+  --pixel-on: oklch(98% 0 0);
+  --pixel-glow: oklch(95% 0 0 / 0.8);
+}
+
+.pixel-grid__cell--teal {
+  --pixel-off: oklch(40% 0.08 175 / 0.4);
+  --pixel-on: oklch(82% 0.18 175);
+  --pixel-glow: oklch(72% 0.24 175 / 0.9);
+}
+
+.pixel-grid__cell--pink {
+  --pixel-off: oklch(45% 0.08 350 / 0.4);
+  --pixel-on: oklch(80% 0.2 350);
+  --pixel-glow: oklch(70% 0.26 350 / 0.9);
+}
+
+.pixel-grid__cell--lime {
+  --pixel-off: oklch(45% 0.08 120 / 0.4);
+  --pixel-on: oklch(88% 0.22 120);
+  --pixel-glow: oklch(80% 0.28 120 / 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-grid__cell,
+  .pixel-grid-loader__cell {
+    transition: none;
+  }
+
+  .ultrathink-frame,
+  .ultrathink-chroma,
+  .ultrathink-pill,
+  .ultrathink-word {
+    animation: none !important;
+  }
+}
+
+/* Terminal drawer scrollbar parity with chat */
+.thread-terminal-drawer .xterm .xterm-scrollable-element > .scrollbar.vertical {
+  width: 6px !important;
+}
+
+.thread-terminal-drawer .xterm .xterm-scrollable-element > .scrollbar > .slider {
+  border-radius: 3px;
+}
+
+.thread-terminal-drawer .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: 6px !important;
+  left: 0 !important;
 }
 
 /* Chat markdown rendering */
@@ -2305,5 +2534,118 @@ code {
         1.25rem + var(--chat-lane-inset-end, 0px) - var(--chat-timeline-gutter, 0px)
       );
     }
+  }
+}
+
+/* ============================================================================
+   Forma theme & appearance system (ported from the fork)
+
+   theme.ts applies its generated palette inline on <html> (CSS custom
+   properties + data-theme attributes); interfaceAppearance.ts sets the
+   --app-ui-* / --app-code-* sizing tokens below. These are the static
+   defaults and the utility classes that consume them.
+   ========================================================================= */
+
+:root {
+  --app-ui-root-font-size: 16px;
+  --app-ui-text-2xs: 10.5px;
+  --app-ui-text-xs: 11.5px;
+  --app-ui-text-sm: 13.5px;
+  /* Bridged to the settings-backed font engine (upstream #5103): the code
+     size setting drives all Forma code-surface utilities, preserving the
+     classic 12/11/13 scale at the default 13px. */
+  --app-code-font-size: calc(var(--font-size-code, 13px) - 1px);
+  --app-code-font-size-compact: calc(var(--font-size-code, 13px) - 2px);
+  --app-code-editor-font-size: var(--font-size-code, 13px);
+  /* Unified motion tokens (fork commit "add unified motion tokens").
+     Consumed by src/lib/motion.ts class-name constants and by inline
+     [transition-*:var(...)] arbitrary utilities across the shell. */
+  --motion-duration-micro: 120ms;
+  --motion-duration-ui: 200ms;
+  --motion-duration-modal: 260ms;
+  --motion-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --motion-ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-floating-positioner {
+    transition: none !important;
+    scale: 1 !important;
+    translate: 0 0 !important;
+    transform: none !important;
+  }
+
+  .motion-modal-popup,
+  .motion-floating-popup,
+  .motion-sheet-popup {
+    transition-property: opacity !important;
+    scale: 1 !important;
+    translate: 0 0 !important;
+    transform: none !important;
+  }
+
+  .motion-modal-popup[data-ending-style],
+  .motion-modal-popup[data-starting-style],
+  .motion-floating-popup[data-ending-style],
+  .motion-floating-popup[data-starting-style],
+  .motion-sheet-popup[data-ending-style],
+  .motion-sheet-popup[data-starting-style] {
+    scale: 1 !important;
+    translate: 0 0 !important;
+    transform: none !important;
+  }
+}
+
+html {
+  font-size: var(--app-ui-root-font-size);
+}
+
+.text-ui-2xs {
+  font-size: var(--app-ui-text-2xs);
+}
+
+.text-ui-xs {
+  font-size: var(--app-ui-text-xs);
+}
+
+.text-ui-sm {
+  font-size: var(--app-ui-text-sm);
+}
+
+.text-code-body {
+  font-size: var(--app-code-font-size);
+}
+
+.text-code-compact {
+  font-size: var(--app-code-font-size-compact);
+}
+
+/* Forma animated logomark (stroke-draw, mirrors the boot splash) */
+.forma-logomark-animated path {
+  stroke: currentColor;
+  stroke-width: 5;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: forma-logomark-draw 1.05s ease forwards;
+}
+
+.forma-logomark-animated .forma-logomark-animated-path-2 {
+  animation-delay: 220ms;
+}
+
+.forma-logomark-animated .forma-logomark-animated-path-3 {
+  animation-delay: 440ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forma-logomark-animated path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes forma-logomark-draw {
+  to {
+    stroke-dashoffset: 0;
   }
 }

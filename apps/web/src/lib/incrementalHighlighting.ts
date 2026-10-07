@@ -18,7 +18,8 @@ export function createIncrementalHighlightedDocument(
   highlighter: DiffsHighlighter,
   language: string,
   theme: DiffThemeName,
-) {
+  // Fork: explicit so the type stays nameable with the fork's dependency layout.
+): (code: string) => ReturnType<DiffsHighlighter["codeToHast"]> {
   const options = { lang: language, theme };
   const newline = { type: "text" as const, value: "\n" };
   let cached:

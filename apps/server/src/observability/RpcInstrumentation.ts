@@ -131,6 +131,11 @@ const RPC_AGGREGATES = {
   [WS_METHODS.projectsSearchContents]: "workspace",
   [WS_METHODS.projectsSearchEntries]: "workspace",
   [WS_METHODS.projectsWriteFile]: "workspace",
+  // Fork: Forma file panel and local agents.
+  [WS_METHODS.projectsLocalAgentInventory]: "workspace",
+  [WS_METHODS.projectsCreateDirectory]: "workspace",
+  [WS_METHODS.projectsRenameEntry]: "workspace",
+  [WS_METHODS.projectsDeleteEntry]: "workspace",
   [WS_METHODS.projectsEnsureScratch]: "orchestration",
   [WS_METHODS.projectsCreateNew]: "orchestration",
   [WS_METHODS.shellOpenInEditor]: "workspace",

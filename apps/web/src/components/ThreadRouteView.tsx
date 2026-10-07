@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import ChatView from "./ChatView";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
-import { SidebarInset } from "./ui/sidebar";
+import { DesktopSidebarReopenButton } from "./sidebar/DesktopSidebarReopenButton";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "./ui/sidebar";
+import { isElectron } from "../env";
+import { cn } from "../lib/utils";
 import {
   finalizePromotedDraftThreadByRef,
   markPromotedDraftThreadByRef,
@@ -189,9 +192,25 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     );
   }
 
+  // Fork: Forma chrome — the inset sits on the window chrome (md:h-auto lets
+  // the inset margins apply), and while the thread loads a header-height band
+  // plus an empty card hold its geometry instead of flashing a chrome void.
   return (
-    <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
-      {view}
+    <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-auto">
+      {view ?? (
+        <>
+          <header
+            className={cn(
+              "workspace-topbar bg-background pl-(--workspace-gutter-start) md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]",
+              isElectron && "drag-region [--workspace-topbar-height:39px]",
+            )}
+          >
+            <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+            <DesktopSidebarReopenButton className="md:ml-0" />
+          </header>
+          <SidebarInsetCard />
+        </>
+      )}
     </SidebarInset>
   );
 }

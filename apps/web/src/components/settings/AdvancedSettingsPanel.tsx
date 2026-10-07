@@ -1,0 +1,239 @@
+import { useAtomValue } from "@effect/atom-react";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { Link } from "@tanstack/react-router";
+import { useCallback, useState } from "react";
+
+import { APP_VERSION } from "../../branding";
+import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
+import { isElectron } from "../../env";
+import { primaryServerAvailableEditorsAtom, primaryServerConfigAtom } from "../../state/server";
+import { shellEnvironment } from "../../state/shell";
+import { usePrimaryEnvironment } from "../../state/environments";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { Button } from "../ui/button";
+import { AboutVersionSection, LegacyFeaturesSection } from "./SettingsPanels";
+import { formatDiagnosticsDescription } from "./SettingsPanels.logic";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { searchableSetting } from "./settingsSearch";
+
+type OpenPathTarget = "keybindings" | "logsDirectory";
+
+function useAdvancedSettingsPanelState() {
+  const [openingPathByTarget, setOpeningPathByTarget] = useState<Record<OpenPathTarget, boolean>>({
+    keybindings: false,
+    logsDirectory: false,
+  });
+  const [openPathErrorByTarget, setOpenPathErrorByTarget] = useState<
+    Partial<Record<OpenPathTarget, string | null>>
+  >({});
+
+  const serverConfig = useAtomValue(primaryServerConfigAtom);
+  const keybindingsConfigPath = serverConfig?.keybindingsConfigPath ?? null;
+  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
+  const observability = serverConfig?.observability;
+  const primaryEnvironment = usePrimaryEnvironment();
+  const environmentId = primaryEnvironment?.environmentId ?? null;
+  const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
+    reportFailure: false,
+  });
+  const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
+  const diagnosticsDescription = formatDiagnosticsDescription({
+    localTracingEnabled: observability?.localTracingEnabled ?? false,
+    otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
+    otlpTracesUrl: observability?.otlpTracesUrl,
+    otlpMetricsEnabled: observability?.otlpMetricsEnabled ?? false,
+    otlpMetricsUrl: observability?.otlpMetricsUrl,
+  });
+
+  const openInPreferredEditor = useCallback(
+    (target: OpenPathTarget, path: string | null, failureMessage: string) => {
+      if (!path) return;
+      setOpenPathErrorByTarget((existing) => ({ ...existing, [target]: null }));
+
+      const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
+      if (!editor) {
+        setOpenPathErrorByTarget((existing) => ({
+          ...existing,
+          [target]: "No available editors found.",
+        }));
+        return;
+      }
+      if (environmentId === null) {
+        setOpenPathErrorByTarget((existing) => ({
+          ...existing,
+          [target]: "No environment is selected.",
+        }));
+        return;
+      }
+
+      setOpeningPathByTarget((existing) => ({ ...existing, [target]: true }));
+      void (async () => {
+        const result = await openInEditor({
+          environmentId,
+          input: {
+            cwd: path,
+            editor,
+          },
+        });
+        setOpeningPathByTarget((existing) => ({ ...existing, [target]: false }));
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          setOpenPathErrorByTarget((existing) => ({
+            ...existing,
+            [target]: error instanceof Error ? error.message : failureMessage,
+          }));
+        }
+      })();
+    },
+    [availableEditors, environmentId, openInEditor],
+  );
+
+  const openKeybindingsFile = useCallback(() => {
+    openInPreferredEditor("keybindings", keybindingsConfigPath, "Unable to open keybindings file.");
+  }, [keybindingsConfigPath, openInPreferredEditor]);
+
+  const openLogsDirectory = useCallback(() => {
+    openInPreferredEditor("logsDirectory", logsDirectoryPath, "Unable to open logs folder.");
+  }, [logsDirectoryPath, openInPreferredEditor]);
+
+  return {
+    diagnosticsDescription,
+    environmentId,
+    isOpeningKeybindings: openingPathByTarget.keybindings,
+    isOpeningLogsDirectory: openingPathByTarget.logsDirectory,
+    keybindingsConfigPath,
+    logsDirectoryPath,
+    openDiagnosticsError: openPathErrorByTarget.logsDirectory ?? null,
+    openKeybindingsError: openPathErrorByTarget.keybindings ?? null,
+    openKeybindingsFile,
+    openLogsDirectory,
+  };
+}
+
+export function AdvancedSettingsPanel() {
+  const {
+    diagnosticsDescription,
+    environmentId,
+    isOpeningKeybindings,
+    isOpeningLogsDirectory,
+    keybindingsConfigPath,
+    logsDirectoryPath,
+    openDiagnosticsError,
+    openKeybindingsError,
+    openKeybindingsFile,
+    openLogsDirectory,
+  } = useAdvancedSettingsPanelState();
+
+  return (
+    <SettingsPageContainer>
+      <SettingsSection title="Files">
+        <SettingsRow
+          id={searchableSetting("keybindings-file").id}
+          title="Keybindings"
+          description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
+          status={
+            <>
+              <span className="text-code-compact block break-all font-mono text-foreground">
+                {keybindingsConfigPath ?? "Resolving keybindings path..."}
+              </span>
+              {openKeybindingsError ? (
+                <span className="mt-1 block text-destructive">{openKeybindingsError}</span>
+              ) : (
+                <span className="mt-1 block">Opens in your preferred editor.</span>
+              )}
+            </>
+          }
+          control={
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!keybindingsConfigPath || isOpeningKeybindings}
+              onClick={openKeybindingsFile}
+            >
+              {isOpeningKeybindings ? "Opening..." : "Open file"}
+            </Button>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Diagnostics">
+        <SettingsRow
+          id={searchableSetting("logs-folder").id}
+          title="Logs"
+          description={diagnosticsDescription}
+          status={
+            <>
+              <span className="text-code-compact block break-all font-mono text-foreground">
+                {logsDirectoryPath ?? "Resolving logs directory..."}
+              </span>
+              {openDiagnosticsError ? (
+                <span className="mt-1 block text-destructive">{openDiagnosticsError}</span>
+              ) : null}
+            </>
+          }
+          control={
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={!logsDirectoryPath || isOpeningLogsDirectory}
+              onClick={openLogsDirectory}
+            >
+              {isOpeningLogsDirectory ? "Opening..." : "Open logs folder"}
+            </Button>
+          }
+        />
+        <SettingsRow
+          id={searchableSetting("diagnostics").id}
+          title="Processes and resources"
+          description="Inspect processes, resource use, and logs on this environment."
+          control={
+            <Button
+              render={
+                <Link to="/settings/diagnostics" search={{ machine: environmentId ?? undefined }} />
+              }
+              size="xs"
+              variant="outline"
+            >
+              View diagnostics
+            </Button>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Updates">
+        {isElectron ? (
+          <AboutVersionSection />
+        ) : (
+          <SettingsRow
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span>Version</span>
+                <code className="text-2xs font-medium text-muted-foreground">{APP_VERSION}</code>
+              </span>
+            }
+            description="Current version of the application."
+          />
+        )}
+        <SettingsRow
+          id={searchableSetting("open-source-licenses").id}
+          title="Open source licenses"
+          description="Notices for dependencies, assets, and optional tools used by Forma."
+          control={
+            <Button
+              render={<Link to="/settings/open-source-licenses" />}
+              size="xs"
+              variant="outline"
+            >
+              View licenses
+            </Button>
+          }
+        />
+      </SettingsSection>
+
+      <LegacyFeaturesSection />
+    </SettingsPageContainer>
+  );
+}

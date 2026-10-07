@@ -64,6 +64,8 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
 
+// Fork: Forma UI type tokens (text-ui-*) replace the fixed text sizes in this file.
+
 // Lineage paging: a busy thread can accumulate dozens of forks and subagents,
 // and the panel it lives in already scrolls. Show a workable window, keep the
 // rest behind Show more, and bound what is shown so the sections below Lineage
@@ -104,7 +106,7 @@ export function ThreadLineageRowList(props: {
         <button
           type="button"
           onClick={props.onShowMore}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
+          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
         >
           <PlusIcon aria-hidden className="size-4 shrink-0" />
           Show {Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)} more
@@ -436,7 +438,7 @@ export function ThreadRelationshipsPanel(props: {
                     status={status}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
+                    <span className="block truncate text-left text-ui-sm font-medium leading-4 text-foreground/85">
                       {threadTitle}
                     </span>
                   </span>
@@ -447,13 +449,13 @@ export function ThreadRelationshipsPanel(props: {
                       carries status, so an agent with a known time shows only that. */}
                   {agent && !failed && deriveSubagentElapsedMs(agent, 0) !== null ? (
                     <span
-                      className={`shrink-0 text-2xs font-normal tabular-nums text-muted-foreground ${trailingVisibilityClass}`}
+                      className={`shrink-0 text-ui-2xs font-normal tabular-nums text-muted-foreground ${trailingVisibilityClass}`}
                     >
                       <AgentElapsed agent={agent} compact />
                     </span>
                   ) : !isMergeTarget ? (
                     <span
-                      className={`shrink-0 text-2xs ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}`}
+                      className={`shrink-0 text-ui-2xs ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}`}
                     >
                       {threadRelationshipStatusLabel(status)}
                     </span>
@@ -520,7 +522,7 @@ export function ThreadRelationshipsPanel(props: {
                               : "Merge this conversation back into its source"}
                         </TooltipPopup>
                       </Tooltip>
-                      <span className="shrink-0 border border-transparent ps-1 pe-2.5 text-2xs font-medium text-muted-foreground">
+                      <span className="shrink-0 border border-transparent ps-1 pe-2.5 text-ui-2xs font-medium text-muted-foreground">
                         {threadRelationshipStatusLabel(status)}
                       </span>
                     </div>

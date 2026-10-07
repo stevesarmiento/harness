@@ -829,7 +829,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     <TooltipProvider delay={0}>
       <div
         ref={pickerContentRef}
-        className="relative flex max-h-86.5 w-screen max-w-90 flex-row overflow-hidden"
+        className="relative flex max-h-96 w-screen max-w-100 flex-row overflow-hidden"
         // Hold the height from when the search started; results scroll instead of resizing.
         style={isSearching ? { height: searchHeight } : undefined}
         data-model-picker-content="true"
@@ -898,7 +898,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         >
           <div
             className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40",
+              "flex min-h-0 flex-1 flex-col overflow-hidden bg-popover",
               showSidebar && "border-l border-border/70",
             )}
           >
@@ -1038,7 +1038,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   estimatedItemSize={MODEL_LIST_ESTIMATED_ITEM_SIZE}
                   drawDistance={480}
                   recycleItems
-                  contentContainerClassName="pl-2 pr-px"
+                  contentContainerClassName="px-2"
                   ItemSeparatorComponent={ModelListSeparator}
                   onLayout={updateModelListScrollFades}
                   onScroll={updateModelListScrollFades}

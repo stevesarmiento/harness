@@ -67,6 +67,8 @@ interface ProjectScriptsControlProps {
   /** Scripts declared in the project's checked-in t3.json, offered for import. */
   fileScripts?: ReadonlyArray<T3ProjectFileScript>;
   preferredScriptId?: string | null;
+  /** Render actions directly inside a parent menu instead of adding another toolbar trigger. */
+  renderMode?: "toolbar" | "menu-items";
   onRunScript?: ((script: ProjectScript) => void) | undefined;
   onAddScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateScript: (
@@ -84,6 +86,7 @@ export default function ProjectScriptsControl({
   scripts,
   fileScripts = NO_FILE_SCRIPTS,
   preferredScriptId = null,
+  renderMode = "toolbar",
   onRunScript,
   onAddScript,
   onUpdateScript,
@@ -251,7 +254,9 @@ export default function ProjectScriptsControl({
 
   return (
     <>
-      {presentation === "menu" ? (
+      {renderMode === "menu-items" ? (
+        scriptItems
+      ) : presentation === "menu" ? (
         <>
           {primaryScript && (
             <MenuItem

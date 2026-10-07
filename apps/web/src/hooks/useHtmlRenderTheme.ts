@@ -1,49 +1,34 @@
 import { HTML_RENDER_DEFAULT_FONTS, htmlRenderTheme } from "@t3tools/shared/htmlRender";
-import { useMemo, useSyncExternalStore } from "react";
+import {
+  T3_CODE_DARK_THEME_COLORS,
+  T3_CODE_LIGHT_THEME_COLORS,
+} from "@t3tools/shared/themePalettes";
+import { useMemo } from "react";
 
 import { appearanceFontStack } from "../appearanceFonts";
-import {
-  getStandardThemeColors,
-  getThemeColorsForMode,
-  getThemeDefinition,
-  resolveThemeHalf,
-  subscribeToCustomThemes,
-  type ThemeAppearance,
-  type ThemeHalves,
-  type ThemePreference,
-} from "../themePalette";
 import { useClientSettings } from "./useSettings";
 import { useTheme } from "./useTheme";
 
-/** The palette `applyTheme` paints for a preference, or the stock look when no theme applies. */
-function resolveActiveThemeColors(
-  theme: ThemePreference,
-  halves: ThemeHalves | null,
-  appearance: ThemeAppearance,
-) {
-  const definition = getThemeDefinition(resolveThemeHalf(theme, halves, appearance));
-  return definition === null
-    ? getStandardThemeColors(appearance)
-    : (getThemeColorsForMode(definition, appearance) ?? definition.colors);
-}
-
-/** The app's active theme and fonts, as handed to agent HTML renders. Stable until one changes. */
+/**
+ * The app's appearance and fonts, as handed to agent HTML renders. Stable until one changes.
+ *
+ * Fork: Forma has no theme library, so renders get the standard palette for the
+ * resolved light or dark mode.
+ */
 export function useHtmlRenderTheme() {
-  const { theme, resolvedTheme, themeHalves } = useTheme();
-  // Custom and published palettes can be edited in place, under an unchanged preference.
-  const colors = useSyncExternalStore(
-    subscribeToCustomThemes,
-    () => resolveActiveThemeColors(theme, themeHalves, resolvedTheme),
-    () => getStandardThemeColors(resolvedTheme),
-  );
+  const { resolvedTheme } = useTheme();
   const sans = useClientSettings((settings) => settings.fontFamilySans);
   const mono = useClientSettings((settings) => settings.fontFamilyCode);
   return useMemo(
     () =>
-      htmlRenderTheme(colors, resolvedTheme, {
-        sans: appearanceFontStack(sans, HTML_RENDER_DEFAULT_FONTS.sans),
-        mono: appearanceFontStack(mono, HTML_RENDER_DEFAULT_FONTS.mono),
-      }),
-    [colors, resolvedTheme, sans, mono],
+      htmlRenderTheme(
+        resolvedTheme === "dark" ? T3_CODE_DARK_THEME_COLORS : T3_CODE_LIGHT_THEME_COLORS,
+        resolvedTheme,
+        {
+          sans: appearanceFontStack(sans, HTML_RENDER_DEFAULT_FONTS.sans),
+          mono: appearanceFontStack(mono, HTML_RENDER_DEFAULT_FONTS.mono),
+        },
+      ),
+    [resolvedTheme, sans, mono],
   );
 }

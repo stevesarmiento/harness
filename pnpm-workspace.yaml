@@ -1,5 +1,8 @@
 packages:
   - apps/*
+  # The fork connects to the released upstream mobile app; keep mobile source
+  # as protocol ground truth without installing its Expo dependency graph.
+  - "!apps/mobile"
   - infra/*
   - oxlint-plugin-t3code
   - packages/*
@@ -254,6 +257,10 @@ packageExtensions:
   "@effect/vitest@*":
     dependencies:
       vite-plus: "catalog:"
+
+# Fork: apps/mobile is excluded above, so its React Native patches have no
+# installed target. Keep upstream's patch list verbatim and tolerate those.
+allowUnusedPatches: true
 
 patchedDependencies:
   alchemy@2.0.0-beta.80: patches/alchemy@2.0.0-beta.80.patch
