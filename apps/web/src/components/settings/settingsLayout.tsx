@@ -1,4 +1,7 @@
 import { SettingsGroup } from "./SettingsGroup";
+import { AuthSettingsWriteScope } from "@t3tools/contracts";
+import { usePrimaryEnvironmentId } from "../../state/environments";
+import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
 import { IconArrowTurnUpLeft as Undo2Icon, IconInfoCircle as InfoIcon } from "symbols-react";
 import { DEFAULT_SERVER_SETTINGS, type ServerSettings } from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
@@ -27,6 +30,7 @@ import { SettingsScopeSentence } from "./SettingsScopeSentence";
 import {
   isProjectScopedSettingKey,
   listProjectOverrides,
+  type ProjectOverrideEntry,
   scopedSettingsAreMixed,
   scopedSettingsSource,
 } from "./scopedSettings";
@@ -41,6 +45,7 @@ const EMPTY_SETTING_KEYS: readonly (keyof ServerSettings)[] = [];
 
 /** Forma's settings card surface, layered over the shared grouped SettingsGroup. */
 const SETTINGS_CARD_CLASSNAME =
+  // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: mirrors the ui Card's inset highlight and inner radius.
   "overflow-hidden rounded-2xl border-border bg-card text-card-foreground shadow-sm/4 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:shadow-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)] [&>*+*]:border-border/60";
 
 declare module "@tanstack/react-router" {
@@ -205,7 +210,10 @@ export function SettingsSection({
           data-settings-scroll-target
           className="flex min-h-8 items-center justify-between gap-4 px-1"
         >
-          <h2 className="text-ui-xs flex min-w-0 items-center gap-2 font-semibold uppercase tracking-[0.08em] text-foreground/50">
+          <h2
+            // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: Forma's eyebrow tracking sits between the wide and widest steps.
+            className="text-ui-xs flex min-w-0 items-center gap-2 font-semibold uppercase tracking-[0.08em] text-foreground/50"
+          >
             <span aria-hidden className="inline-block h-px w-3 bg-border" />
             {icon}
             {title}
@@ -288,6 +296,16 @@ export function SettingsRow({
   const targetRef = useSettingsSearchTarget<HTMLDivElement>(rowProps.id);
   const primarySettingsAvailable = usePrimarySettingsAvailable();
   const context = useOptionalSettingsScope();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const primaryCanWrite = useEnvironmentScope(primaryEnvironmentId, AuthSettingsWriteScope);
+  const writableIds = useEnvironmentsWithScope(
+    context?.connectedEnvironments ?? [],
+    AuthSettingsWriteScope,
+  );
+  const canWriteSettings = context
+    ? context.connectedEnvironments.length > 0 &&
+      context.connectedEnvironments.every((target) => writableIds.has(target.environmentId))
+    : primaryCanWrite;
   const clearOverrides = useClearScopedSettings();
   const clearProjectOverrides = useClearProjectOverrides();
   const isProjectScope =
@@ -302,7 +320,8 @@ export function SettingsRow({
     context && isProjectScope ? scopedSettingsSource(context.targets, scopedKeys) : null;
   const unavailable =
     serverScoped &&
-    !(context ? context.connectedEnvironments.length > 0 : primarySettingsAvailable);
+    (!canWriteSettings ||
+      !(context ? context.connectedEnvironments.length > 0 : primarySettingsAvailable));
   const inheritedFrom =
     source === "environment" && context?.scope.environmentIds.length === 1
       ? (context.environments.find(
@@ -382,9 +401,11 @@ export function SettingsRow({
   const renderedControl =
     unavailable && control
       ? inertControl(
-          context
-            ? "Reconnect the selected environment to change this setting."
-            : PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE,
+          !canWriteSettings
+            ? "This connection does not have permission to change environment settings."
+            : context
+              ? "Reconnect the selected environment to change this setting."
+              : PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE,
         )
       : environmentWide && control
         ? inertControl("Environment-wide setting. Select an environment to change it.")
@@ -422,7 +443,12 @@ export function SettingsRow({
         environments={context.connectedEnvironments}
         keys={settingKeys}
         overridingProjects={overridingProjects}
-        onClearOverrides={(entries) => clearProjectOverrides(entries, scopedKeys)}
+        {...(canWriteSettings
+          ? {
+              onClearOverrides: (entries: readonly ProjectOverrideEntry[]) =>
+                clearProjectOverrides(entries, scopedKeys),
+            }
+          : {})}
       />
     ) : null;
   const renderedStatus = status;
@@ -477,7 +503,12 @@ function SettingsRowBody({
     <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex min-h-5 items-center gap-1.5">
-          <h3 className="text-ui-sm font-semibold tracking-[-0.01em] text-foreground">{title}</h3>
+          <h3
+            // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: Forma's row titles tighten less than the tight step.
+            className="text-ui-sm font-semibold tracking-[-0.01em] text-foreground"
+          >
+            {title}
+          </h3>
           {inheritance ? (
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               {inheritance}

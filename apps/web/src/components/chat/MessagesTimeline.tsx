@@ -168,6 +168,8 @@ import {
   SnapShotAttachmentDetails,
 } from "./SnapShotAttachmentDetails";
 import { ProposedPlanCard } from "./ProposedPlanCard";
+import { HtmlRenderFrame } from "./HtmlRenderFrame";
+import { McpAppFrame } from "./McpAppFrame";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { useFileContextMenuHandler } from "../../fileContextMenu";
 import { useProject, useThreadShell } from "../../state/entities";
@@ -278,6 +280,7 @@ import {
   V2LifecycleRow,
   type HandoffTimelineRun,
 } from "./V2LifecycleRow";
+import { SecretRequestCard } from "./SecretRequestCard";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
 
 import { SkillChipIcon, SkillInlineText } from "./SkillInlineText";
@@ -313,6 +316,14 @@ interface TimelineRowSharedState {
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
+  /** Sends text an MCP App asked to post, after the user approved it. */
+  onSendAppMessage: ((text: string) => Promise<void>) | undefined;
+  /**
+   * An MCP App row entering or leaving full screen. The row stays rendered
+   * and the list stops following new output meanwhile, so the app is not
+   * virtualized away while the reader is using it.
+   */
+  onAppFullscreenChange: (rowId: string, fullscreen: boolean) => void;
   onRunShellCommand: ((command: string) => void) | undefined;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   displayThreadKey?: string;
@@ -346,6 +357,8 @@ interface TimelineRowActivityState {
   isCompacting: boolean;
   isRevertingCheckpoint: boolean;
   activeTurnInProgress: boolean;
+  /** The agent waits on an approval or an answer from the user. */
+  awaitingUser: boolean;
   isPreparingWorktree: boolean;
   latestRunId: RunId | null;
   /**
@@ -376,11 +389,18 @@ const USER_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/70 
 const ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/30 tabular-nums";
 const WORKING_ROW_LABEL_CLASS_NAME =
   "text-ui-xs flex h-6 min-w-0 items-center gap-2 text-muted-foreground/70 tabular-nums";
-function TimelineListFooter({ composerInset }: { readonly composerInset: number }) {
+function TimelineListFooter({
+  composerInset,
+  children,
+}: {
+  readonly composerInset: number;
+  readonly children?: ReactNode;
+}) {
   return (
-    <div aria-hidden>
-      <div style={{ height: composerInset }} />
-      <div className="h-3 sm:h-4" />
+    <div>
+      {children}
+      <div aria-hidden style={{ height: composerInset }} />
+      <div aria-hidden className="h-3 sm:h-4" />
     </div>
   );
 }
@@ -439,6 +459,10 @@ interface MessagesTimelineProps {
   onOpenWorktreeSetupTerminal?: (terminalId: string) => void;
   isPreparingWorktree?: boolean;
   isCompacting?: boolean;
+  /** The agent waits on an approval or an answer from the user. */
+  awaitingUser?: boolean;
+  /** Thread state shown after the last message, such as a settled or snoozed line. */
+  footer?: ReactNode;
 
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReadonlyArray<TimelineEntry>;
@@ -464,6 +488,7 @@ interface MessagesTimelineProps {
   supportsConversationRollback: boolean;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
+  onSendAppMessage?: (text: string) => Promise<void>;
   onRunShellCommand?: (command: string) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -517,6 +542,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   activeTurnInProgress,
   activeTurnStartedAt = null,
   worktreeSetup = null,
+  footer = null,
   onCancelWorktreeSetup,
   retryableWorkspacePreparationRunIds = EMPTY_RUN_IDS,
   onRetryWorkspacePreparation,
@@ -524,6 +550,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenWorktreeSetupTerminal,
   isPreparingWorktree = false,
   isCompacting = false,
+  awaitingUser = false,
   listRef,
   timelineEntries,
   latestRun,
@@ -539,6 +566,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   supportsConversationRollback,
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
+  onSendAppMessage,
   onRunShellCommand,
   isRevertingCheckpoint,
   onImageExpand,
@@ -954,7 +982,26 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     onManualNavigation,
   });
   const [minimapHasPersistentGutter, setMinimapHasPersistentGutter] = useState(false);
-  const alwaysRender = citationAlwaysRender ?? restoringAlwaysRender;
+  const [fullscreenAppRowId, setFullscreenAppRowId] = useState<string | null>(null);
+  // Only the row that holds the pin can release it.
+  const onAppFullscreenChange = useCallback((rowId: string, fullscreen: boolean) => {
+    setFullscreenAppRowId((current) => (fullscreen ? rowId : current === rowId ? null : current));
+  }, []);
+  // Every pin holds at once, so navigating to a citation or restoring a
+  // position never drops a full-screen app's row. The app is pinned by key,
+  // which stays right as earlier rows load in.
+  const alwaysRender = useMemo(() => {
+    const indices = restoringAlwaysRender?.indices ?? [];
+    const keys = [
+      ...(citationAlwaysRender?.keys ?? []),
+      ...(fullscreenAppRowId === null ? [] : [fullscreenAppRowId]),
+    ];
+    if (indices.length === 0 && keys.length === 0) return undefined;
+    return {
+      ...(indices.length === 0 ? {} : { indices }),
+      ...(keys.length === 0 ? {} : { keys }),
+    };
+  }, [citationAlwaysRender, restoringAlwaysRender, fullscreenAppRowId]);
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
   const [minimapCurrentIndex, setMinimapCurrentIndex] = useState<number | null>(null);
   const handleAnchorReady = useCallback(
@@ -993,8 +1040,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [shouldRestoreVisibleContentPosition],
   );
   const timelineListFooter = useMemo(
-    () => <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment} />,
-    [anchoredEndSpace, contentInsetEndAdjustment],
+    () => (
+      <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}>
+        {footer}
+      </TimelineListFooter>
+    ),
+    [anchoredEndSpace, contentInsetEndAdjustment, footer],
   );
 
   const measureContentOverflow = useCallback(
@@ -1174,6 +1225,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onFileOpen,
       onUseArtifactTemplate,
+      onSendAppMessage,
+      onAppFullscreenChange,
       onFileDownload,
       openPullRequest,
       onOpenTurnDiff,
@@ -1209,6 +1262,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onFileOpen,
       onUseArtifactTemplate,
+      onSendAppMessage,
+      onAppFullscreenChange,
       onFileDownload,
       openPullRequest,
       onOpenTurnDiff,
@@ -1243,10 +1298,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isRevertingCheckpoint,
       backgroundWorktreeSetup,
       activeTurnInProgress,
+      awaitingUser,
       isPreparingWorktree,
       latestRunId: latestRun?.runId ?? null,
     }),
     [
+      awaitingUser,
       compactionAwaitingRow,
       backgroundWorktreeSetup,
       activeTurnInProgress,
@@ -1313,7 +1370,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     rows.length === 0 &&
     !isWorking &&
     parentThreadLink === null &&
-    historyControls === undefined
+    historyControls === undefined &&
+    // A status line (settled, snoozed) still needs the list, whose footer renders it.
+    footer === null
   ) {
     if (hideEmptyPlaceholder) {
       // Occupy the pane with the theme surface so a thread switch cannot
@@ -1364,6 +1423,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
               anchoredEndSpace ||
               !liveFollowEnabled ||
+              fullscreenAppRowId !== null ||
               disclosureToggleSettling
                 ? false
                 : isWorking && !prefersReducedMotion && settlingListIdentity === null
@@ -1786,7 +1846,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
                   !row.showAssistantMeta) ||
                 row.kind === "worktree-setup" ||
                 row.kind === "event" ||
-                row.kind === "attempt-fold"
+                row.kind === "attempt-fold" ||
+                row.kind === "html-render" ||
+                row.kind === "mcp-app"
               ? "pb-2"
               : "pb-4",
         (row.kind === "message" && row.message.role === "assistant") ||
@@ -1834,6 +1896,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       ) : null}
       {row.kind === "assistant-meta" ? <AssistantMetaTimelineRow row={row} /> : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
+      {row.kind === "html-render" ? <HtmlRenderTimelineRow row={row} /> : null}
+      {row.kind === "mcp-app" ? <McpAppTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
       {row.kind === "worktree-setup" ? <WorktreeSetupTimelineRow row={row} /> : null}
       {row.kind === "event" ? <V2EventTimelineRow row={row} /> : null}
@@ -2708,6 +2772,45 @@ function ProposedPlanTimelineRow({
   );
 }
 
+function HtmlRenderTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "html-render" }> }) {
+  const ctx = use(TimelineRowCtx);
+
+  return (
+    <div className="min-w-0 px-1">
+      <HtmlRenderFrame
+        // A recycled row must not keep another page's frozen frame.
+        key={row.htmlRender.attachmentId}
+        environmentId={ctx.activeThreadEnvironmentId}
+        htmlRender={row.htmlRender}
+        onOpen={ctx.onFileOpen}
+      />
+    </div>
+  );
+}
+
+function McpAppTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mcp-app" }> }) {
+  const ctx = use(TimelineRowCtx);
+  const { awaitingUser } = use(TimelineRowActivityCtx);
+
+  return (
+    <div className="min-w-0 px-1">
+      <McpAppFrame
+        // A recycled row must not keep another app's live document.
+        key={row.mcpApp.attachmentId}
+        environmentId={ctx.activeThreadEnvironmentId}
+        threadId={row.sourceThreadId}
+        conversationThreadId={ctx.threadRef?.threadId ?? row.sourceThreadId}
+        itemId={row.itemId}
+        revision={row.revision}
+        app={row.mcpApp}
+        onSendMessage={ctx.onSendAppMessage}
+        awaitingUser={awaitingUser}
+        onFullscreenChange={(fullscreen) => ctx.onAppFullscreenChange(row.id, fullscreen)}
+      />
+    </div>
+  );
+}
+
 type V2EventTone = "muted" | "warning" | "danger" | "success";
 
 function v2EventPresentation(item: OrchestrationV2TurnItem): {
@@ -2796,6 +2899,15 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
   const { item, visibility, sourceThreadId } = row.projectedItem;
   if (item.type === "subagent" && (row.subagents?.length ?? 1) > 1) {
     return <V2SubagentGroup key={row.id} row={row} />;
+  }
+  if (item.type === "secret_request") {
+    return (
+      <SecretRequestCard
+        environmentId={ctx.activeThreadEnvironmentId}
+        item={item}
+        visibility={visibility}
+      />
+    );
   }
   if (isV2LifecycleItem(item)) {
     return (
@@ -2886,6 +2998,7 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
               onRollbackCheckpoint={ctx.onRollbackCheckpoint}
+              onImageExpand={ctx.onImageExpand}
             />
           </div>
         </div>
@@ -2960,6 +3073,7 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
               onRollbackCheckpoint={ctx.onRollbackCheckpoint}
+              onImageExpand={ctx.onImageExpand}
             />
           </div>
         </div>
@@ -3083,7 +3197,7 @@ const V2SubagentGroup = memo(function V2SubagentGroup({
               {statusSummary}
             </span>
           </span>
-          <span className="shrink-0 font-mono text-3xs text-muted-foreground">
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
             <SubagentElapsed agent={subagentGroupTiming(agents)} />
           </span>
           <ChevronDownIcon
@@ -5323,6 +5437,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
               onOpenThread={ctx.onOpenThread}
               onOpenTurnDiff={ctx.onOpenTurnDiff}
               onRollbackCheckpoint={ctx.onRollbackCheckpoint}
+              onImageExpand={ctx.onImageExpand}
             />
           ) : (
             <>
@@ -5333,6 +5448,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
                 <FetchedToolOutput
                   projectedItem={workEntry.projectedItem}
                   environmentId={ctx.activeThreadEnvironmentId}
+                  onImageExpand={onImageExpand}
                 />
               ) : null}
             </>

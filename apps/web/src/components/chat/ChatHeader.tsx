@@ -1,4 +1,9 @@
-import { type EnvironmentId, type ProjectId, type ThreadId } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  type EnvironmentId,
+  type ProjectId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type {
   EnvironmentProject,
@@ -37,7 +42,8 @@ import { readLocalApi } from "~/localApi";
 import { useThreadShells } from "~/state/entities";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
+import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
 import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
 import { Badge } from "../ui/badge";
@@ -123,7 +129,11 @@ export const ChatHeader = memo(function ChatHeader({
     () => scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
     [activeThreadEnvironmentId, activeThreadId],
   );
-  const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+  const canOperateThread = useEnvironmentScope(
+    activeThreadEnvironmentId,
+    AuthOrchestrationOperateScope,
+  );
+  const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
   // Inline rename, keyed by thread: navigating away drops an in-progress
@@ -136,23 +146,36 @@ export const ChatHeader = memo(function ChatHeader({
   } | null>(null);
   if (
     renaming !== null &&
-    (renaming.threadId !== activeThreadId || renaming.environmentId !== activeThreadEnvironmentId)
+    (renaming.threadId !== activeThreadId ||
+      renaming.environmentId !== activeThreadEnvironmentId ||
+      !canOperateThread)
   ) {
     setRenaming(null);
   }
-  const renamingTitle = renaming?.threadId === activeThreadId ? renaming.title : null;
+  const renamingTitle =
+    canOperateThread &&
+    renaming?.threadId === activeThreadId &&
+    renaming.environmentId === activeThreadEnvironmentId
+      ? renaming.title
+      : null;
   const renameCommittedRef = useRef(false);
   const startRename = useCallback(() => {
+    if (
+      !isServerThread ||
+      !readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)
+    )
+      return;
     renameCommittedRef.current = false;
     setRenaming({
-      threadId: activeThreadId,
       environmentId: activeThreadEnvironmentId,
+      threadId: activeThreadId,
       title: activeThreadTitle,
     });
-  }, [activeThreadEnvironmentId, activeThreadId, activeThreadTitle]);
+  }, [activeThreadEnvironmentId, activeThreadId, activeThreadTitle, isServerThread]);
   const commitRename = useCallback(
     (title: string) => {
       setRenaming(null);
+      if (!readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)) return;
       const resolution = resolveRenameCommit({ title, originalTitle: activeThreadTitle });
       if (resolution.action === "reject-empty") {
         toastManager.add({ type: "warning", title: "Thread title cannot be empty" });

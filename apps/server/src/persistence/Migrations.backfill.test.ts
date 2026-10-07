@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { runMigrations } from "./Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -47,7 +47,7 @@ backfillLayer("Migrations backfill", (it) => {
 
 v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
   it.effect(
-    "applies upstream 041-056, including OrchestrationV2, on a Forma 040 + 9xx ledger",
+    "applies upstream 041-059, including OrchestrationV2, on a Forma 040 + 9xx ledger",
     () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
@@ -70,7 +70,7 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
         const executed = yield* runMigrations();
         assert.deepStrictEqual(
           executed.map(([id]) => id),
-          Array.from({ length: 16 }, (_, index) => index + 41),
+          Array.from({ length: 19 }, (_, index) => index + 41),
         );
 
         const tables = yield* sql<{ readonly name: string }>`

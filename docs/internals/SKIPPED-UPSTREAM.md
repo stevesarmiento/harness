@@ -19,8 +19,9 @@ panel.
 **Resolution policy:** delete the theme-library web files, keep the fork side of
 `hooks/useTheme.ts`, `index.html`, and `index.css`, and strip
 theme-editor/keybinding/command-palette references. Gate:
-`git grep -nE "themePalette|vscodeThemeImport|useCustomThemes|ThemeEditor|ThemeLibrary" -- apps/web/src`
-must return nothing.
+`git grep -nE "themePalette\b|vscodeThemeImport|useCustomThemes|ThemeEditor|ThemeLibrary" -- apps/web/src`
+must return nothing (imports of the kept shared `@t3tools/shared/themePalettes`
+data plane, e.g. the standard palette for agent HTML renders, are allowed).
 
 Since the V2 sync the theme library also lives outside the web app
 (`packages/shared/src/themePalettes.ts`, server `environmentTheme.ts` and
@@ -128,3 +129,15 @@ with `apps/server/src/orchestration-v2/`. The fork adopted V2 wholesale.
   `t3code-v2` profile with an installed T3 Code. App name, bundle id and data
   dir stay Forma's; other internal identifiers follow upstream.
 - **Defaults**: `legacySidebarEnabled` true, `composerCollapseOnScroll` false.
+
+## Anonymous usage telemetry (#16564, synced 2026-10-07)
+
+Upstream defaults `T3CODE_TELEMETRY_ENABLED` to on and reports to T3's
+PostHog project; #16564 added an onboarding note and a Settings privacy-policy
+row about it. Forma defaults telemetry **off** (`AnalyticsService.ts`, `// Fork:`)
+and drops the onboarding note, the privacy row, its settings-search entry and
+`legalLinks.ts`. Setting `T3CODE_TELEMETRY_ENABLED=true` still opts in.
+
+Also from that sync: the fork-only `git.listOpenPullRequests` RPC was removed
+(nothing called it after the V2 merge, and upstream moved `GitHubCli` to
+GitHub's API).

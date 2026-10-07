@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Option from "effect/Option";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import {
   combinedAuthOutput,

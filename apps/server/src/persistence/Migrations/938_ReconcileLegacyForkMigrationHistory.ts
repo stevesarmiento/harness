@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import Migration0026 from "./026_CanonicalizeModelSelectionOptions.ts";
 import Migration0027 from "./027_ProviderSessionRuntimeInstanceId.ts";

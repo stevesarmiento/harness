@@ -2128,6 +2128,8 @@ function PullRequestsRouteView() {
   // Fork: one prop set for the header pills and the panel mount. This page's
   // panel only hosts pull requests, so every "add surface" action is off.
   const pullRequestTabProps = {
+    keybindings,
+    getShortcutContext,
     surfaces: renderedRightPanelSurfaces,
     environmentId: panelEnvironmentId,
     activeSurfaceId: renderedPullRequestSurface?.id ?? null,

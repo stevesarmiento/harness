@@ -1,5 +1,5 @@
 import type { SourceControlDiscoveryResult } from "@t3tools/contracts";
-import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
+import { Atom, type AtomRegistry } from "effect/reactivity";
 
 export interface SourceControlDiscoveryState {
   readonly data: SourceControlDiscoveryResult | null;

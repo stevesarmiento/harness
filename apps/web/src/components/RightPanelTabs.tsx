@@ -11,6 +11,7 @@ import type {
   PreviewSessionSnapshot,
   ProjectId,
   PullRequestState,
+  ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
@@ -33,6 +34,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -42,6 +44,7 @@ import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
+import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
 import { Button } from "~/components/ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -85,6 +88,10 @@ import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
  * underneath via `hideTabBar`. Store-free: every action is a callback.
  */
 export interface RightPanelTabStripProps {
+  /** False while the panel is collapsed: the Mod+T new-surface shortcut stands down. */
+  open?: boolean;
+  keybindings: ResolvedKeybindingsConfig;
+  getShortcutContext: () => ShortcutMatchContext;
   layoutControls?: ReactNode;
   surfaces: readonly RightPanelSurface[];
   /** Fallback environment for surfaces that do not carry their own. */
@@ -134,7 +141,6 @@ export interface RightPanelTabStripProps {
 interface RightPanelTabsProps extends Omit<RightPanelTabStripProps, "className"> {
   mode: PreviewPanelMode;
   maximized?: boolean;
-  open?: boolean;
   /** Forwarded to PreviewPanelShell so this surface persists its own width. */
   widthStorageKey?: string;
   /** Forwarded to PreviewPanelShell as the initial width before a user resize. */
@@ -812,6 +818,7 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
   const browserProfiles = useBrowserDefaults().profiles;
   const { resolvedTheme } = useTheme();
   const tabListRef = useRef<HTMLDivElement>(null);
+  const addSurfaceTriggerRef = useRef<HTMLButtonElement>(null);
   const [renamingDevice, setRenamingDevice] = useState<string | null>(null);
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
   const [tabScrollState, setTabScrollState] = useState({
@@ -819,6 +826,30 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
     canScrollLeft: false,
     canScrollRight: false,
   });
+
+  if (props.open === false && addSurfaceMenuOpen) setAddSurfaceMenuOpen(false);
+
+  const onNewSurfaceKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing) return;
+    if (
+      resolveShortcutCommand(event, props.keybindings, {
+        context: { ...props.getShortcutContext(), rightPanelOpen: true },
+      }) !== "rightPanel.new"
+    )
+      return;
+    if (!addSurfaceMenuOpen && document.querySelector(LAUNCHER_SHORTCUT_BLOCKING_LAYERS)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat) {
+      addSurfaceTriggerRef.current?.focus();
+      setAddSurfaceMenuOpen(true);
+    }
+  });
+  useEffect(() => {
+    if (props.open === false) return;
+    document.addEventListener("keydown", onNewSurfaceKeyDown, true);
+    return () => document.removeEventListener("keydown", onNewSurfaceKeyDown, true);
+  }, [props.open]);
 
   const updateTabScrollState = useCallback(() => {
     const viewport = tabScrollViewport(tabListRef.current);
@@ -1250,9 +1281,10 @@ export function RightPanelTabStrip(props: RightPanelTabStripProps) {
               </div>
             );
           })}
-          {props.surfaces.length > 0 ? (
+          {props.open !== false ? (
             <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
               <MenuTrigger
+                ref={addSurfaceTriggerRef}
                 render={
                   <Button
                     aria-label="Add panel surface"
@@ -1415,6 +1447,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       {hideTabBar ? null : (
         <RightPanelTabStrip
           {...stripProps}
+          {...(open !== undefined ? { open } : {})}
           className={cn(
             // The sheet overlays from the viewport top, so its tab bar keeps
             // the titlebar's height: a compact row re-centers the layout

@@ -18,8 +18,6 @@ import {
   GitActionProgressEvent,
   GitActionProgressPhase,
   GitCommandError,
-  type GitListOpenPullRequestsInput,
-  type GitListOpenPullRequestsResult,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
@@ -68,14 +66,13 @@ import {
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import { detachStackFrame } from "./detachStackFrame.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { GitManagerServiceError } from "@t3tools/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
-import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import { detectPrTemplate } from "../sourceControl/PrTemplateDetection.ts";
 import type { ChangeRequest } from "@t3tools/contracts";
 
@@ -98,6 +95,8 @@ export type GitBranchPullRequest = NonNullable<VcsStatusResult["pr"]> & {
   readonly updatedAt: string | null;
   readonly closedAt?: string | null;
   readonly mergedAt?: string | null;
+  /** The pull request's head commit, when the host read reports it. */
+  readonly headSha?: string | null;
 };
 
 interface SourceControlTextGenerationSettings {
@@ -133,9 +132,6 @@ export class GitManager extends Context.Service<
     readonly resolvePullRequest: (
       input: GitPullRequestRefInput,
     ) => Effect.Effect<GitResolvePullRequestResult, GitManagerServiceError>;
-    readonly listOpenPullRequests: (
-      input: GitListOpenPullRequestsInput,
-    ) => Effect.Effect<GitListOpenPullRequestsResult, GitManagerServiceError>;
     readonly preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
@@ -207,6 +203,7 @@ interface PullRequestInfo extends OpenPrInfo, PullRequestHeadRemoteInfo {
   closedAt?: string | null;
   mergedAt?: string | null;
   updatedAt: Option.Option<DateTime.Utc>;
+  headSha?: string | undefined;
 }
 
 const pullRequestUpdatedAtDescOrder: Order.Order<PullRequestInfo> = Order.mapInput(
@@ -466,6 +463,7 @@ function toPullRequestInfo(summary: ChangeRequest): PullRequestInfo {
     url: summary.url,
     baseRefName: summary.baseRefName,
     headRefName: summary.headRefName,
+    ...(summary.headSha !== undefined ? { headSha: summary.headSha } : {}),
     state: summary.state ?? "open",
     ...(summary.isDraft === true ? { isDraft: true } : {}),
     closedAt: summary.closedAt ?? null,
@@ -710,7 +708,6 @@ function toPullRequestHeadRemoteInfo(pr: {
 export const make = Effect.gen(function* () {
   const gitCore = yield* GitVcsDriver.GitVcsDriver;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
-  const gitHubCli = yield* GitHubCli.GitHubCli;
   const textGeneration = yield* TextGeneration.TextGeneration;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
@@ -740,6 +737,11 @@ export const make = Effect.gen(function* () {
         );
     return resolveProjectSettings(settings, projectId).settings;
   });
+  // Best effort: a settings read failure falls back to the default location.
+  const readWorktreesDirectory = serverSettingsService.getSettings.pipe(
+    Effect.map((settings) => settings.worktreesDirectory),
+    Effect.orElseSucceed(() => ""),
+  );
   const createWorktree: GitManager["Service"]["createWorktree"] = Effect.fn(
     "GitManager.createWorktree",
   )(function* (input, options) {
@@ -750,7 +752,8 @@ export const make = Effect.gen(function* () {
             Effect.map((settings) => settings.worktreeSubmodules),
             Effect.orElseSucceed(() => null),
           );
-    return yield* gitCore.createWorktree(input, { ...options, submodules });
+    const worktreesDirectory = yield* readWorktreesDirectory;
+    return yield* gitCore.createWorktree(input, { worktreesDirectory, ...options, submodules });
   });
 
   const readRepositoryInstructions = (cwd: string, fileName: string) =>
@@ -1405,17 +1408,25 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  // Returns [head remote, origin]. Most branches track origin, so read it once.
+  const resolveHeadAndOriginContexts = (cwd: string, remoteName: string | null) =>
+    remoteName === "origin"
+      ? resolveRemoteRepositoryContext(cwd, "origin").pipe(
+          Effect.map((origin) => [origin, origin] as const),
+        )
+      : Effect.all(
+          [
+            resolveRemoteRepositoryContext(cwd, remoteName),
+            resolveRemoteRepositoryContext(cwd, "origin"),
+          ],
+          { concurrency: "unbounded" },
+        );
+
   const resolvePrLookupRepositoryIdentity = Effect.fn("resolvePrLookupRepositoryIdentity")(
     function* (cwd: string, branch: string, remoteNameOverride?: string) {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
-      const [headRemote, targetRemote] = yield* Effect.all(
-        [
-          resolveRemoteRepositoryContext(cwd, remoteName),
-          resolveRemoteRepositoryContext(cwd, "origin"),
-        ],
-        { concurrency: "unbounded" },
-      );
+      const [headRemote, targetRemote] = yield* resolveHeadAndOriginContexts(cwd, remoteName);
       return {
         remoteName,
         headRemoteUrlKey:
@@ -1439,12 +1450,9 @@ export const make = Effect.gen(function* () {
     const shouldProbeLocalBranchSelector =
       headBranchFromUpstream.length === 0 || headBranch === details.branch;
 
-    const [remoteRepository, originRepository] = yield* Effect.all(
-      [
-        resolveRemoteRepositoryContext(cwd, remoteName),
-        resolveRemoteRepositoryContext(cwd, "origin"),
-      ],
-      { concurrency: "unbounded" },
+    const [remoteRepository, originRepository] = yield* resolveHeadAndOriginContexts(
+      cwd,
+      remoteName,
     );
 
     const isCrossRepository =
@@ -2317,6 +2325,7 @@ export const make = Effect.gen(function* () {
       ...toStatusPr(latest),
       closedAt: latest.closedAt ?? null,
       mergedAt: latest.mergedAt ?? null,
+      headSha: latest.headSha ?? null,
       // Hosting CLIs can select an upstream repository instead of origin.
       // The returned PR URL names the repository that actually owns it.
       repositoryKey: pullRequestRepositoryKey(latest.url),
@@ -2354,57 +2363,6 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.map((resolved) => toResolvedPullRequest(resolved)));
 
     return { pullRequest };
-  });
-
-  const listOpenPullRequests: GitManager["Service"]["listOpenPullRequests"] = Effect.fn(
-    "listOpenPullRequests",
-  )(function* (input) {
-    // Only surface the current user's PRs in the overview; without this,
-    // upstream repos with many fork contributors drown the list.
-    const listAuthoredByMe = (repo?: string) =>
-      gitHubCli.listOpenPullRequests({
-        cwd: input.cwd,
-        author: "@me",
-        limit: 20,
-        ...(repo ? { repo } : {}),
-      });
-
-    const pullRequests = yield* listAuthoredByMe().pipe(
-      Effect.mapError(
-        (cause) =>
-          new GitManagerError({
-            operation: "listOpenPullRequests",
-            cwd: input.cwd,
-            detail: cause.detail,
-            cause,
-          }),
-      ),
-    );
-
-    // On forks, gh resolves the default repo to the upstream, so the query
-    // above misses PRs opened on the fork itself. Probe origin as well and
-    // dedupe; when origin IS the default repo the extra query is a no-op.
-    const originRepository = parseRepositoryNameWithOwnerFromRemoteUrl(
-      yield* readConfigValueNullable(input.cwd, "remote.origin.url"),
-    );
-    const originPullRequests = originRepository
-      ? yield* listAuthoredByMe(originRepository).pipe(Effect.orElseSucceed(() => []))
-      : [];
-
-    const pullRequestsByUrl = new Map(
-      [...pullRequests, ...originPullRequests].map((pullRequest) => [pullRequest.url, pullRequest]),
-    );
-
-    return {
-      pullRequests: Array.from(pullRequestsByUrl.values(), (pullRequest) => ({
-        number: pullRequest.number,
-        title: pullRequest.title,
-        url: pullRequest.url,
-        baseRef: pullRequest.baseRefName,
-        headRef: pullRequest.headRefName,
-        state: pullRequest.state ?? "open",
-      })),
-    };
   });
 
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
@@ -2662,6 +2620,7 @@ export const make = Effect.gen(function* () {
           path: null,
         },
         {
+          worktreesDirectory: yield* readWorktreesDirectory,
           // Best effort: a settings read failure falls back to the checkout's t3.json.
           submodules: yield* projectSettingsFor(input).pipe(
             Effect.map((settings) => settings.worktreeSubmodules),
@@ -2934,7 +2893,6 @@ export const make = Effect.gen(function* () {
     invalidateLocalStatus,
     invalidateRemoteStatus,
     invalidateStatus,
-    listOpenPullRequests,
     resolvePullRequest,
     preparePullRequestThread,
     runStackedAction,

@@ -158,7 +158,7 @@ export function ChatHeaderActionsMenu({
                 renderMode="menu-items"
                 scripts={activeProjectScripts}
                 fileScripts={fileScripts}
-                keybindings={keybindings}
+                environmentId={activeThreadEnvironmentId}
                 preferredScriptId={preferredScriptId}
                 onRunScript={onRunProjectScript}
                 onAddScript={onAddProjectScript}

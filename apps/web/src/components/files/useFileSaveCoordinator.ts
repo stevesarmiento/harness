@@ -1,5 +1,6 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
+  AuthFilesystemWriteScope,
   ProjectFileVersionConflictError,
   type EnvironmentId,
   type ProjectFileVersion,
@@ -8,10 +9,14 @@ import { Schema } from "effect";
 import { createRef, useEffect, useMemo, useRef, useState } from "react";
 
 import { projectEnvironment } from "~/state/projects";
+import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 
 import { FileSaveCoordinator } from "./fileSaveCoordinator";
-import { confirmProjectFileQueryData } from "./projectFilesQueryState";
+import {
+  confirmProjectFileQueryData,
+  getUnsavedProjectFileQueryData,
+} from "./projectFilesQueryState";
 
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const isVersionConflict = Schema.is(ProjectFileVersionConflictError);
@@ -43,6 +48,7 @@ export function useFileSaveCoordinator({
   version,
   onPendingChange,
 }: FileSaveOptions): FileSaveSession {
+  const canWriteFiles = useEnvironmentScope(environmentId, AuthFilesystemWriteScope);
   const writeFile = useAtomCommand(projectEnvironment.writeFile);
   // Fork: versioned writes. A conflict pauses autosave until the user reloads
   // or overwrites; until then the last confirmed version stays the baseline.
@@ -62,6 +68,7 @@ export function useFileSaveCoordinator({
       setup: () => {
         const coordinator = new FileSaveCoordinator({
           debounceMs: FILE_SAVE_DEBOUNCE_MS,
+          canPersist: () => readEnvironmentScope(environmentId, AuthFilesystemWriteScope),
           onPendingChange: (pending) => onPendingChange(relativePath, pending),
           persist: (nextContents) => {
             const expectedVersion = forceNextWriteRef.current
@@ -82,7 +89,7 @@ export function useFileSaveCoordinator({
             const confirmedVersion = result?.version;
             confirmedVersionRef.current = confirmedVersion;
             setConflict(null);
-            confirmProjectFileQueryData(
+            return confirmProjectFileQueryData(
               environmentId,
               cwd,
               relativePath,
@@ -110,6 +117,19 @@ export function useFileSaveCoordinator({
   // StrictMode replays effect setup. Retired file sessions stay inert, while the
   // replay gets a fresh coordinator instead of reusing a disposed one.
   useEffect(session.setup, [session]);
+  useEffect(() => {
+    if (!canWriteFiles) return;
+    let cancelled = false;
+    // Replay must retire the first session before recovery queues a draft to flush.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const unsaved = getUnsavedProjectFileQueryData(environmentId, cwd, relativePath);
+      if (unsaved) session.change(unsaved.contents);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canWriteFiles, cwd, environmentId, relativePath, session]);
   return useMemo(
     () => ({
       change: session.change,
