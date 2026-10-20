@@ -52,6 +52,12 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
+// Fork: the page title wears the same SF Symbol the sidebar's Pull Requests entry does.
+import {
+  IconArrowTriangleheadPull as PullRequestsTitleIcon,
+  IconChevronRight as BreadcrumbChevronIcon,
+} from "symbols-react";
 
 import {
   filterPullRequestsByInvolvement,
@@ -123,14 +129,17 @@ import {
   type PullRequestRowTarget,
 } from "../components/pullRequest/PullRequestRow";
 import { PullRequestsUnavailableState } from "../components/pullRequest/PullRequestsUnavailableState";
-import { RightPanelTabs, type PullRequestTabStatusSeed } from "../components/RightPanelTabs";
 import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../components/WorkspaceBreadcrumb";
+  RightPanelTabStrip,
+  type RightPanelTabStripProps,
+  RightPanelTabs,
+  type PullRequestTabStatusSeed,
+} from "../components/RightPanelTabs";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../components/ThreadBreadcrumb";
 import { WorkspacePageContainer } from "../components/WorkspacePageContainer";
-import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
+// Fork: Forma page shell (header band on the window chrome + inset card), as Settings uses.
+import { WorkspaceHeaderTitle } from "../components/WorkspaceHeaderTitle";
+import { DesktopSidebarReopenButton } from "../components/sidebar/DesktopSidebarReopenButton";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { isElectron } from "../env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -141,7 +150,7 @@ import {
 } from "../components/chat/PanelLayoutControls";
 import { Button } from "../components/ui/button";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../components/ui/menu";
-import { SidebarInset } from "../components/ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../components/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useLiveRefresh } from "../hooks/useLiveRefresh";
 import { useStableCallback } from "../hooks/useStableCallback";
@@ -158,6 +167,7 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
   type PullRequestSurface,
+  type RightPanelSurface,
 } from "../rightPanelStore";
 import { useDebouncedValue } from "../state/queries";
 import { useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
@@ -1290,20 +1300,11 @@ function PullRequestsRouteView() {
       onToggleRightPanel={toggleRightPanel}
     />
   );
-  const openPanelControls = (
-    <div
-      className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
-      data-workspace-titlebar-controls
-    >
-      {rightPanelState.isOpen ? (
-        <RightPanelMaximizeControl
-          maximized={rightPanelMaximized}
-          onToggle={toggleRightPanelMaximized}
-        />
-      ) : null}
-      {panelToggleControls}
-    </div>
-  );
+  // The rows carried over from the last filters can also narrow to nothing one step further on,
+  // where involvement is applied against the viewers of the answer they came from. "Nothing under
+  // these filters" is a claim, and it is the wrong one to make about a question still in flight,
+  // so that case waits with the skeletons rather than answering for the hosts. A search says so
+  // in its own words and is left to.
   const carriedToNothing =
     shownCount === 0 &&
     typedQuery.length === 0 &&
@@ -1315,7 +1316,7 @@ function PullRequestsRouteView() {
       ) : !pullRequestsSupported ? (
         <PullRequestsUnavailableState
           title="Pull requests unavailable"
-          error="Update your T3 Code servers to browse pull requests."
+          error="Update your Forma servers to browse pull requests."
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} />
@@ -1501,6 +1502,8 @@ function PullRequestsRouteView() {
       }
     />
   );
+  // Fork: the column portals its live header controls into the single Forma header row.
+  const [headerActionsElement, setHeaderActionsElement] = useState<HTMLDivElement | null>(null);
   const columnProps = {
     refreshing,
     onRefresh: () => void refreshFromHost(),
@@ -1515,36 +1518,22 @@ function PullRequestsRouteView() {
     searchInput,
     sortMenu,
     filtersMenu,
-    rightPanelControl: !pullRequestsSupported ? null : (
-      <span
-        aria-hidden
-        className={cn(
-          "shrink-0",
-          rightPanelState.isOpen ? "-ml-3 w-0" : "w-7 sm:w-5",
-          panelAnimationsActive && "transition-[width,margin] ease-out",
-        )}
-        style={
-          panelAnimationsActive
-            ? { transitionDuration: `${panelAnimationDurationMs}ms` }
-            : undefined
-        }
-      />
-    ),
-    titlebarControls:
-      // While the panel is closed the strip lives inside the header: a no-drag
-      // descendant beats the header's desktop drag-region, where a floating
-      // sibling loses (app-region hit-testing ignores z-index).
-      pullRequestsSupported ? (
-        rightPanelPresent ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-full w-7 [-webkit-app-region:no-drag]"
-          />
-        ) : (
-          openPanelControls
-        )
+    // Fork: the toggle sits at the end of the Forma header row, and only while there is a pull
+    // request to show: on this route the panel hosts nothing else, so a disabled toggle would
+    // only point at an empty panel. An open panel adds upstream's maximize control beside it.
+    rightPanelControl:
+      pullRequestsSupported && rightPanelAvailable ? (
+        <>
+          {rightPanelState.isOpen ? (
+            <RightPanelMaximizeControl
+              maximized={rightPanelMaximized}
+              onToggle={toggleRightPanelMaximized}
+            />
+          ) : null}
+          {panelToggleControls}
+        </>
       ) : null,
-    rightPanelOpen: rightPanelState.isOpen,
+    headerActionsElement,
     maximizedAway: rightPanelMaximized,
     listBody,
     scrollRef,
@@ -1584,6 +1573,55 @@ function PullRequestsRouteView() {
     selectSurfaceInUrl(null);
   };
 
+  // Fork: one prop set for the header pills and the panel mount. This page's
+  // panel only hosts pull requests, so every "add surface" action is off.
+  const pullRequestTabProps = {
+    keybindings,
+    getShortcutContext,
+    surfaces: renderedRightPanelSurfaces,
+    environmentId: panelEnvironmentId,
+    activeSurfaceId: renderedPullRequestSurface?.id ?? null,
+    pendingSurfaceIds: EMPTY_PENDING_SURFACES,
+    previewSessions: EMPTY_PREVIEW_SESSIONS,
+    desktopByTabId: EMPTY_PREVIEW_DESKTOP_STATE,
+    terminalLabelsById: EMPTY_TERMINAL_LABELS,
+    onActivate: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") activateSurface(surface);
+    },
+    onCloseSurface: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurface(surface);
+    },
+    onCloseOtherSurfaces: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeOtherSurfaces(surface);
+    },
+    onCloseSurfacesToRight: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurfacesToRight(surface);
+    },
+    onCloseAllSurfaces: closeAllSurfaces,
+    onMoveSurface: (surfaceId: string, toIndex: number) => {
+      if (rightPanelRef !== null)
+        useRightPanelStore.getState().moveSurface(rightPanelRef, surfaceId, toIndex);
+    },
+    onCopyFilePath: () => undefined,
+    onAddBrowser: () => undefined,
+    onAddBrowserInProfile: () => undefined,
+    onAddTerminal: () => undefined,
+    onAddDiff: () => undefined,
+    onAddFiles: () => undefined,
+    onAddPullRequest: () => undefined,
+    onAddPullRequests: () => undefined,
+    onAddDevice: () => undefined,
+    browserAvailable: false,
+    terminalAvailable: false,
+    diffAvailable: false,
+    filesAvailable: false,
+    pullRequestAvailable: false,
+    pullRequestsAvailable: false,
+    deviceAvailable: false,
+    pullRequestStatusSeeds: listedPullRequestTabStatuses,
+  } satisfies Omit<RightPanelTabStripProps, "className" | "layoutControls">;
+
+  // This page has no ChatView, so it handles the shared panel shortcuts itself.
   const copyPullRequestFromShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (!openPanelPullRequestUrl) return;
     event.preventDefault();
@@ -1638,61 +1676,65 @@ function PullRequestsRouteView() {
   }, [keybindings]);
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      <div className="relative flex min-h-0 flex-1">
-        {pullRequestsSupported && rightPanelPresent ? openPanelControls : null}
+    // Fork: Forma page shell — one header band on the window chrome above an inset card that
+    // holds the list and the panel, the same frame Settings and the thread view use.
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none md:h-auto">
+      <header
+        className={cn(
+          "workspace-topbar border-b border-border/70 bg-background md:border-b-0 md:bg-transparent",
+          "px-2.5 md:pl-0",
+          isElectron
+            ? "drag-region relative [--workspace-topbar-height:39px] wco:pr-(--workspace-native-controls-inset)"
+            : "[--workspace-topbar-height:40px]",
+        )}
+      >
+        <div className="flex min-w-0 w-full items-center gap-2">
+          {isElectron ? null : <SidebarTrigger className="size-7 shrink-0 md:hidden" />}
+          <DesktopSidebarReopenButton className="md:ml-0" />
+          <WorkspaceHeaderTitle
+            icon={
+              <PullRequestsTitleIcon
+                className="size-3.5 shrink-0 fill-current opacity-50"
+                aria-hidden
+              />
+            }
+          >
+            Pull Requests
+          </WorkspaceHeaderTitle>
+          {/* Fork: open pull request surfaces continue the header as pills, the
+              same treatment the thread header gives its right-panel tabs. */}
+          {rightPanelState.isOpen && renderedRightPanelSurfaces.length > 0 ? (
+            <>
+              <BreadcrumbChevronIcon
+                className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                aria-hidden
+              />
+              <RightPanelTabStrip
+                {...pullRequestTabProps}
+                className="h-full min-h-0 min-w-0 shrink border-b-0 bg-transparent p-0 [-webkit-app-region:no-drag]"
+              />
+            </>
+          ) : null}
+          <div
+            ref={setHeaderActionsElement}
+            className="ms-auto flex min-w-0 items-center justify-end gap-1.5 [-webkit-app-region:no-drag]"
+          />
+        </div>
+      </header>
+      <SidebarInsetCard className="flex-row">
         <PullRequestsColumn {...columnProps} />
 
         {rightPanelPresent && renderedPullRequestSurface && panelEnvironmentId !== null ? (
           <RightPanelTabs
             mode="inline"
             open={rightPanelState.isOpen}
+            // Fork: the tabs render as pills in the Forma header row above the card.
+            hideTabBar
+            titleBarInCard
             maximized={rightPanelMaximized}
-            keybindings={keybindings}
-            getShortcutContext={getShortcutContext}
             widthStorageKey="t3code:pull-request-panel-width"
             defaultWidth={typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2)}
-            surfaces={renderedRightPanelSurfaces}
-            environmentId={panelEnvironmentId}
-            activeSurfaceId={renderedPullRequestSurface.id}
-            pendingSurfaceIds={EMPTY_PENDING_SURFACES}
-            previewSessions={EMPTY_PREVIEW_SESSIONS}
-            desktopByTabId={EMPTY_PREVIEW_DESKTOP_STATE}
-            terminalLabelsById={EMPTY_TERMINAL_LABELS}
-            onActivate={(surface) => {
-              if (surface.kind === "pull-request") activateSurface(surface);
-            }}
-            onCloseSurface={(surface) => {
-              if (surface.kind === "pull-request") closeSurface(surface);
-            }}
-            onCloseOtherSurfaces={(surface) => {
-              if (surface.kind === "pull-request") closeOtherSurfaces(surface);
-            }}
-            onCloseSurfacesToRight={(surface) => {
-              if (surface.kind === "pull-request") closeSurfacesToRight(surface);
-            }}
-            onCloseAllSurfaces={closeAllSurfaces}
-            onMoveSurface={(surfaceId, toIndex) => {
-              if (rightPanelRef !== null)
-                useRightPanelStore.getState().moveSurface(rightPanelRef, surfaceId, toIndex);
-            }}
-            onCopyFilePath={() => undefined}
-            onAddBrowser={() => undefined}
-            onAddBrowserInProfile={() => undefined}
-            onAddTerminal={() => undefined}
-            onAddDiff={() => undefined}
-            onAddFiles={() => undefined}
-            onAddPullRequest={() => undefined}
-            onAddPullRequests={() => undefined}
-            onAddDevice={() => undefined}
-            browserAvailable={false}
-            terminalAvailable={false}
-            diffAvailable={false}
-            filesAvailable={false}
-            pullRequestAvailable={false}
-            pullRequestsAvailable={false}
-            deviceAvailable={false}
-            pullRequestStatusSeeds={listedPullRequestTabStatuses}
+            {...pullRequestTabProps}
           >
             <PullRequestDetailPanel
               getShortcutContext={getShortcutContext}
@@ -1761,7 +1803,7 @@ function PullRequestsRouteView() {
             />
           </RightPanelTabs>
         ) : null}
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }
@@ -2300,8 +2342,7 @@ function PullRequestsColumn({
   sortMenu,
   filtersMenu,
   rightPanelControl,
-  titlebarControls,
-  rightPanelOpen,
+  headerActionsElement,
   maximizedAway,
   listBody,
   scrollRef,
@@ -2320,8 +2361,8 @@ function PullRequestsColumn({
   sortMenu: ReactNode;
   filtersMenu: ReactNode;
   rightPanelControl: ReactNode;
-  titlebarControls: ReactNode;
-  rightPanelOpen: boolean;
+  /** Fork: the Forma header row's actions slot, which this column portals its controls into. */
+  headerActionsElement: HTMLDivElement | null;
   maximizedAway: boolean;
   listBody: ReactNode;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -2344,7 +2385,9 @@ function PullRequestsColumn({
   const inFlowSearchRef = useRef<HTMLDivElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
-  const searchExpanded = searchOpen || searchValue.length > 0;
+  // Mod+F belongs to this page's own search: the desktop shell binds no find-in-page, so the
+  // shortcut would otherwise do nothing. Condensed, it unfolds the topbar search; at the top,
+  // it focuses the in-flow bar and selects the query the way a find field would.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
@@ -2375,77 +2418,73 @@ function PullRequestsColumn({
   }, [condensed]);
 
   return (
+    // Painted flat like the chat column: the inset underneath carries the chrome grain, and a
+    // content surface that lets it show reads as a different background than every thread.
     <div
       className={cn(
         "@container/pr-list flex min-h-0 min-w-0 flex-col overflow-x-hidden bg-background",
         maximizedAway ? "w-0 flex-none" : "flex-1",
       )}
     >
-      <WorkspacePageHeader
-        electron={isElectron}
-        reserveNativeControls={!rightPanelOpen}
-        className="relative bg-background"
-      >
-        {titlebarControls}
-        {condensed ? (
-          <WorkspaceBreadcrumb ariaLabel="Pull request scope" className="overflow-hidden">
-            <WorkspaceBreadcrumbItem current className={cn(searchExpanded && "sr-only")}>
-              <h1 className="truncate">Pull Requests</h1>
-            </WorkspaceBreadcrumbItem>
-            {searchExpanded ? null : <WorkspaceBreadcrumbSeparator />}
-            <WorkspaceBreadcrumbItem className="shrink gap-1.5">
-              <CompactFilterMenu
-                label="Filter by state"
-                value={state}
-                options={STATE_TABS}
-                onChange={onState}
-                className="shrink-0"
-              />
-              <CompactFilterMenu
-                label="Filter by involvement"
-                value={involvement}
-                options={INVOLVEMENT_TABS}
-                onChange={onInvolvement}
-              />
-              {hostMenuOptions.length > 2 ? (
-                <CompactFilterMenu
-                  label="Filter by host"
-                  value={host ?? ""}
-                  options={hostMenuOptions}
-                  onChange={(next) => onHost(next === "" ? undefined : next)}
-                />
+      {/* Fork: one Forma header row for the whole page. Condensed, the scope menus and the
+          folded search join refresh and the panel toggle in its actions slot. */}
+      {headerActionsElement
+        ? createPortal(
+            <>
+              {condensed ? (
+                <div className="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
+                  <CompactFilterMenu
+                    label="Filter by state"
+                    value={state}
+                    options={STATE_TABS}
+                    onChange={onState}
+                    className="shrink-0"
+                  />
+                  <CompactFilterMenu
+                    label="Filter by involvement"
+                    value={involvement}
+                    options={INVOLVEMENT_TABS}
+                    onChange={onInvolvement}
+                  />
+                  {hostMenuOptions.length > 2 ? (
+                    <CompactFilterMenu
+                      label="Filter by host"
+                      value={host ?? ""}
+                      options={hostMenuOptions}
+                      onChange={(next) => onHost(next === "" ? undefined : next)}
+                    />
+                  ) : null}
+                </div>
               ) : null}
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        ) : (
-          <WorkspaceBreadcrumb ariaLabel="Pull requests breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1 className="truncate">Pull Requests</h1>
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        )}
-        <div className="min-w-0 flex-1" />
-        {condensed ? (
-          <div className="flex shrink items-center gap-1.5">
-            <ExpandableSearch
-              searchInput={searchInput}
-              searchValue={searchValue}
-              open={searchOpen}
-              onOpenChange={setSearchOpen}
-              focusToken={searchFocusToken}
-              onFocusWithin={(focused) => {
-                topbarSearchFocusedRef.current = focused;
-              }}
-            />
-            <PullRequestRefreshControl compact refreshing={refreshing} onRefresh={onRefresh} />
-          </div>
-        ) : null}
-        {rightPanelControl}
-      </WorkspacePageHeader>
+              {condensed ? (
+                <div className="flex shrink items-center gap-1.5">
+                  <ExpandableSearch
+                    searchInput={searchInput}
+                    searchValue={searchValue}
+                    open={searchOpen}
+                    onOpenChange={setSearchOpen}
+                    focusToken={searchFocusToken}
+                    onFocusWithin={(focused) => {
+                      topbarSearchFocusedRef.current = focused;
+                    }}
+                  />
+                  <PullRequestRefreshControl
+                    compact
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                </div>
+              ) : null}
+              {rightPanelControl}
+            </>,
+            headerActionsElement,
+          )
+        : null}
 
       <div
         ref={scrollRef}
-        className="topbar-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
+        // Fork: Forma's shorter fade band for a list that starts right under its header.
+        className="pull-requests-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
       >
         <WorkspacePageContainer width="expanded" className="min-h-full gap-4">
           <div className="flex flex-col gap-3">

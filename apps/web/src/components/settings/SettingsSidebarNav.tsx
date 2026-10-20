@@ -7,22 +7,7 @@ import {
   type ComponentType,
   type KeyboardEvent,
 } from "react";
-import {
-  ArchiveIcon,
-  BlocksIcon,
-  BotIcon,
-  createLucideIcon,
-  CalendarClockIcon,
-  GitBranchIcon,
-  HardDriveIcon,
-  PanelsTopLeftIcon,
-  KeyboardIcon,
-  Link2Icon,
-  PaletteIcon,
-  SearchIcon,
-  Settings2Icon,
-  XIcon,
-} from "lucide-react";
+import { ArrowLeftIcon, SearchIcon, Settings2Icon, XIcon } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { Button } from "../ui/button";
@@ -37,8 +22,9 @@ import {
   useSidebar,
   SidebarInput,
 } from "../ui/sidebar";
-import { SidebarUtilityMenu } from "../sidebar/SidebarChrome";
+import { useNavigateToMainApp } from "../sidebar/mainAppLocation";
 import { scrollToSettingsTarget } from "./settingsLayout";
+import { SETTINGS_NAV_ITEMS, resolveSettingsPathname } from "./settingsNavigation";
 import {
   searchSettings,
   isSettingsOverviewVisible,
@@ -48,18 +34,6 @@ import {
 } from "./settingsSearch";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
-
-const SnapShotIcon = createLucideIcon("snap-shot", [
-  [
-    "path",
-    {
-      d: "M8 3H6a3 3 0 0 0-3 3v2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2",
-      key: "capture-frame",
-    },
-  ],
-  ["rect", { width: "10", height: "8", x: "7", y: "8", rx: "2", key: "window" }],
-  ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
-]);
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -72,43 +46,31 @@ const T3ConnectSidebarAvatar = lazy(() =>
   })),
 );
 
-const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsPath, ComponentType<{ className?: string }>>
-> = {
-  "/settings/general": Settings2Icon,
-  "/settings/diagnostics": Settings2Icon,
-  "/settings/appearance": PaletteIcon,
-  "/settings/projects": PanelsTopLeftIcon,
-  "/settings/keybindings": KeyboardIcon,
-  "/settings/snap-shot": SnapShotIcon,
-  "/settings/providers": BotIcon,
-  "/settings/integrations": BlocksIcon,
-  "/settings/scheduled-tasks": CalendarClockIcon,
-  "/settings/source-control": GitBranchIcon,
-  "/settings/storage": HardDriveIcon,
-  "/settings/connections": Link2Icon,
-  "/settings/archived": ArchiveIcon,
-};
-
-const SETTINGS_NAV_ITEMS: ReadonlyArray<{
-  label: string;
-  to: SettingsPath;
-  icon: ComponentType<{ className?: string }>;
-}> = (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[])
-  .filter((to) => to !== "/settings/diagnostics")
-  .map((to) => ({
-    to,
-    label: SETTINGS_SECTION_LABELS[to],
-    icon: SETTINGS_SECTION_ICONS[to],
-  }));
+// Fork: the sidebar renders the Forma settings IA from settingsNavigation;
+// search results may point at legacy upstream sections, so icons fall back.
+const SETTINGS_SECTION_ICONS: Partial<Record<string, ComponentType<{ className?: string }>>> =
+  Object.fromEntries(SETTINGS_NAV_ITEMS.map((item) => [item.to, item.icon]));
+const SETTINGS_SECTION_ICON_USES_FILL: Partial<Record<string, boolean>> = Object.fromEntries(
+  SETTINGS_NAV_ITEMS.map((item) => [item.to, item.iconUsesFill]),
+);
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
-  const Icon = SETTINGS_SECTION_ICONS[to];
-  return <Icon className="size-3.5 h-5 shrink-0 text-sidebar-muted-foreground/60" />;
+  const Icon = SETTINGS_SECTION_ICONS[to] ?? Settings2Icon;
+  const usesFill = SETTINGS_SECTION_ICON_USES_FILL[to] ?? false;
+  return (
+    <Icon
+      className={
+        usesFill
+          ? "size-3.5 h-5 shrink-0 fill-current text-sidebar-muted-foreground/60"
+          : "size-3.5 h-5 shrink-0 text-sidebar-muted-foreground/60"
+      }
+    />
+  );
 }
 
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
+  const navigateToMainApp = useNavigateToMainApp();
   const currentHash = useLocation({ select: (location) => location.hash });
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
@@ -178,7 +140,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isMobile, open, setOpen, setOpenMobile]);
 
-  const handleSectionClick = (to: SettingsPath) => {
+  const handleSectionClick = (to: SettingsPath | (typeof SETTINGS_NAV_ITEMS)[number]["to"]) => {
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -211,6 +173,14 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
       hashScrollIntoView: false,
       state: { settingsTargetHighlight: true },
     });
+  };
+
+  // Fork: settings always renders as a utility page, so the footer is just Back.
+  const handleBackClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigateToMainApp();
   };
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -330,20 +300,17 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
               <SidebarMenu>
                 {navItems.map((item) => {
                   const Icon = item.icon;
-                  const isGeneralDetailPage =
-                    item.to === "/settings/general" &&
-                    pathname === "/settings/open-source-licenses";
+                  const resolvedPathname = resolveSettingsPathname(pathname);
                   const isActive =
-                    isGeneralDetailPage ||
-                    pathname === item.to ||
-                    pathname.startsWith(`${item.to}/`);
+                    resolvedPathname === item.to ||
+                    (resolvedPathname?.startsWith(`${item.to}/`) ?? false);
                   return (
                     <SidebarMenuItem key={item.to}>
                       <SidebarMenuButton
                         isActive={isActive}
                         onClick={() => handleSectionClick(item.to)}
                       >
-                        <Icon />
+                        {item.iconUsesFill ? <Icon className="fill-current" /> : <Icon />}
                         <span className="truncate">{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -359,9 +326,14 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
           <T3ConnectSidebarSignIn />
         </Suspense>
         <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <SidebarUtilityMenu />
-          </div>
+          <SidebarMenu className="min-w-0 flex-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleBackClick}>
+                <ArrowLeftIcon />
+                <span>Back</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
           <Suspense fallback={null}>
             <T3ConnectSidebarAvatar />
           </Suspense>

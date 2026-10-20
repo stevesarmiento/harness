@@ -14,16 +14,8 @@ vi.mock(import("../../hooks/useTheme"), async (original) => ({
   useTheme: () =>
     ({
       theme: "system",
-      followSystem: true,
-      themeHalves: null,
       setTheme: vi.fn(),
-      setFollowSystem: vi.fn(),
-      setThemeHalf: vi.fn(),
-      clearThemeHalves: vi.fn(),
     }) as never,
-  readThemePreference: () => "system",
-  readThemeHalves: () => null,
-  readAppearanceModePreference: () => "system",
 }));
 vi.mock(import("./useScopedSettings"), async (original) => ({
   ...(await original()),
@@ -67,7 +59,8 @@ describe("restoring V2 settings", () => {
     ["snoozeLimitedThreads", "Snooze limited threads"],
   ] as const)("restores %s when it is the only changed setting", async (key, label) => {
     setup();
-    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, [key]: true };
+    // Fork: flip the default so the test holds for Forma's default-on settings.
+    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, [key]: !DEFAULT_UNIFIED_SETTINGS[key] };
     await using screen = await renderRestore();
     const { restore } = screen;
 
@@ -81,7 +74,10 @@ describe("restoring V2 settings", () => {
 
   it("does not reset settings after cancellation", async () => {
     setup();
-    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, autoResumeLimitedThreads: true };
+    state.settings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      autoResumeLimitedThreads: !DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
+    };
     state.confirm.mockResolvedValue(false);
     await using screen = await renderRestore();
     const { restore } = screen;

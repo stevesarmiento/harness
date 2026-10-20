@@ -311,7 +311,7 @@ function ModelPickerList({
           estimatedItemSize={MODEL_LIST_ESTIMATED_ITEM_SIZE}
           drawDistance={480}
           recycleItems
-          contentContainerClassName="pl-2 pr-px"
+          contentContainerClassName="px-2"
           ItemSeparatorComponent={ModelListSeparator}
           onLayout={updateScrollFades}
           onScroll={updateScrollFades}
@@ -798,7 +798,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       <WindowKeyDownListener onKeyDown={onWindowKeyDown} />
       <div
         ref={pickerContentRef}
-        className="relative flex max-h-86.5 w-screen max-w-90 flex-row overflow-hidden"
+        // Fork: Forma's roomier picker.
+        className="relative flex max-h-96 w-screen max-w-100 flex-row overflow-hidden"
         style={isSearching ? { height: searchHeight } : undefined}
         data-model-picker-content="true"
       >
@@ -864,7 +865,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         >
           <div
             className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40",
+              "flex min-h-0 flex-1 flex-col overflow-hidden bg-popover",
               showSidebar && "border-l border-border/70",
             )}
           >

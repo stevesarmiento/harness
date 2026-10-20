@@ -9,7 +9,6 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { act, render, stubGlobal } from "../../test/render";
 import "../index.css";
 import { useTheme } from "../hooks/useTheme";
-import { applyThemeColorPreview, getStandardThemeColors } from "../themePalette";
 
 import { readLocalApi } from "../localApi";
 import { toastManager } from "./ui/toast";
@@ -113,63 +112,7 @@ function fileOptions(container: HTMLElement) {
     .filter((label) => label?.startsWith("File options for "));
 }
 
-describe("ChatMarkdown theme drafts", () => {
-  it.each(["dark", "light"] as const)(
-    "previews opposite syntax colors and restores saved %s colors on cancel",
-    async (savedAppearance) => {
-      setup();
-      let selection: ReturnType<typeof useTheme>;
-      function Preview() {
-        const theme = useTheme();
-        useEffect(() => {
-          selection = theme;
-        }, [theme]);
-        return <ChatMarkdown cwd={undefined} text={"```typescript\nconst answer = 42;\n```"} />;
-      }
-      await getSyntaxHighlighterPromise("typescript");
-      await using screen = await render(<Preview />);
-      // Disposed before the unmount, while useTheme still listens for the storage event.
-      using _storage = {
-        [Symbol.dispose]() {
-          localStorage.clear();
-          window.dispatchEvent(new StorageEvent("storage", { key: null }));
-        },
-      };
-      const { container } = screen;
-      await act(async () => {
-        selection.setTheme(savedAppearance);
-        selection.setAppearanceMode(savedAppearance);
-      });
-      const keywordColor = () =>
-        container.querySelector<HTMLElement>(".chat-markdown-shiki .line span")?.style.color;
-      await vi.waitFor(() => expect(keywordColor()).toBeTruthy());
-      const savedColor = keywordColor();
-      const savedStorage = Object.fromEntries(Object.entries(localStorage));
-      const draftAppearance = savedAppearance === "dark" ? "light" : "dark";
-
-      await act(async () =>
-        applyThemeColorPreview(getStandardThemeColors(draftAppearance), draftAppearance),
-      );
-      await vi.waitFor(() => {
-        expect(keywordColor()).toBeTruthy();
-        expect(keywordColor()).not.toBe(savedColor);
-      });
-      expect(document.documentElement.classList.contains("dark")).toBe(draftAppearance === "dark");
-      expect(selection!).toMatchObject({
-        theme: savedAppearance,
-        resolvedTheme: savedAppearance,
-        appearanceMode: savedAppearance,
-      });
-      expect(Object.fromEntries(Object.entries(localStorage))).toEqual(savedStorage);
-
-      await act(async () => selection.refreshTheme());
-      await vi.waitFor(() => expect(keywordColor()).toBe(savedColor));
-      expect(document.documentElement.classList.contains("dark")).toBe(savedAppearance === "dark");
-      expect(Object.fromEntries(Object.entries(localStorage))).toEqual(savedStorage);
-    },
-  );
-});
-
+// Fork: upstream's theme-draft case is dropped with the theme library.
 describe("ChatMarkdown table layout", () => {
   it.each([
     { width: 36, timeline: true, fits: true },

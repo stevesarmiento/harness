@@ -8,6 +8,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useRef, useState } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
+import { cn } from "~/lib/utils";
 import { shortcutLabelForCommand } from "~/keybindings";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
@@ -25,6 +26,7 @@ import {
 } from "~/sidebarProjectGrouping";
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
+import { LogomarkFormaAnimated } from "../LogomarkFormaAnimated";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
@@ -41,7 +43,6 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
 import { DraftProjectName } from "./DraftProjectName";
-import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 
 const ADD_PROJECT_VALUE = "add-project";
@@ -315,6 +316,10 @@ export function DraftHeroHeadline({
     </button>
   );
 
+  // Fork: Forma shows the hero headline only while no real project is chosen;
+  // a resolved project leaves just the logomark above the composer.
+  const showHeadline = !hasResolvedProject || isScratchDraft;
+
   const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");
   const orStartWithoutProject =
     scratchWorkspaceRoot !== null && !isScratchDraft && (hasResolvedProject || canChooseProject) ? (
@@ -341,27 +346,39 @@ export function DraftHeroHeadline({
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
-      {hasResolvedProject && !isScratchDraft ? (
-        <DraftHeroProjectHeading projectName={activeProjectDisplayName ?? "Choose a project"}>
-          {projectSelector}
-        </DraftHeroProjectHeading>
-      ) : (
-        <h1 className="w-full text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
-          {isScratchDraft ? (
-            <>What should we work on?</>
-          ) : canChooseProject ? (
-            <>{projectSelector} to start</>
-          ) : (
-            <>Add a project to start</>
+    <div
+      className={cn(
+        "flex w-full flex-col items-center",
+        // With no headline the logo slides down to tuck slightly behind the
+        // composer (the hero block is z-0, the composer z-10); with the
+        // headline it keeps the classic gap above the composer.
+        showHeadline ? "pb-8" : "-mb-14",
+      )}
+    >
+      <LogomarkFormaAnimated
+        aria-hidden
+        className="pointer-events-none h-80 w-auto text-foreground/5 [mask-image:linear-gradient(to_bottom,black_30%,transparent_80%)] sm:h-80"
+      />
+      {showHeadline ? (
+        <>
+          <h1 className="mx-auto mt-5 w-full max-w-5xl text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl">
+            {isScratchDraft ? (
+              <>What should we work on?</>
+            ) : canChooseProject ? (
+              <>{projectSelector} to start</>
+            ) : (
+              <>Add a project to start</>
+            )}
+          </h1>
+          {/* Reserved whenever threads can skip a project, so the heading does not
+              move. Without a project, the picker moves here to choose one. */}
+          {scratchWorkspaceRoot === null ? null : (
+            <p className="mt-2 flex h-6 w-full items-center justify-center text-sm">
+              {isScratchDraft ? projectSelector : orStartWithoutProject}
+            </p>
           )}
-        </h1>
-      )}
-      {scratchWorkspaceRoot === null ? null : (
-        <p className="mt-2 flex h-6 w-full items-center justify-center text-sm">
-          {isScratchDraft ? projectSelector : orStartWithoutProject}
-        </p>
-      )}
+        </>
+      ) : null}
     </div>
   );
 }

@@ -31,13 +31,6 @@ import {
 } from "@t3tools/client-runtime/state/shared-settings";
 import { ensureLocalApi } from "~/localApi";
 import {
-  getThemeDefinition,
-  getThemePreviewSidebarArtwork,
-  resolveThemeHalf,
-  subscribeToThemePreview,
-  themeAllowsSidebarArtwork,
-} from "~/themePalette";
-import {
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
 } from "@t3tools/shared/serverSettings";
@@ -51,7 +44,6 @@ import { environmentCatalog } from "~/connection/catalog";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { useTheme } from "./useTheme";
 import {
   environmentSession,
   environmentSessionStatesAtom,
@@ -393,32 +385,24 @@ export function resolveEnvironmentIdentificationMode(input: {
 export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMode {
   const settingsHydrated = useClientSettingsHydrated();
   const mode = useClientSettings((settings) => settings.environmentIdentificationMode);
-  const { resolvedTheme, theme, themeHalves } = useTheme();
-  const previewSidebarArtwork = useSyncExternalStore(
-    subscribeToThemePreview,
-    getThemePreviewSidebarArtwork,
-    () => null,
-  );
-  const activeTheme = resolveThemeHalf(theme, themeHalves, resolvedTheme);
-  const activeThemeDefinition = getThemeDefinition(activeTheme);
-  return resolveEnvironmentIdentificationMode({
-    mode,
-    settingsHydrated,
-    paletteThemeActive: previewSidebarArtwork !== null || activeThemeDefinition !== null,
-    paletteThemeAllowsArtwork: previewSidebarArtwork ?? themeAllowsSidebarArtwork(activeTheme),
-  });
+  // Fork: no palette-theme library, so stage artwork never needs suppressing.
+  return resolveEnvironmentIdentificationMode({ mode, settingsHydrated });
 }
 
 /**
- * Held at the default sidebar until client settings hydrate: the pre-hydration snapshot is just
- * the schema defaults, so resolving against it could mount one sidebar and then swap it out
- * once persisted settings land — remounting the whole tree for everyone instead of only for
- * legacy opt-ins.
+ * Whether the legacy sidebar (Settings → General → Legacy features) replaces
+ * the default one. Fork: the Forma sidebar is the legacy implementation and it
+ * is the default — the schema default is `true` and hydration holds it on.
+ *
+ * Held at the default sidebar until client settings hydrate: the pre-hydration
+ * snapshot is just the schema defaults, so resolving against it could mount one
+ * sidebar and then swap it out once persisted settings land — remounting the
+ * whole tree for everyone instead of only for legacy opt-ins.
  */
 export function useLegacySidebarEnabled(): boolean {
   const settingsHydrated = useClientSettingsHydrated();
   const legacySidebarEnabled = useClientSettings((settings) => settings.legacySidebarEnabled);
-  return settingsHydrated && legacySidebarEnabled;
+  return settingsHydrated ? legacySidebarEnabled : true;
 }
 
 export async function prepareModelPreferencesPatch(

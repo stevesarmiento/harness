@@ -33,6 +33,9 @@ it("initializes React refresh before a shared UI chunk runs in bundled dev", asy
     for (const file of ["index.html", "src/bootstrap.ts", "src/lib/bootError.ts"]) {
       await NodeFSP.copyFile(new URL(`../${file}`, import.meta.url), NodePath.join(root, file));
     }
+    // Fork: bootstrap.ts first imports Forma's theme bootstrap; its theme
+    // modules are irrelevant to the refresh preamble, so a stub stands in.
+    await NodeFSP.writeFile(NodePath.join(root, "src/themeBootstrap.ts"), "export {};");
     await NodeFSP.writeFile(
       NodePath.join(root, "src/shared.tsx"),
       "export function Shared() { return <div>ready</div>; }",

@@ -103,6 +103,8 @@ export function createSidebarSortingStrategy(input: {
   cardHeight?: number;
   slimHeight?: number;
   boundaryLabelHeight?: number;
+  /** Fork: unscaled card / slim row heights (px) of the rendering sidebar. */
+  restingRowHeights?: { card: number; slim: number };
 }): SortingStrategy {
   if (input.enabled === false) return () => stationary;
   const { items } = input;
@@ -139,10 +141,16 @@ export function createSidebarSortingStrategy(input: {
       else slimHeight ??= rects[index]?.height;
       if (item.key !== active.key) groups[item.section].push(item);
     }
+    // Fork: callers with other row designs (Forma's compact rows) pass their
+    // own resting heights so the measured scale stays the root font scale.
+    const baseCardHeight = input.restingRowHeights?.card ?? 82;
+    const baseSlimHeight = input.restingRowHeights?.slim ?? 36;
     const scale =
-      slimHeight !== undefined ? slimHeight / 36 : (headerScale ?? (cardHeight ?? 82) / 82);
-    cardHeight ??= 82 * scale;
-    slimHeight ??= 36 * scale;
+      slimHeight !== undefined
+        ? slimHeight / baseSlimHeight
+        : (headerScale ?? (cardHeight ?? baseCardHeight) / baseCardHeight);
+    cardHeight ??= baseCardHeight * scale;
+    slimHeight ??= baseSlimHeight * scale;
     const labelHeight = (input.boundaryLabelHeight ?? 0) * scale;
     const group = groups[target.section];
     const order =

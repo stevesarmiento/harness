@@ -25,7 +25,6 @@ vi.mock("../hooks/useTheme", () => ({
   useRenderedAppearance: () => "light",
   useTheme: () => ({ theme: "default", resolvedTheme: "light", appearanceMode: "light" }),
 }));
-vi.mock("../hooks/useCustomThemes", () => ({ useCustomThemes: () => [] }));
 vi.mock("../hooks/useEnvironmentTheme", () => ({ useEnvironmentThemeDefinitions: () => [] }));
 vi.mock("../hooks/useSettings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../hooks/useSettings")>()),

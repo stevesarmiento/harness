@@ -55,7 +55,8 @@ const setupBaseDir = Effect.fn("browserSetup.baseDir")(function* (explicit: Opti
     .pipe(Effect.orElseSucceed(() => ""));
   const home = entry.trim().split(":")[5];
   const path = yield* Path.Path;
-  return home ? path.join(home, ".t3") : yield* resolveBaseDir(undefined);
+  // Fork: Forma's default base dir (see resolveBaseDir).
+  return home ? path.join(home, ".forma") : yield* resolveBaseDir(undefined);
 });
 
 const aptOffers = Effect.fn("browserSetup.aptOffers")(function* (name: string) {

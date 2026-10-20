@@ -10,7 +10,14 @@ import {
   type UsageProviderKind,
   type UsageSummaryInput,
 } from "@t3tools/contracts";
-import { CircleAlertIcon, ChevronDownIcon, InfoIcon, SlidersHorizontalIcon } from "lucide-react";
+// Fork: Forma iconography (symbols-react) instead of lucide.
+import {
+  IconExclamationmarkCircle as CircleAlertIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconChevronRight as HeaderCrumbSeparatorIcon,
+  IconInfoCircle as InfoIcon,
+  IconSliderHorizontal3 as SlidersHorizontalIcon,
+} from "symbols-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -70,19 +77,17 @@ import {
 } from "../ui/menu";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { SidebarInset } from "../ui/sidebar";
+// Fork: Forma page shell (topbar on the window chrome + inset card).
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../ui/sidebar";
+import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
+import { WorkspaceHeaderTitle } from "../WorkspaceHeaderTitle";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
+import { UsageChartIcon as UsageTitleIcon } from "../icons/custom";
 import { Skeleton } from "../ui/skeleton";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-  WorkspaceBreadcrumbText,
-} from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
-import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { UsageLimitsSection } from "./UsageLimits";
 import { UsagePriceOverrides } from "./UsagePriceOverrides";
 import { UsageProviderChart } from "./UsageProviderChart";
@@ -361,41 +366,51 @@ export function UsagePage() {
     shownHourly && shownWindow.sinceTime !== undefined && shownWindow.untilTime !== undefined
       ? `${formatDateTimeShort(shownWindow.sinceTime, shownWindow.timeZone, hour12)} to ${formatDateTimeShort(shownWindow.untilTime, shownWindow.timeZone, hour12)}`
       : `${formatDayShort(shownWindow.sinceDay)} to ${formatDayShort(shownWindow.untilDay)}`;
+  // Fork: a single fixed-height Forma header row — Usage pill, environment and
+  // provider crumbs, then the controls — instead of upstream's wrapping breadcrumb grid.
   const topbarContent = (
-    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-2 xl:flex">
-      <WorkspaceBreadcrumb ariaLabel="Usage breadcrumb" className="min-w-0">
-        <WorkspaceBreadcrumbItem>
-          <h1>Usage</h1>
-        </WorkspaceBreadcrumbItem>
-        <WorkspaceBreadcrumbSeparator />
-        <WorkspaceBreadcrumbItem className="min-w-10 shrink">
-          <UsageEnvironmentFilter
-            environments={environments}
-            selectedEnvironments={selectedEnvironments}
-            selectedEnvironmentIds={selectedEnvironmentIds}
-            onSelectionChange={setSelectedEnvironmentIds}
-            showUsageStatus={!showingLimits}
-            refreshing={refreshingUsage}
-            isPartial={isPartial}
-            duplicateSources={merged.duplicateSources}
-            contractMismatches={merged.contractMismatches}
-            onOpenModelPrices={() => setPriceDialog({})}
-          />
-        </WorkspaceBreadcrumbItem>
-        <WorkspaceBreadcrumbSeparator />
-        <WorkspaceBreadcrumbItem current className="min-w-10">
-          <UsageProviderFilter
-            hiddenProviders={hiddenProviders}
-            onChange={(next) => updatePreferences({ hiddenProviders: next })}
-          />
-        </WorkspaceBreadcrumbItem>
-      </WorkspaceBreadcrumb>
+    <div className="flex min-w-0 w-full items-center gap-2">
+      <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+      <DesktopSidebarReopenButton className="md:ml-0" />
+      <h1 className="contents">
+        <WorkspaceHeaderTitle
+          icon={
+            <UsageTitleIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
+          }
+        >
+          Usage
+        </WorkspaceHeaderTitle>
+      </h1>
+      <HeaderCrumbSeparatorIcon
+        className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+        aria-hidden
+      />
+      <UsageEnvironmentFilter
+        environments={environments}
+        selectedEnvironments={selectedEnvironments}
+        selectedEnvironmentIds={selectedEnvironmentIds}
+        onSelectionChange={setSelectedEnvironmentIds}
+        showUsageStatus={!showingLimits}
+        refreshing={refreshingUsage}
+        isPartial={isPartial}
+        duplicateSources={merged.duplicateSources}
+        contractMismatches={merged.contractMismatches}
+        onOpenModelPrices={() => setPriceDialog({})}
+      />
+      <HeaderCrumbSeparatorIcon
+        className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+        aria-hidden
+      />
+      <UsageProviderFilter
+        hiddenProviders={hiddenProviders}
+        onChange={(next) => updatePreferences({ hiddenProviders: next })}
+      />
       {!showingLimits ? (
         <span className="hidden min-w-0 truncate text-xs text-muted-foreground 2xl:block">
           {windowLabel}
         </span>
       ) : null}
-      <div className="ms-auto hidden min-w-0 items-center justify-end gap-2 xl:flex">
+      <div className="ms-auto hidden shrink-0 items-center justify-end gap-2 xl:flex">
         <ToggleGroup
           aria-label="Usage metric"
           variant="segmented"
@@ -438,7 +453,7 @@ export function UsagePage() {
           <RefreshIcon size="sm" refreshing={isRefreshing} />
         </Button>
       </div>
-      <div className="ms-auto flex min-w-0 items-center justify-end gap-1 xl:hidden">
+      <div className="ms-auto flex shrink-0 items-center justify-end gap-1 xl:hidden">
         <Select
           value={metric}
           onValueChange={(value) => {
@@ -505,69 +520,82 @@ export function UsagePage() {
   );
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
+    // Fork: Forma page shell — the topbar sits on the window chrome above the
+    // inset card, like every Forma page.
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate md:h-auto">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
+        <header
+          className={cn(
+            "workspace-topbar border-b border-border/70 bg-background md:border-b-0 md:bg-transparent",
+            "pl-(--workspace-gutter-start) pr-(--workspace-gutter-end) md:pl-0 [--workspace-topbar-height:40px]",
+            isElectron &&
+              "drag-region relative [--workspace-topbar-height:39px] wco:pr-(--workspace-native-controls-inset)",
+          )}
+        >
+          {topbarContent}
+        </header>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="wide">
-            {selectedEnvironments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {environments.length === 0
-                  ? `Connect an environment to see ${showingLimits ? "limits" : "usage"}.`
-                  : `Select an environment to see ${showingLimits ? "limits" : "usage"}.`}
-              </p>
-            ) : showingLimits ? (
-              <UsageLimitsSection
-                selectedEnvironmentIds={selectedEnvironmentIds}
-                hiddenProviders={hiddenProviders}
-                now={limitsNow}
-                cursorPrompt={
-                  cursorAccessEnvironments.length > 0 ? (
-                    <CursorEnableLimits
-                      environments={cursorAccessEnvironments}
-                      onEnabled={() => {
-                        void refresh();
-                        void refreshLimits(false, true);
-                      }}
-                    />
-                  ) : null
-                }
-              />
-            ) : shown === null ? (
-              <UsageSkeleton />
-            ) : !canReadDiagnostics ? (
-              <div className="space-y-2 py-12 text-center text-sm text-muted-foreground">
-                {selectedEnvironments.map((environment) => (
-                  <p key={environment.environmentId}>
-                    {selectedEnvironments.length > 1 ? `${environment.label}: ` : null}
-                    {environment.error}
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <UsageOverview
-                merged={merged}
-                shownWindow={shownWindow}
-                hour12={hour12}
-                days={days}
-                hours={hours}
-                showingKept={showingKept}
-                metric={metric === "tokens" ? "tokens" : "cost"}
-                selectedEnvironments={selectedEnvironments}
-                hiddenProviders={hiddenProviders}
-                refreshingUsage={refreshingUsage}
-                cursorAccessEnvironments={cursorAccessEnvironments}
-                showChatGptSharing={showChatGptSharing}
-                onCursorEnabled={() => {
-                  void refresh();
-                  void refreshLimits(false, true);
-                }}
-                onSelectModel={selectUsageModel}
-              />
-            )}
-          </WorkspacePageContainer>
-        </ScrollArea>
+        <SidebarInsetCard>
+          <ScrollArea className="min-h-0 flex-1">
+            <WorkspacePageContainer width="wide">
+              {selectedEnvironments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {environments.length === 0
+                    ? `Connect an environment to see ${showingLimits ? "limits" : "usage"}.`
+                    : `Select an environment to see ${showingLimits ? "limits" : "usage"}.`}
+                </p>
+              ) : showingLimits ? (
+                <UsageLimitsSection
+                  selectedEnvironmentIds={selectedEnvironmentIds}
+                  hiddenProviders={hiddenProviders}
+                  now={limitsNow}
+                  cursorPrompt={
+                    cursorAccessEnvironments.length > 0 ? (
+                      <CursorEnableLimits
+                        environments={cursorAccessEnvironments}
+                        onEnabled={() => {
+                          void refresh();
+                          void refreshLimits(false, true);
+                        }}
+                      />
+                    ) : null
+                  }
+                />
+              ) : shown === null ? (
+                <UsageSkeleton />
+              ) : !canReadDiagnostics ? (
+                <div className="space-y-2 py-12 text-center text-sm text-muted-foreground">
+                  {selectedEnvironments.map((environment) => (
+                    <p key={environment.environmentId}>
+                      {selectedEnvironments.length > 1 ? `${environment.label}: ` : null}
+                      {environment.error}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <UsageOverview
+                  merged={merged}
+                  shownWindow={shownWindow}
+                  hour12={hour12}
+                  days={days}
+                  hours={hours}
+                  showingKept={showingKept}
+                  metric={metric === "tokens" ? "tokens" : "cost"}
+                  selectedEnvironments={selectedEnvironments}
+                  hiddenProviders={hiddenProviders}
+                  refreshingUsage={refreshingUsage}
+                  cursorAccessEnvironments={cursorAccessEnvironments}
+                  showChatGptSharing={showChatGptSharing}
+                  onCursorEnabled={() => {
+                    void refresh();
+                    void refreshLimits(false, true);
+                  }}
+                  onSelectModel={selectUsageModel}
+                />
+              )}
+            </WorkspacePageContainer>
+          </ScrollArea>
+        </SidebarInsetCard>
       </div>
       {showingLimits ? null : (
         <UsageModelDialogHost
@@ -724,7 +752,7 @@ function UsageOverview({
                     render={<InlineButton tone="muted" />}
                     aria-label="Unpriced usage details"
                   >
-                    <InfoIcon className="size-3" aria-hidden />
+                    <InfoIcon className="size-3 fill-current" aria-hidden />
                   </PopoverTrigger>
                   <PopoverPopup side="top" tooltipStyle>
                     API estimate excludes {formatPercent(merged.costQuality.unpricedShare)} unpriced
@@ -1328,17 +1356,21 @@ function UsageEnvironmentFilter({
 
   return (
     <Menu>
-      <MenuTrigger render={<InlineButton />} className="group/usage-environment min-w-0 max-w-full">
-        <WorkspaceBreadcrumbText>{label}</WorkspaceBreadcrumbText>
+      {/* Fork: Forma header crumb pill rather than an inline text button. */}
+      <MenuTrigger
+        render={<button type="button" />}
+        className="group/usage-environment inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-foreground"
+      >
+        <span className="min-w-0 truncate">{label}</span>
         <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
           {showUsageStatus && hasIssue ? (
             <CircleAlertIcon
-              className="size-3.5 text-warning-foreground"
+              className="size-3 fill-current text-warning-foreground"
               aria-label="Some environments could not report usage"
             />
           ) : (
             <ChevronDownIcon
-              className="size-3.5 opacity-0 transition-opacity group-hover/usage-environment:opacity-100 group-focus-visible/usage-environment:opacity-100 group-data-popup-open/usage-environment:opacity-100"
+              className="size-3 fill-current opacity-0 transition-opacity group-hover/usage-environment:opacity-100 group-focus-visible/usage-environment:opacity-100 group-data-popup-open/usage-environment:opacity-100"
               aria-hidden
             />
           )}
@@ -1421,7 +1453,7 @@ function UsageEnvironmentFilter({
         ) : null}
         <MenuSeparator />
         <MenuItem onClick={onOpenModelPrices}>
-          <SlidersHorizontalIcon aria-hidden />
+          <SlidersHorizontalIcon className="fill-current" aria-hidden />
           Model prices
         </MenuItem>
       </MenuPopup>
@@ -1448,10 +1480,14 @@ function UsageProviderFilter({
 
   return (
     <Menu>
-      <MenuTrigger render={<InlineButton />} className="group/usage-provider min-w-0 max-w-full">
+      {/* Fork: Forma header crumb pill rather than an inline text button. */}
+      <MenuTrigger
+        render={<button type="button" />}
+        className="group/usage-provider inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-foreground"
+      >
         <span className="min-w-0 truncate">{label}</span>
         <ChevronDownIcon
-          className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/usage-provider:opacity-100 group-focus-visible/usage-provider:opacity-100 group-data-popup-open/usage-provider:opacity-100"
+          className="size-3 shrink-0 fill-current text-muted-foreground opacity-0 transition-opacity group-hover/usage-provider:opacity-100 group-focus-visible/usage-provider:opacity-100 group-data-popup-open/usage-provider:opacity-100"
           aria-hidden
         />
       </MenuTrigger>

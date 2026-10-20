@@ -71,7 +71,6 @@ import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { getProjectFaviconCacheKey } from "@t3tools/shared/projectFavicon";
 import { claudeSkillInvocation, isJavaScriptReplTool } from "@t3tools/shared/toolActivity";
-import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
   createContext,
   memo,
@@ -118,7 +117,8 @@ import {
 } from "../../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import ChatMarkdown, { ChatMarkdownAssetImage } from "../ChatMarkdown";
-import { T3Wordmark } from "../T3Wordmark";
+import { LogomarkForma } from "../LogomarkForma";
+import { APP_BASE_NAME } from "~/branding";
 import { ThreadContextChip } from "../ThreadContextChip";
 import {
   ArrowRightIcon,
@@ -152,7 +152,8 @@ import {
   ZapIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { ChevronDown, ChevronRight, Link as LinkIconNode } from "lucide";
+import { ChevronDown, ChevronRight } from "lucide";
+import { IconLink } from "symbols-react";
 import type {
   ComposerContextId,
   ComposerContextRecord,
@@ -187,7 +188,10 @@ import {
   rememberTimelinePosition,
   timelineContentOverflowsViewport,
 } from "./timelineScrollAnchoring";
+// Fork: Forma message actions, pixel-grid working indicator, and micro fades.
 import { MessageCopyButton } from "./MessageCopyButton";
+import { PixelGridLoader } from "../ui/pixel-grid-loader";
+import { MICRO_FADE_MOTION_CLASS_NAME } from "~/lib/motion";
 import { promptLinkFor } from "../promptLinks/copyPromptLink";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { WorkspaceEntryIcon, WorkspaceEntryTooltip } from "./WorkspaceEntryIcon";
@@ -396,9 +400,13 @@ function timelineListStateFor(identity: string): {
 }
 
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
-const TIMELINE_LIST_FADE_HEADER = (
-  <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
-);
+// Fork: Forma's taller top fade band (matches `.chat-timeline-scroll-fade`).
+const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
+// Forma's settings-driven UI type scale (`text-ui-*`) for timeline metadata.
+const USER_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/70 tabular-nums";
+const ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/30 tabular-nums";
+const WORKING_ROW_LABEL_CLASS_NAME =
+  "text-ui-xs flex h-6 min-w-0 items-center gap-2 text-muted-foreground/70 tabular-nums";
 function TimelineListFooter({
   composerInset,
   children,
@@ -1554,7 +1562,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
             onItemSizeChanged={handleItemSizeChanged}
             className={cn(
               "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-              topFadeEnabled && "topbar-scroll-fade",
+              topFadeEnabled && "chat-timeline-scroll-fade",
             )}
             ListHeaderComponent={listHeader}
             ListFooterComponent={timelineListFooter}
@@ -2085,13 +2093,8 @@ function ContextCompactionTimelineRow({
       className="mx-auto flex w-full max-w-(--chat-content-max-width) items-center gap-3 py-1 text-muted-foreground text-xs"
     >
       <span className="h-px flex-1 bg-border/70" />
-      <span
-        ref={row.active ? observeVisibleAnimation : undefined}
-        className="relative shrink-0 overflow-hidden"
-      >
-        {content}
-        {row.active ? <ActivityShimmerOverlay>{content}</ActivityShimmerOverlay> : null}
-      </span>
+      {/* Fork: Forma labels stay still; the working row's loader shows activity. */}
+      <span className="shrink-0">{content}</span>
       <span className="h-px flex-1 bg-border/70" />
     </div>
   );
@@ -2291,7 +2294,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   };
 
   return (
-    <div className="group flex flex-col items-end gap-1">
+    <div className="group flex flex-col items-end gap-1 px-0.5">
       {userMessage.attribution === "automation" ? (
         <p
           className="me-1 text-2xs text-muted-foreground/70"
@@ -2317,7 +2320,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           className="me-1 text-2xs text-muted-foreground/70"
           data-user-message-attribution="t3code"
         >
-          Sent by T3 Code
+          Sent by {APP_BASE_NAME}
         </p>
       ) : userMessage.attribution === "agent" ? (
         <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-attribution="agent">
@@ -2338,7 +2341,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       row.message.inputIntent === "promoted_queued_to_steer" ? (
         <UserMessageIntentMarker intent={row.message.inputIntent} />
       ) : null}
-      <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
+      {/* Fork: Forma's full-width user message card. */}
+      <div
+        className="relative w-full rounded-xl border border-border/80 bg-secondary/95 px-4 py-3 shadow-sm"
+        data-user-message-card="true"
+      >
         <MessageAuthorHeading>You</MessageAuthorHeading>
         {(regularImages.length > 0 || userVideos.length > 0) && (
           <div className="mb-2 grid max-w-[210px] grid-cols-2 gap-2">
@@ -2464,17 +2471,22 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </span>
         </div>
       ) : null}
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
+      <div
+        className={cn(
+          "flex w-full items-center justify-end pe-1 tabular-nums opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
-            <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+            <TooltipTrigger render={<p className={USER_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
               {formatDayAwareTimestamp(row.message.createdAt, ctx.timestampFormat)}
             </TooltipTrigger>
             <TooltipPopup>
               {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
             </TooltipPopup>
           </Tooltip>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1.5">
             {typeof revertTurnCount === "number" && (
               <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
             )}
@@ -2486,15 +2498,17 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                       extraFlavors: { [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment },
                     }
                   : {})}
-                variant="ghost"
+                size="icon-xs"
+                variant="subtle"
               />
             )}
             {promptLink !== null && (
               <MessageCopyButton
                 text={promptLink}
                 label="Copy prompt link"
-                icon={LinkIconNode}
-                variant="ghost"
+                icon={IconLink}
+                size="icon-xs"
+                variant="subtle"
               />
             )}
           </div>
@@ -2569,8 +2583,8 @@ function RevertUserMessageButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={activity.isRevertingCheckpoint || activity.isWorking}
             onClick={() => ctx.onRevertToTurnCount(turnCount, messageId)}
             aria-label="Edit from here"
@@ -2668,7 +2682,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
+        <MessageAuthorHeading>{APP_BASE_NAME}</MessageAuthorHeading>
         <div data-thread-find-text="true">
           <AssistantCitationSource
             messageId={row.message.id}
@@ -2737,8 +2751,8 @@ function AssistantForkButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -2793,32 +2807,12 @@ function AssistantMessageMeta({
 }) {
   const ctx = use(TimelineRowCtx);
 
+  // Fork: Forma keeps a faint timestamp visible and fades the actions in on hover.
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
-        alwaysVisible
-          ? "opacity-100"
-          : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
-        className,
-      )}
-    >
-      {projectedItem && projectedItem.item.status !== "completed" ? (
-        <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
-          {projectedItem.item.status}
-        </span>
-      ) : null}
-      <AssistantCopyButton
-        message={message}
-        showCopyButton={showCopyButton}
-        streaming={copyStreaming}
-      />
-      {projectedItem?.item.type === "assistant_message" ? (
-        <AssistantForkButton projectedItem={projectedItem} />
-      ) : null}
+    <div className={cn("flex items-center gap-2 tabular-nums", className)}>
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+          <TooltipTrigger render={<p className={ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
             {formatDayAwareTimestamp(message.updatedAt, ctx.timestampFormat)}
           </TooltipTrigger>
           <TooltipPopup>
@@ -2826,6 +2820,29 @@ function AssistantMessageMeta({
           </TooltipPopup>
         </Tooltip>
       )}
+      <div
+        className={cn(
+          "flex items-center gap-1.5",
+          alwaysVisible
+            ? "opacity-100"
+            : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
+        {projectedItem && projectedItem.item.status !== "completed" ? (
+          <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
+            {projectedItem.item.status}
+          </span>
+        ) : null}
+        <AssistantCopyButton
+          message={message}
+          showCopyButton={showCopyButton}
+          streaming={copyStreaming}
+        />
+        {projectedItem?.item.type === "assistant_message" ? (
+          <AssistantForkButton projectedItem={projectedItem} />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -2849,7 +2866,7 @@ function AssistantCopyButton({
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  return <MessageCopyButton text={assistantCopyState.text ?? ""} size="icon-xs" variant="subtle" />;
 }
 
 function ProposedPlanTimelineRow({
@@ -3571,19 +3588,6 @@ function ExpandedWorkGroupEntries({
 
 const workEntryKey = (entry: TimelineWorkEntry) => entry.id;
 
-function ActivityShimmerOverlay({ children }: { children: ReactNode }) {
-  return (
-    <span
-      aria-hidden
-      className="live-activity-focus pointer-events-none absolute inset-y-0 select-none"
-    >
-      <span className="live-activity-focus-counter block">
-        <span className="live-activity-focus-aligned block text-foreground">{children}</span>
-      </span>
-    </span>
-  );
-}
-
 const failedToolIconClassName = "text-tool-error-icon/40";
 
 function toolIconAcceptsTint(toolIcon: ToolActivityIcon | undefined): boolean {
@@ -3593,7 +3597,8 @@ function toolIconAcceptsTint(toolIcon: ToolActivityIcon | undefined): boolean {
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
   const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup } =
     use(TimelineRowActivityCtx);
-  const shimmer = isPreparingWorktree || isCompacting;
+  // One span for every label so the setup-to-working handoff swaps text in
+  // place instead of remounting the row.
   const label = isPreparingWorktree ? (
     "Setting up worktree…"
   ) : isCompacting ? (
@@ -3605,16 +3610,15 @@ function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "workin
   ) : (
     "Working..."
   );
+  // Fork: Forma's working row leads with the pixel-grid loader; labels never
+  // shimmer.
   return (
-    <div className="border-b border-border/60 pb-2 pt-1">
-      <div className="flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-        <span
-          ref={shimmer ? observeVisibleAnimation : undefined}
-          className="relative shrink-0 overflow-hidden whitespace-nowrap"
-        >
-          {label}
-          {shimmer ? <ActivityShimmerOverlay>{label}</ActivityShimmerOverlay> : null}
+    <div className="py-0.5 pl-1.5">
+      <div className={WORKING_ROW_LABEL_CLASS_NAME}>
+        <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
+          <PixelGridLoader variant="chat" />
         </span>
+        <span className="relative shrink-0 overflow-hidden whitespace-nowrap">{label}</span>
         {backgroundWorktreeSetup ? (
           <BackgroundWorktreeSetupChip snapshot={backgroundWorktreeSetup} />
         ) : null}
@@ -3670,7 +3674,7 @@ function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "think
   const ctx = use(TimelineRowCtx);
   const { isCompacting, isPreparingWorktree } = use(TimelineRowActivityCtx);
   if (isPreparingWorktree || isCompacting) return <WorkLogRow label="" />;
-  const activity = <LiveActivityRow label="Thinking" iconName="brain" active shimmer />;
+  const activity = <LiveActivityRow label="Thinking" iconName="brain" />;
   const { groupId } = row;
   if (groupId === undefined) return activity;
   return (
@@ -3690,36 +3694,23 @@ function LiveActivityRow({
   iconName,
   toolIcon,
   failed = false,
-  active = false,
-  shimmer = false,
 }: {
   label: ReactNode;
   iconName?: WorkEntryIconName;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
-  active?: boolean;
-  shimmer?: boolean;
 }) {
-  const animated = active && !failed;
-  const showShimmer = animated && shimmer;
+  // Fork: live labels stay still (no shimmer or shine); the working row's
+  // loader already shows activity.
   return (
-    <div
-      ref={animated ? observeVisibleAnimation : undefined}
-      className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed"
-    >
+    <div className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed">
       <LiveActivityContent
         label={label}
         iconName={iconName}
         toolIcon={toolIcon}
         failed={failed}
         announceFailure={failed}
-        active={animated && !shimmer}
       />
-      {showShimmer ? (
-        <ActivityShimmerOverlay>
-          <LiveActivityContent label={label} iconName={iconName} toolIcon={toolIcon} highlighted />
-        </ActivityShimmerOverlay>
-      ) : null}
     </div>
   );
 }
@@ -3730,7 +3721,6 @@ function LiveActivityContent({
   toolIcon,
   failed = false,
   announceFailure = false,
-  active = false,
   highlighted = false,
 }: {
   label: ReactNode;
@@ -3738,7 +3728,6 @@ function LiveActivityContent({
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
   announceFailure?: boolean;
-  active?: boolean;
   highlighted?: boolean;
 }) {
   const showTrailingFailureMark =
@@ -3770,15 +3759,7 @@ function LiveActivityContent({
         ) : null
       }
       label={
-        <span
-          className={cn(
-            "block truncate",
-            highlighted && "text-foreground",
-            active && "live-tool-shine",
-          )}
-        >
-          {label}
-        </span>
+        <span className={cn("block truncate", highlighted && "text-foreground")}>{label}</span>
       }
       trailing={
         showTrailingFailureMark ? (
@@ -3922,7 +3903,6 @@ function LiveWorkEntryTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "
         iconName={workEntryIconName(row.entry)}
         toolIcon={row.entry.toolIcon ?? row.entry.toolSource?.icon}
         failed={failed}
-        active={row.active}
       />
     </button>
   );
@@ -4004,7 +3984,6 @@ function WorkGroupHeader(props: {
 }) {
   return (
     <WorkLogButton
-      ref={props.active && !props.failed ? observeVisibleAnimation : undefined}
       aria-label={props.failed ? `${props.label}, tool call failed` : props.label}
       aria-expanded={props.expanded}
       onClick={props.onToggle}
@@ -4016,11 +3995,8 @@ function WorkGroupHeader(props: {
           muted
         />
       }
-      label={
-        <span className={cn("block truncate", props.active && !props.failed && "live-tool-shine")}>
-          {props.label}
-        </span>
-      }
+      // Fork: active group labels stay still (no shine).
+      label={<span className="block truncate">{props.label}</span>}
       trailing={
         <TimelineRowTimestamp createdAt={props.createdAt} timestampFormat={props.timestampFormat} />
       }
@@ -5049,7 +5025,8 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
     case "device":
       return <SmartphoneIcon className={className} aria-hidden />;
     case "t3-code":
-      return <T3Wordmark className={className} aria-hidden />;
+      // Fork: Forma mark for the app's own tool activity.
+      return <LogomarkForma className={className} aria-hidden />;
     case "check":
       return <CheckIcon className={className} aria-hidden />;
     case "circle-alert":

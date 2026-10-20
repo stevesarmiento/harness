@@ -1,6 +1,6 @@
-import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
-import { EllipsisIcon } from "lucide-react";
+import { IconEllipsis as EllipsisIcon } from "symbols-react";
 import {
   Menu,
   MenuPopup,
@@ -9,7 +9,9 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
-import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
+import { cn } from "~/lib/utils";
+import { ComposerControl } from "./ComposerControl";
+import { composerInteractionModeConfig } from "./composerInteractionMode";
 import { useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
 
@@ -35,6 +37,10 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   const composerFloatingLayerProps = useComposerMenuProps();
   const size = props.size ?? "sm";
   const [open, setOpen] = useComposerMenuState(props.hidden);
+  const interactionModeDescription =
+    composerInteractionModeConfig[props.interactionMode].description;
+  const BuildModeIcon = composerInteractionModeConfig.default.icon;
+  const PlanModeIcon = composerInteractionModeConfig.plan.icon;
 
   return (
     <Menu open={open} onOpenChange={setOpen}>
@@ -50,7 +56,12 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
           />
         }
       >
-        <ComposerControlIcon icon={EllipsisIcon} size={size} />
+        {/* Fork: symbols-react icons don't fit ComposerControlIcon's SVGProps type. */}
+        <EllipsisIcon
+          aria-hidden="true"
+          className={cn("shrink-0 fill-current", size === "xs" ? "size-3" : "size-4")}
+          data-composer-control-icon
+        />
       </MenuTrigger>
       <MenuPopup align="start" {...composerFloatingLayerProps}>
         {props.traitsMenuContent ? (
@@ -62,6 +73,9 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
         {props.showInteractionModeToggle ? (
           <>
             <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
+            <div className="px-2 pb-1 text-xs text-muted-foreground/70">
+              {interactionModeDescription}
+            </div>
             <MenuRadioGroup
               value={props.interactionMode}
               onValueChange={(value) => {
@@ -69,8 +83,14 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
                 props.onToggleInteractionMode();
               }}
             >
-              <MenuRadioItem value="default">Chat</MenuRadioItem>
-              <MenuRadioItem value="plan">Plan</MenuRadioItem>
+              <MenuRadioItem value="default">
+                <BuildModeIcon className="size-3.5 fill-current" />
+                Build
+              </MenuRadioItem>
+              <MenuRadioItem value="plan">
+                <PlanModeIcon className="size-3.5 fill-current" />
+                Plan
+              </MenuRadioItem>
             </MenuRadioGroup>
             <MenuDivider />
           </>

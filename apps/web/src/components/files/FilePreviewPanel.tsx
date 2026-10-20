@@ -3,6 +3,7 @@ import {
   AuthPreviewOperateScope,
   type EditorId,
   type EnvironmentId,
+  type ProjectFileVersion,
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -113,6 +114,7 @@ import {
 } from "./filePreviewMode";
 import { useFileSaveCoordinator } from "./useFileSaveCoordinator";
 import {
+  clearProjectFileQueryData,
   getOptimisticProjectFileQueryData,
   getProjectFileContents,
   setProjectFileQueryData,
@@ -636,11 +638,14 @@ interface EditableFileSurfaceProps {
   relativePath: string;
   composerDraftTarget: ScopedThreadRef | DraftId;
   contents: string;
+  // Fork: absent when the environment server predates versioned project files.
+  version: ProjectFileVersion | undefined;
   resolvedTheme: "light" | "dark";
   revealRequestId: number;
   wordWrap: boolean;
   onPostRender: FilePostRender;
   onPendingChange: (relativePath: string, pending: boolean) => void;
+  onReloadFromDisk: () => void;
 }
 
 interface FileSelectionOverride {
@@ -654,11 +659,13 @@ function EditableFileSurface({
   relativePath,
   composerDraftTarget,
   contents,
+  version,
   resolvedTheme,
   revealRequestId,
   wordWrap,
   onPostRender,
   onPendingChange,
+  onReloadFromDisk,
 }: EditableFileSurfaceProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
@@ -671,10 +678,11 @@ function EditableFileSurface({
   };
   const surfaceRef = useRef<HTMLDivElement>(null);
   const selectionFrameRef = useRef<number | null>(null);
-  const saveCoordinator = useFileSaveCoordinator({
+  const saveState = useFileSaveCoordinator({
     environmentId,
     cwd,
     relativePath,
+    version,
     onPendingChange,
   });
   // The editor owns the draft, so its own edits echoing back through the file
@@ -705,8 +713,8 @@ function EditableFileSurface({
   }: EditorChangeEvent<"file", FileCommentAnnotationGroup, undefined>) => {
     if (file.contents === getProjectFileContents(environmentId, cwd, relativePath)) return;
     setEditedContents(file.contents);
-    setProjectFileQueryData(environmentId, cwd, relativePath, file.contents);
-    saveCoordinator.change(file.contents);
+    setProjectFileQueryData(environmentId, cwd, relativePath, file.contents, version);
+    saveState.change(file.contents);
     if (!nextLineAnnotations) return;
     const remapped = remapFileCommentAnnotations(nextLineAnnotations);
     // The editor hands back the array it was given until an edit moves an annotation.
@@ -769,6 +777,29 @@ function EditableFileSurface({
           ),
         },
       })),
+    );
+  };
+
+  // Fork: "Add to chat" attaches the selected lines to the composer as an
+  // uncommented file excerpt, reusing the review-comment context chip.
+  const addSelectionToChat = (entryId: string, startLine: number, endLine: number) => {
+    setSelectedRange(null);
+    addReviewComment(
+      composerDraftTarget,
+      buildFileReviewComment({
+        id: entryId,
+        filePath: relativePath,
+        startLine,
+        endLine,
+        text: "",
+        contents,
+      }),
+    );
+    setLineAnnotations((current) =>
+      current.flatMap((annotation) => {
+        const entries = annotation.metadata.entries.filter((entry) => entry.id !== entryId);
+        return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
+      }),
     );
   };
 
@@ -848,56 +879,100 @@ function EditableFileSurface({
   };
 
   return (
-    <EditProvider createEditor={createFileEditor}>
-      <div ref={surfaceRef} className="flex min-h-0 flex-1">
-        <Virtualizer
-          className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
-          config={{
-            overscrollSize: 600,
-            intersectionObserverMargin: 1200,
+    <div className="flex min-h-0 flex-1 flex-col">
+      {saveState.conflict ? (
+        <FileVersionConflictBanner
+          onReloadFromDisk={() => {
+            saveState.reloadFromDisk();
+            onReloadFromDisk();
           }}
-        >
-          <File<FileCommentAnnotationGroup>
-            file={externalFile}
-            edit={editable}
-            editorOptions={editorOptions}
-            onEditChange={handleEditChange}
-            options={{
-              disableFileHeader: true,
-              enableGutterUtility: !hasOpenCommentForm,
-              enableLineSelection: !hasOpenCommentForm,
-              onGutterUtilityClick: setSelectedRange,
-              onLineSelectionChange: setSelectedRange,
-              onLineSelectionEnd: handleLineSelectionEnd,
-              overflow: wordWrap ? "wrap" : "scroll",
-              theme: resolveDiffThemeName(resolvedTheme),
-              preferredHighlighter: PREFERRED_HIGHLIGHTER,
-              themeType: resolvedTheme,
-              unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
-              onPostRender: handlePostRender,
+          onOverwrite={saveState.overwrite}
+        />
+      ) : null}
+      <EditProvider createEditor={createFileEditor}>
+        <div ref={surfaceRef} className="flex min-h-0 flex-1">
+          <Virtualizer
+            className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
+            config={{
+              overscrollSize: 600,
+              intersectionObserverMargin: 1200,
             }}
-            selectedLines={selectedRange}
-            lineAnnotations={lineAnnotations}
-            renderAnnotation={(annotation) => (
-              <div className="py-1">
-                {annotation.metadata.entries.map((entry) => (
-                  <DiffCommentAnnotation
-                    key={entry.id}
-                    kind={entry.kind}
-                    rangeLabel={formatFileCommentRange(entry.startLine, entry.endLine)}
-                    text={entry.text}
-                    onCancel={() => removeAnnotationEntry(entry.id)}
-                    onComment={(text) => submitAnnotationEntry(entry.id, text)}
-                    onDelete={() => removeAnnotationEntry(entry.id)}
-                  />
-                ))}
-              </div>
-            )}
-            className="min-h-full"
-          />
-        </Virtualizer>
-      </div>
-    </EditProvider>
+          >
+            <File<FileCommentAnnotationGroup>
+              file={externalFile}
+              edit={editable}
+              editorOptions={editorOptions}
+              onEditChange={handleEditChange}
+              options={{
+                disableFileHeader: true,
+                enableGutterUtility: !hasOpenCommentForm,
+                enableLineSelection: !hasOpenCommentForm,
+                onGutterUtilityClick: setSelectedRange,
+                onLineSelectionChange: setSelectedRange,
+                onLineSelectionEnd: handleLineSelectionEnd,
+                overflow: wordWrap ? "wrap" : "scroll",
+                theme: resolveDiffThemeName(resolvedTheme),
+                preferredHighlighter: PREFERRED_HIGHLIGHTER,
+                themeType: resolvedTheme,
+                unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
+                onPostRender: handlePostRender,
+              }}
+              selectedLines={selectedRange}
+              lineAnnotations={lineAnnotations}
+              renderAnnotation={(annotation) => (
+                <div className="py-1">
+                  {annotation.metadata.entries.map((entry) => (
+                    <DiffCommentAnnotation
+                      key={entry.id}
+                      kind={entry.kind}
+                      rangeLabel={formatFileCommentRange(entry.startLine, entry.endLine)}
+                      text={entry.text}
+                      onCancel={() => removeAnnotationEntry(entry.id)}
+                      onComment={(text) => submitAnnotationEntry(entry.id, text)}
+                      onDelete={() => removeAnnotationEntry(entry.id)}
+                      onAddToChat={
+                        entry.kind === "draft"
+                          ? () => addSelectionToChat(entry.id, entry.startLine, entry.endLine)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+              className="min-h-full"
+            />
+          </Virtualizer>
+        </div>
+      </EditProvider>
+    </div>
+  );
+}
+
+// Fork: versioned writes surface an on-disk change instead of clobbering it.
+function FileVersionConflictBanner(props: {
+  readonly onReloadFromDisk: () => void;
+  readonly onOverwrite: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-warning/25 bg-warning-surface px-3 py-2 text-xs text-warning-foreground">
+      <span className="min-w-0 flex-1">
+        This file changed on disk. Your local draft is preserved and autosave is paused.
+      </span>
+      <button
+        type="button"
+        className="rounded-md px-2 py-1 font-medium hover:bg-warning/15"
+        onClick={props.onReloadFromDisk}
+      >
+        Reload
+      </button>
+      <button
+        type="button"
+        className="rounded-md bg-warning/15 px-2 py-1 font-medium hover:bg-warning/25"
+        onClick={props.onOverwrite}
+      >
+        Overwrite
+      </button>
+    </div>
   );
 }
 
@@ -906,10 +981,12 @@ function RenderedMarkdownSurface({
   cwd,
   relativePath,
   contents,
+  version,
   threadRef,
   workspaceMutationId,
   readOnly,
   onPendingChange,
+  onReloadFromDisk,
 }: Omit<
   EditableFileSurfaceProps,
   | "resolvedTheme"
@@ -923,36 +1000,52 @@ function RenderedMarkdownSurface({
   readOnly: boolean;
   workspaceMutationId: string | null;
 }) {
-  const saveCoordinator = useFileSaveCoordinator({
+  const saveState = useFileSaveCoordinator({
     environmentId,
     cwd,
     relativePath,
+    version,
     onPendingChange,
   });
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <FileMarkdownPreview
-        text={contents}
-        cwd={cwd}
-        relativePath={relativePath}
-        threadRef={threadRef}
-        workspaceMutationId={workspaceMutationId}
-        onTaskListChange={
-          readOnly
-            ? undefined
-            : ({ markerOffset, checked }) => {
-                const currentContents =
-                  getOptimisticProjectFileQueryData(environmentId, cwd, relativePath)?.contents ??
-                  contents;
-                const nextContents = setMarkdownTaskChecked(currentContents, markerOffset, checked);
-                if (nextContents === currentContents) return;
-                setProjectFileQueryData(environmentId, cwd, relativePath, nextContents);
-                saveCoordinator.change(nextContents);
-              }
-        }
-      />
-    </ScrollArea>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {saveState.conflict ? (
+        <FileVersionConflictBanner
+          onReloadFromDisk={() => {
+            saveState.reloadFromDisk();
+            onReloadFromDisk();
+          }}
+          onOverwrite={saveState.overwrite}
+        />
+      ) : null}
+      <ScrollArea className="min-h-0 flex-1">
+        <FileMarkdownPreview
+          text={contents}
+          cwd={cwd}
+          relativePath={relativePath}
+          threadRef={threadRef}
+          workspaceMutationId={workspaceMutationId}
+          onTaskListChange={
+            readOnly
+              ? undefined
+              : ({ markerOffset, checked }) => {
+                  const currentContents =
+                    getOptimisticProjectFileQueryData(environmentId, cwd, relativePath)?.contents ??
+                    contents;
+                  const nextContents = setMarkdownTaskChecked(
+                    currentContents,
+                    markerOffset,
+                    checked,
+                  );
+                  if (nextContents === currentContents) return;
+                  setProjectFileQueryData(environmentId, cwd, relativePath, nextContents, version);
+                  saveState.change(nextContents);
+                }
+          }
+        />
+      </ScrollArea>
+    </div>
   );
 }
 
@@ -1134,6 +1227,15 @@ export default function FilePreviewPanel({
         ? resolvePathLinkTarget(relativePath, cwd)
         : null;
   const onFilePostRender = useFileLineReveal(relativePath, revealLine, revealRequestId);
+  // Fork: a version conflict's "Reload" drops the optimistic draft, re-reads the
+  // file, and remounts the editor so it starts from the on-disk contents.
+  const [reloadEpoch, setReloadEpoch] = useState(0);
+  const reloadFromDisk = () => {
+    if (relativePath === null) return;
+    clearProjectFileQueryData(environmentId, cwd, relativePath);
+    file.refresh();
+    setReloadEpoch((current) => current + 1);
+  };
   useWorkspaceMutationRefresh({
     enabled:
       attachment === undefined &&
@@ -1401,15 +1503,17 @@ export default function FilePreviewPanel({
           ) : relativePath && file.data ? (
             isMarkdown && renderMarkdown ? (
               <RenderedMarkdownSurface
-                key={relativePath}
+                key={`${relativePath}:${reloadEpoch}`}
                 environmentId={environmentId}
                 cwd={cwd}
                 relativePath={relativePath}
                 threadRef={threadRef}
                 contents={file.data.contents}
+                version={file.data.version}
                 workspaceMutationId={workspaceMutationId}
                 readOnly={isHostFile || !canWriteFiles}
                 onPendingChange={onPendingChange}
+                onReloadFromDisk={reloadFromDisk}
               />
             ) : tableDelimiter && renderTable ? (
               <DelimitedTablePreview
@@ -1428,17 +1532,19 @@ export default function FilePreviewPanel({
             ) : (
               <DiffWorkerPoolProvider>
                 <EditableFileSurface
-                  key={`${relativePath}:${resolvedTheme}`}
+                  key={`${relativePath}:${resolvedTheme}:${reloadEpoch}`}
                   environmentId={environmentId}
                   cwd={cwd}
                   relativePath={relativePath}
                   composerDraftTarget={composerDraftTarget}
                   contents={file.data.contents}
+                  version={file.data.version}
                   resolvedTheme={resolvedTheme}
                   revealRequestId={revealRequestId}
                   wordWrap={wordWrap}
                   onPostRender={onFilePostRender}
                   onPendingChange={onPendingChange}
+                  onReloadFromDisk={reloadFromDisk}
                 />
               </DiffWorkerPoolProvider>
             )
@@ -1458,6 +1564,7 @@ export default function FilePreviewPanel({
               environmentId={environmentId}
               cwd={hostFolderPath ?? cwd}
               projectName={hostFolderPath ?? projectName}
+              threadRef={threadRef}
               hostFolder={hostFolderPath !== null}
               selectedPath={
                 hostFolderPath === null

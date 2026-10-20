@@ -81,6 +81,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const triggerLabel = selectedModel
     ? `${getTriggerDisplayModelLabel(selectedModel)}${selectedModel.isUnavailable ? " (Unavailable)" : ""}`
     : triggerTitle;
+  const triggerSubtitle = selectedModel?.subProvider;
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
@@ -198,7 +199,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             size={size}
             data-chat-provider-model-picker="true"
             className={cn(
-              "min-w-0 shrink justify-between whitespace-nowrap",
+              "min-w-0 shrink justify-between whitespace-nowrap rounded-full before:rounded-[inherit]",
               props.compact
                 ? "max-w-42 shrink-0"
                 : !props.isComposerOwned && "max-w-48 sm:max-w-56",
@@ -233,7 +234,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 </span>
               ) : null}
             </span>
-          ) : activeEntry && props.triggerLabel === undefined ? (
+          ) : activeEntry && showInstanceBadge && props.triggerLabel === undefined ? (
             <ProviderInstanceIcon
               driverKind={activeEntry.driverKind}
               displayName={activeEntry.displayName}
@@ -259,7 +260,19 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 />
               }
             >
-              {props.triggerLabel ?? multipleLabel ?? triggerTitle}
+              {props.triggerLabel ??
+                multipleLabel ??
+                (triggerSubtitle ? (
+                  <>
+                    {triggerSubtitle}
+                    <span aria-hidden="true" className="mx-1 opacity-60">
+                      ·
+                    </span>
+                    {triggerTitle}
+                  </>
+                ) : (
+                  triggerTitle
+                ))}
             </TooltipTrigger>
             <TooltipPopup side="top">{triggerTooltipContent}</TooltipPopup>
           </Tooltip>

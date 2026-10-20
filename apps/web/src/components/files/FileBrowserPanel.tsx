@@ -3,9 +3,9 @@ import type {
   ContextMenuItem as TreeContextMenuItem,
   ContextMenuOpenContext as TreeContextMenuOpenContext,
 } from "@pierre/trees";
-import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectEntry, ScopedThreadRef } from "@t3tools/contracts";
 import { FileTree, useFileTree, useFileTreeSearch, useFileTreeSelector } from "@pierre/trees/react";
-import { settlePromise } from "@t3tools/client-runtime/state/runtime";
+import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
@@ -26,6 +26,9 @@ import { useFileContextMenu, type FileContextMenuAction } from "~/fileContextMen
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
 import { PIERRE_TREE_UNSAFE_CSS, pierreTreeStyle } from "~/pierre-tree-theme";
+import { useAtomCommand } from "~/state/use-atom-command";
+import { projectEnvironment } from "~/state/projects";
+import { useRightPanelStore } from "~/rightPanelStore";
 
 import { joinHostPath } from "./filePath";
 import { createFileTreeDragMentionController } from "./fileTreeDragMention";
@@ -39,6 +42,8 @@ interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
+  /** Fork: the thread whose open file surfaces follow a rename or delete. */
+  threadRef?: ScopedThreadRef;
   selectedPath: string | null;
   selectedPathRevealId: number;
   onOpenFile: (relativePath: string) => void;
@@ -142,6 +147,7 @@ export default function FileBrowserPanel({
   environmentId,
   cwd,
   projectName,
+  threadRef,
   selectedPath,
   selectedPathRevealId,
   onOpenFile,
@@ -172,6 +178,11 @@ export default function FileBrowserPanel({
   const { entries, entryKinds, treePaths, directoryPaths, expandableDirectoryPaths } =
     buildTreeEntries(directoryEntries, pathSearch.entries, pathSearch.isPending, query);
   const entryKindsRef = useRef(entryKinds);
+  // Fork: workspace entry create/rename/delete from the tree's context menu.
+  const writeFile = useAtomCommand(projectEnvironment.writeFile);
+  const createDirectory = useAtomCommand(projectEnvironment.createDirectory);
+  const renameEntry = useAtomCommand(projectEnvironment.renameEntry);
+  const deleteEntry = useAtomCommand(projectEnvironment.deleteEntry);
   const previousTreePathsRef = useRef<readonly string[] | null>(null);
   const syncingSelectionRef = useRef(false);
   const treeSelectionPathRef = useRef<string | null>(null);
@@ -197,6 +208,8 @@ export default function FileBrowserPanel({
         return;
       }
       const relativePath = item.path.replace(/\/$/, "");
+      const kind =
+        entryKindsRef.current.get(relativePath) ?? (item.path.endsWith("/") ? "directory" : "file");
       const mention = serializeComposerFileLink(panelPath(relativePath));
       const pointer = contextMenuPointerRef.current;
       const pointerIsFresh = pointer !== null && performance.now() - pointer.at < 1000;
@@ -209,6 +222,15 @@ export default function FileBrowserPanel({
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
           [
+            // Fork: entry management stays inside the workspace; host folders are browse-only.
+            ...(hostFolder
+              ? []
+              : [
+                  { id: "new-file", label: "New file" },
+                  { id: "new-folder", label: "New folder" },
+                  { id: "rename", label: "Rename" },
+                  { id: "delete", label: "Delete", destructive: true },
+                ]),
             ...fileMenuItems,
             { id: "copy-mention", label: "Copy mention" },
             { id: "add-to-chat", label: "Add to chat" },
@@ -216,6 +238,98 @@ export default function FileBrowserPanel({
           position,
         );
         if (clicked === null) return;
+        const parentPath =
+          kind === "directory"
+            ? relativePath
+            : relativePath.includes("/")
+              ? relativePath.slice(0, relativePath.lastIndexOf("/"))
+              : "";
+        if (clicked === "new-file" || clicked === "new-folder") {
+          const label = clicked === "new-file" ? "file" : "folder";
+          const name = window.prompt(`Name the new ${label}`);
+          if (!name?.trim()) return;
+          const targetPath = [parentPath, name.trim()].filter(Boolean).join("/");
+          const result =
+            clicked === "new-file"
+              ? await writeFile({
+                  environmentId,
+                  input: { cwd, relativePath: targetPath, contents: "", expectedVersion: null },
+                })
+              : await createDirectory({
+                  environmentId,
+                  input: { cwd, relativePath: targetPath },
+                });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: `Failed to create ${label}`,
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          refresh();
+          if (clicked === "new-file") onOpenFile(targetPath);
+          return;
+        }
+        if (clicked === "rename") {
+          const name = window.prompt(
+            `Rename ${kind}`,
+            relativePath.slice(relativePath.lastIndexOf("/") + 1),
+          );
+          if (!name?.trim()) return;
+          const sourceParent = relativePath.includes("/")
+            ? relativePath.slice(0, relativePath.lastIndexOf("/"))
+            : "";
+          const targetPath = [sourceParent, name.trim()].filter(Boolean).join("/");
+          if (targetPath === relativePath) return;
+          const result = await renameEntry({
+            environmentId,
+            input: { cwd, fromRelativePath: relativePath, toRelativePath: targetPath },
+          });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: "Failed to rename entry",
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          if (threadRef) {
+            useRightPanelStore
+              .getState()
+              .renameFileSurfaces(threadRef, relativePath, targetPath, result.value.kind);
+          }
+          refresh();
+          return;
+        }
+        if (clicked === "delete") {
+          const confirmed = await api.dialogs.confirm(
+            `Delete ${kind} “${relativePath}”?${kind === "directory" ? " Its contents will also be deleted." : ""}`,
+          );
+          if (!confirmed) return;
+          const result = await deleteEntry({
+            environmentId,
+            input: { cwd, relativePath, recursive: kind === "directory" },
+          });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: "Failed to delete entry",
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          if (threadRef) {
+            useRightPanelStore
+              .getState()
+              .removeFileSurfaces(threadRef, relativePath, result.value.kind);
+          }
+          refresh();
+          return;
+        }
         // "Open with" submenu selections report the child id ("editor:<id>"),
         // which is not present in the top-level item list.
         const isFileMenuAction =

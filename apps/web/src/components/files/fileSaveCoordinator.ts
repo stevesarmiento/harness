@@ -6,7 +6,10 @@ export interface FileSaveCoordinatorOptions<A, E> {
   readonly persist: (contents: string) => Promise<AtomCommandResult<A, E>>;
   readonly onPendingChange: (pending: boolean) => void;
   /** Return false when another editor has newer unsaved contents. */
-  readonly onConfirmed: (contents: string) => boolean | void;
+  readonly onConfirmed: (contents: string, value: A) => boolean | void;
+  readonly onFailed?: (result: Extract<AtomCommandResult<A, E>, { readonly _tag: "Failure" }>) => {
+    readonly pause: boolean;
+  };
 }
 
 export class FileSaveCoordinator<A = unknown, E = unknown> {
@@ -17,6 +20,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   private lastChangeAt = 0;
   private saving = false;
   private disposed = false;
+  private paused = false;
 
   constructor(private readonly options: FileSaveCoordinatorOptions<A, E>) {}
 
@@ -26,7 +30,21 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
     this.latestRevision += 1;
     this.lastChangeAt = Date.now();
     this.options.onPendingChange(true);
-    this.schedule(this.options.debounceMs);
+    if (!this.paused) this.schedule(this.options.debounceMs);
+  }
+
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.latestRevision > 0) this.schedule(0);
+  }
+
+  reset(): void {
+    this.clearTimer();
+    this.latestRevision = 0;
+    this.confirmedRevision = 0;
+    this.paused = false;
+    this.options.onPendingChange(false);
   }
 
   dispose(): void {
@@ -59,15 +77,18 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
     const contents = this.latestContents;
     const revision = this.latestRevision;
     const result = await this.options.persist(contents);
-    const succeeded = result._tag === "Success";
     let confirmed = false;
-    if (succeeded) {
+    if (result._tag === "Success") {
       this.confirmedRevision = revision;
-      confirmed = this.options.onConfirmed(contents) !== false;
+      // Fork: surface the persist result value (e.g. the new file version).
+      confirmed = this.options.onConfirmed(contents, result.value) !== false;
+    } else if (result._tag === "Failure") {
+      // Fork: let the owner pause autosave after a failed persist.
+      this.paused = this.options.onFailed?.(result).pause ?? false;
     }
 
     this.saving = false;
-    if (revision === this.latestRevision) {
+    if (revision === this.latestRevision || this.paused) {
       if (confirmed) this.options.onPendingChange(false);
       return;
     }

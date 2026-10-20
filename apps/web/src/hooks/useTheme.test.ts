@@ -51,7 +51,7 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "read",
-        storageKey: "t3code:theme",
+        storageKey: "forma:theme",
         cause: readCause,
       });
     }
@@ -63,23 +63,11 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "write",
-        storageKey: "t3code:theme",
+        storageKey: "forma:theme",
         theme: "dark",
         cause: writeCause,
       });
     }
-  });
-
-  it("reads the persisted T3 Chat theme preference", async () => {
-    vi.stubGlobal("window", {
-      localStorage: createStorage({
-        getItem: () => "t3-chat",
-      }),
-    });
-
-    const { readThemePreference } = await import("./useTheme");
-
-    expect(readThemePreference()).toBe("t3-chat");
   });
 
   it("falls back during initial theme application and logs only safe attributes", async () => {
@@ -96,16 +84,18 @@ describe("theme failure handling", () => {
     vi.stubGlobal("document", {
       documentElement: {
         classList: { toggle: vi.fn() },
+        dataset: {},
+        style: { setProperty: vi.fn(), backgroundColor: "" },
       },
     });
 
     await expect(import("./useTheme")).resolves.toBeDefined();
 
     expect(errorLog).toHaveBeenCalledWith(
-      "Failed to read theme preference for t3code:theme.",
+      "Failed to read theme preference for forma:theme.",
       expect.objectContaining({
         operation: "read",
-        storageKey: "t3code:theme",
+        storageKey: "forma:theme",
         errorTag: "ThemeStorageError",
       }),
     );
@@ -116,10 +106,9 @@ describe("theme failure handling", () => {
 
   it("retries a failed storage read only after a relevant storage event", async () => {
     const cause = new Error("persistent storage failure");
-    const themeGetItem = vi.fn((): string | null => {
+    const getItem = vi.fn(() => {
       throw cause;
     });
-    const getItem = vi.fn((key: string) => (key === "t3code:theme" ? themeGetItem() : null));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     let readSnapshot: (() => unknown) | undefined;
     let subscribeToTheme: ((listener: () => void) => () => void) | undefined;
@@ -154,14 +143,14 @@ describe("theme failure handling", () => {
     readSnapshot?.();
     readSnapshot?.();
 
-    expect(themeGetItem).toHaveBeenCalledTimes(1);
+    expect(getItem).toHaveBeenCalledTimes(1);
     expect(errorLog).toHaveBeenCalledTimes(1);
 
     const unsubscribe = subscribeToTheme?.(() => undefined);
-    storageHandler?.({ key: "t3code:theme" } as StorageEvent);
+    storageHandler?.({ key: "forma:theme" } as StorageEvent);
     readSnapshot?.();
 
-    expect(themeGetItem).toHaveBeenCalledTimes(2);
+    expect(getItem).toHaveBeenCalledTimes(2);
     expect(errorLog).toHaveBeenCalledTimes(2);
     unsubscribe?.();
   });

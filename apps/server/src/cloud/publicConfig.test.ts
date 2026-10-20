@@ -152,10 +152,14 @@ it("resolves relay client tracing from runtime config with build-time fallback",
     tracesToken: "embedded-token",
   };
 
-  assert.deepEqual(resolveRelayClientTracingConfig({}, fallback), fallback);
+  // Fork: Forma relay tracing is opt-in.
+  const optIn = { T3CODE_TELEMETRY_ENABLED: "true" };
+  assert.equal(resolveRelayClientTracingConfig({}, fallback), null);
+  assert.deepEqual(resolveRelayClientTracingConfig(optIn, fallback), fallback);
   assert.deepEqual(
     resolveRelayClientTracingConfig(
       {
+        ...optIn,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
@@ -171,6 +175,7 @@ it("resolves relay client tracing from runtime config with build-time fallback",
   assert.equal(
     resolveRelayClientTracingConfig(
       {
+        ...optIn,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "http://insecure.example.test/v1/traces",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",

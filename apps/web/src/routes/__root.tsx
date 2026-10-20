@@ -15,6 +15,7 @@ import { Check, Copy } from "lucide";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL, APP_VERSION } from "../branding";
+import { applyAppIconPreferenceToDocument } from "../appIcon";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
@@ -41,10 +42,7 @@ import { HostFreezeToastCoordinator } from "../components/HostFreezeToastCoordin
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ProviderAuthCallbackCoordinator } from "../components/settings/ProviderAuthCallbackCoordinator";
-import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
-import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
-import { useEnvironmentThemeSync } from "../hooks/useEnvironmentTheme";
 import { Button } from "../components/ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { StandalonePage, StandalonePageHeader } from "../components/ui/standalone-page";
@@ -58,7 +56,7 @@ import { isElectron } from "../env";
 import { cn } from "../lib/utils";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
 import { applyAppearanceContrast } from "~/appearanceContrast";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdatePrimarySettings } from "../hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -183,8 +181,8 @@ function RootRouteView() {
           <DocumentTitleSync />
           <BrowserChromeThemeSync key={pathname} />
           <ContrastAppearanceSync />
-          <EnvironmentThemeSync />
           <GlassAppearanceSync />
+          <AppIconSync />
           <FontAppearanceSync />
           <ProviderAuthCallbackCoordinator />
           <CustomSnoozeDialogHost />
@@ -222,9 +220,10 @@ function RootRouteView() {
         <DocumentTitleSync />
         <BrowserChromeThemeSync key={pathname} />
         <ContrastAppearanceSync />
-        <EnvironmentThemeSync />
         <GlassAppearanceSync />
+        <AppIconSync />
         <FontAppearanceSync />
+        <LegacyInterfaceAppearanceMigration />
         <ProviderAuthCallbackCoordinator />
         <ChatGptWelcomeCoordinator />
         <FirstRunGate
@@ -257,21 +256,10 @@ function RootRouteView() {
           {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
           {isElectron ? <DesktopUpdateLaunchNotice /> : null}
           {appShell}
-          {/* Above the router: a theme draft is judged by walking the app, so the
-              editor has to survive navigation away from settings. */}
-          <ThemeEditorHost />
         </FirstRunGate>
       </AnchoredToastProvider>
     </ToastProvider>
   );
-}
-
-function EnvironmentThemeSync() {
-  useEnvironmentThemeSync();
-  // Ordered after the palette sync so a first-run client adopting the
-  // environment's own theme finds it already in the library.
-  useDefaultThemeAdoption();
-  return null;
 }
 
 function ContrastAppearanceSync() {
@@ -306,6 +294,61 @@ function GlassAppearanceSync() {
       style.removeProperty("--glass-blur");
     }
   }, [glassOpacity]);
+
+  return null;
+}
+
+function AppIconSync() {
+  const appIcon = useClientSettings((settings) => settings.appIcon);
+
+  useEffect(() => {
+    applyAppIconPreferenceToDocument({ appIcon });
+  }, [appIcon]);
+
+  return null;
+}
+
+/**
+ * Fork: one-time migration of the pre-unification Forma font prefs
+ * (localStorage `forma:interface-appearance`) into the settings-backed font
+ * engine. Only runs while the settings are still at their defaults so a value
+ * already chosen on another device is never clobbered.
+ */
+function LegacyInterfaceAppearanceMigration() {
+  const fontSizeInterface = useClientSettings((settings) => settings.fontSizeInterface);
+  const fontSizeCode = useClientSettings((settings) => settings.fontSizeCode);
+  const updateSettings = useUpdatePrimarySettings();
+
+  const migrate = useEffectEvent(() => {
+    try {
+      if (localStorage.getItem("forma:interface-appearance:migrated") === "1") return;
+      const raw = localStorage.getItem("forma:interface-appearance");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { uiFontScale?: number; codeFontScale?: number };
+      const clamp = (value: number) => Math.min(20, Math.max(12, Math.round(value)));
+      const patch: Record<string, number> = {};
+      if (
+        typeof parsed.uiFontScale === "number" &&
+        fontSizeInterface === 16 &&
+        clamp(parsed.uiFontScale) !== 16
+      ) {
+        patch.fontSizeInterface = clamp(parsed.uiFontScale);
+      }
+      if (
+        typeof parsed.codeFontScale === "number" &&
+        fontSizeCode === 13 &&
+        clamp(parsed.codeFontScale) !== 13
+      ) {
+        patch.fontSizeCode = clamp(parsed.codeFontScale);
+      }
+      if (Object.keys(patch).length > 0) updateSettings(patch);
+      localStorage.setItem("forma:interface-appearance:migrated", "1");
+    } catch {
+      // Never block boot on migration issues.
+    }
+  });
+  // One-shot on mount by design.
+  useEffect(() => migrate(), []);
 
   return null;
 }

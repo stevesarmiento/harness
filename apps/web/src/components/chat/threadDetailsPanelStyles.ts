@@ -15,7 +15,8 @@ export const THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS = "gap-2.5 px-2.5 text-left"
 export const THREAD_DETAILS_PANEL_LABEL_CLASS =
   "[text-box:trim-both_cap_alphabetic] overflow-x-clip overflow-y-visible";
 
-const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-[13px] font-medium text-foreground/80`;
+// Fork: Forma's scalable UI type token instead of a fixed 13px.
+const THREAD_DETAILS_PANEL_CONTROL_CLASS = `h-8 min-w-0 rounded-lg border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-foreground/80`;
 
 export const THREAD_DETAILS_PANEL_ROW_CLASS = `${THREAD_DETAILS_PANEL_CONTROL_CLASS} w-full justify-start ${THREAD_DETAILS_PANEL_ROW_SURFACE_CLASS}`;
 
@@ -26,7 +27,8 @@ export const THREAD_DETAILS_PANEL_SELECT_LABEL_CLASS = `flex h-full min-w-0 flex
 
 export const THREAD_DETAILS_PANEL_SELECT_ICON_CLASS = `rounded-e-lg ${THREAD_DETAILS_PANEL_HALF_HOVER_SURFACE_CLASS}`;
 
-export const THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS = `h-8 w-full min-w-0 justify-start rounded-lg border border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-[13px] font-medium text-foreground/80 sm:h-8 sm:text-[13px]`;
+// Fork: Forma UI type token (its unlayered rule also beats the button's sm: size).
+export const THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS = `h-8 w-full min-w-0 justify-start rounded-lg border border-transparent ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-foreground/80 sm:h-8`;
 
 export const THREAD_DETAILS_PANEL_ICON_CLASS = "size-4 shrink-0 text-muted-foreground";
 

@@ -1,5 +1,8 @@
 packages:
   - apps/*
+  # The fork connects to the released upstream mobile app; keep mobile source
+  # as protocol ground truth without installing its Expo dependency graph.
+  - "!apps/mobile"
   - infra/*
   - oxlint-plugin-t3code
   - packages/*
@@ -321,6 +324,10 @@ packageExtensions:
   "@effect/vitest@*":
     dependencies:
       vite-plus: "catalog:"
+
+# Fork: apps/mobile is excluded above, so its React Native patches have no
+# installed target. Keep upstream's patch list verbatim and tolerate those.
+allowUnusedPatches: true
 
 patchedDependencies:
   react-native-image-viewing@0.2.2: patches/react-native-image-viewing@0.2.2.patch

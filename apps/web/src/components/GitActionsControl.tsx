@@ -3,6 +3,8 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
+  type GitKeybindingCommand,
+  type ResolvedKeybindingsConfig,
   SourceControlProviderKind,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -21,7 +23,15 @@ import type {
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { type MouseEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type Ref,
+  useEffect,
+  useEffectEvent,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   CheckIcon,
@@ -80,6 +90,7 @@ import {
   MenuItem,
   MenuItemLabel,
   MenuPopup,
+  MenuShortcut,
   MenuSub,
   MenuSubTrigger,
   MenuSubPopup,
@@ -120,6 +131,9 @@ import { getSourceControlPresentation, sourceControlIcon } from "~/sourceControl
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useOpenLink } from "~/browser/useOpenLink";
+// Fork: git keybindings route through the control's imperative handle.
+import { isGitActionKeybindingCommand } from "~/gitActionCommands";
+import { shortcutLabelForCommand } from "~/keybindings";
 
 interface GitActionsControlProps {
   presentation?: "toolbar" | "menu";
@@ -130,6 +144,18 @@ interface GitActionsControlProps {
   displayMode?: "toolbar" | "panel";
   compact?: boolean;
   onOpenChanges?: () => void;
+  // Fork: Forma's compact header actions menu hosts the git items inline ("menu-items"),
+  // shows their shortcuts, and drives git keybindings through the imperative handle.
+  renderMode?: "split-button" | "menu-items";
+  keybindings?: ResolvedKeybindingsConfig;
+  ref?: Ref<GitActionsControlHandle> | undefined;
+}
+
+// Fork: imperative surface for the host (chat view keybindings, header menu open).
+export interface GitActionsControlHandle {
+  readonly runKeybindingCommand: (command: GitKeybindingCommand) => boolean;
+  /** Request a fresh working-tree status (e.g. when a host menu opens). */
+  readonly refreshStatus: () => void;
 }
 
 interface PendingDefaultBranchAction {
@@ -962,6 +988,9 @@ export default function GitActionsControl({
   displayMode = "toolbar",
   compact = false,
   onOpenChanges,
+  renderMode = "split-button",
+  keybindings,
+  ref,
 }: GitActionsControlProps) {
   const isPanel = displayMode === "panel";
   const ActionGroup = isPanel ? "div" : Group;
@@ -1539,6 +1568,40 @@ export default function GitActionsControl({
       );
     })();
   };
+
+  // Fork: git keybindings (commit/push/PR/publish/init) run through the same paths as the menu.
+  const runKeybindingCommand = (command: GitKeybindingCommand): boolean => {
+    if (!gitCwd || !canWriteSourceControl || !isGitActionKeybindingCommand(command)) return false;
+    if (command === "git.init") {
+      if (isRepo || initAction.isPending) return false;
+      initializeGit();
+      return true;
+    }
+    if (!isRepo) return false;
+    if (command === "git.publish") {
+      if (!canPublishRepository || isGitActionRunning) return false;
+      setIsPublishDialogOpen(true);
+      return true;
+    }
+    const targetId = command === "git.commit" ? "commit" : command === "git.push" ? "push" : "pr";
+    const targetMenuItem = gitActionMenuItems.find((item) => item.id === targetId);
+    if (!targetMenuItem || targetMenuItem.disabled) return false;
+    openDialogForMenuItem(targetMenuItem);
+    return true;
+  };
+
+  useImperativeHandle(ref, () => ({
+    runKeybindingCommand,
+    refreshStatus: () => {
+      requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+    },
+  }));
+
+  const shortcutLabel = (command: GitKeybindingCommand) => {
+    const label = keybindings ? shortcutLabelForCommand(keybindings, command) : null;
+    return label ? <MenuShortcut>{label}</MenuShortcut> : null;
+  };
+
   const gitItems = (
     <>
       {gitActionMenuItems.map((item) => {
@@ -1548,6 +1611,10 @@ export default function GitActionsControl({
           isBusy: isGitActionRunning,
           hasPrimaryRemote,
         });
+        // Fork: shortcut hints on the git items.
+        const itemShortcut = shortcutLabel(
+          item.id === "commit" ? "git.commit" : item.id === "push" ? "git.push" : "git.pr",
+        );
         if (item.disabled && disabledReason && presentation === "menu") {
           return (
             <div key={`${item.id}-${item.label}`}>
@@ -1574,6 +1641,7 @@ export default function GitActionsControl({
                 >
                   <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
                   <MenuItemLabel>{item.label}</MenuItemLabel>
+                  {itemShortcut}
                 </MenuItem>
               </PopoverTrigger>
               <PopoverPopup tooltipStyle side="left" align="center">
@@ -1594,6 +1662,7 @@ export default function GitActionsControl({
           >
             <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
             <MenuItemLabel>{item.label}</MenuItemLabel>
+            {itemShortcut}
           </MenuItem>
         );
       })}
@@ -1607,6 +1676,7 @@ export default function GitActionsControl({
         >
           <CloudUploadIcon />
           <MenuItemLabel>Publish repository...</MenuItemLabel>
+          {shortcutLabel("git.publish")}
         </MenuItem>
       ) : null}
       {gitStatusForActions?.refName === null && (
@@ -1629,7 +1699,20 @@ export default function GitActionsControl({
 
   return (
     <>
-      {presentation === "menu" ? (
+      {renderMode === "menu-items" ? (
+        // Fork: flat items for Forma's compact header actions menu.
+        !isRepo ? (
+          <MenuItem disabled={initAction.isPending} onClick={initializeGit}>
+            <GitBranchPlusIcon aria-hidden />
+            <MenuItemLabel>
+              {initAction.isPending ? "Initializing..." : "Initialize Git"}
+            </MenuItemLabel>
+            {shortcutLabel("git.init")}
+          </MenuItem>
+        ) : (
+          gitItems
+        )
+      ) : presentation === "menu" ? (
         !isRepo ? (
           <MenuItem
             density={presentation === "menu" ? "touch" : "default"}

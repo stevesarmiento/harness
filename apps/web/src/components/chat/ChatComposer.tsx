@@ -39,6 +39,7 @@ import type {
   RuntimeMode,
   RuntimeRequestId,
   ScopedThreadRef,
+  ServerLocalAgentInventory,
   ServerProvider,
   ThreadId,
   SnapShotSource,
@@ -138,7 +139,6 @@ import {
   usePromptStashStore,
   type PromptStashEntry,
 } from "../../promptStashStore";
-import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { useComposerTriggerState } from "./useComposerTriggerState";
@@ -158,7 +158,16 @@ import {
 } from "./composerContextUndo";
 import type { ThreadSyncPhase } from "../../threadSync";
 import { ComposerBanner } from "./ComposerBanner";
-import { ComposerSurface } from "./ComposerSurface";
+import { ComposerSurface, useComposerMetaSlotElement } from "./ComposerSurface";
+// Fork: Forma composer pieces (add-actions menu, mode pill, meta-row runtime mode).
+import { ComposerAddActionsMenu } from "./ComposerAddActionsMenu";
+import { ComposerInteractionModePill } from "./ComposerInteractionModePill";
+import { ComposerRuntimeModeControl } from "./ComposerRuntimeModeControl";
+import { MenuCreateHandle } from "../ui/menu";
+import { Separator } from "../ui/separator";
+import { expandProjectLocalAgentsPrompt } from "../../localAgentPrompting";
+import { projectEnvironment } from "~/state/projects";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   ComposerBannerStack,
   type ComposerBannerStackContent,
@@ -266,7 +275,7 @@ import {
 } from "~/lib/copiedComposerAttachments";
 import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
 import { useThreadContextDrop, threadContextDropTargetProps } from "./threadContextDrag";
-import { readThreadShell, useThreadShells } from "~/state/entities";
+import { readThreadShell, useProject, useThreadShells } from "~/state/entities";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import type {
@@ -980,8 +989,14 @@ function composerCommandMenuPositionsEqual(
   );
 }
 
-function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children: ReactNode }) {
+function ComposerCommandMenuLayer(props: {
+  anchor: HTMLElement | null;
+  /** Fork: Forma floats the command menu above the composer instead of attaching it. */
+  placement?: "attached" | "floating";
+  children: ReactNode;
+}) {
   const [position, setPosition] = useState<ComposerCommandMenuPosition | null>(null);
+  const placement = props.placement ?? "attached";
 
   useLayoutEffect(() => {
     const anchor = props.anchor;
@@ -993,6 +1008,18 @@ function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children:
         '[data-chat-composer-main-surface="true"]',
       );
       const rect = (mainSurface ?? form ?? anchor).getBoundingClientRect();
+      if (placement === "floating") {
+        const floating = {
+          bottom: window.innerHeight - rect.top + 8,
+          left: rect.left,
+          maxHeight: Math.max(96, rect.top - 24),
+          width: rect.width,
+        };
+        setPosition((current) =>
+          current && composerCommandMenuPositionsEqual(current, floating) ? current : floating,
+        );
+        return;
+      }
       const rootFontSizePx =
         Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
       const drawerInsetRem = Number.parseFloat(
@@ -1031,7 +1058,7 @@ function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children:
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [props.anchor]);
+  }, [placement, props.anchor]);
 
   if (!props.anchor || !position) return null;
 
@@ -1058,7 +1085,6 @@ import { toastManager } from "../ui/toast";
 import {
   BotIcon,
   CircleAlertIcon,
-  PaperclipIcon,
   PencilRulerIcon,
   PlayIcon,
   ShieldIcon,
@@ -1119,6 +1145,7 @@ import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+const EMPTY_LOCAL_AGENT_INVENTORY: ServerLocalAgentInventory = { skills: [], commands: [] };
 
 /** Reads and disarms a paste-as-text deadline: the shortcut applies to one paste only. */
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
@@ -1232,6 +1259,8 @@ const supervisedRuntimeModeOption = {
 };
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   showInteractionModeToggle: boolean;
+  /** Fork: false while the Forma meta row below the composer hosts the runtime mode. */
+  showRuntimeMode: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
@@ -1289,6 +1318,8 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
       </Tooltip>
     </>
   ) : null;
+
+  if (!props.showRuntimeMode) return interactionModeToggle;
 
   return (
     <>
@@ -1491,6 +1522,11 @@ export interface ChatComposerHandle {
     interactionModeEnabled: boolean;
   };
   validateProviderInput: (providerInput: string) => boolean;
+  /**
+   * Fork: expand project-local agent skills (`$name`) and commands (`/name`)
+   * into the outgoing text. Resolves null after reporting a load failure.
+   */
+  expandLocalAgentPrompt: (text: string) => Promise<string | null>;
   setMultipleModelSelections: (selections: ReadonlyArray<ModelSelection>) => void;
 }
 
@@ -2000,6 +2036,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onRemoveEditingQueuedAttachment,
   } = props;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // Fork: Forma's meta row hosts the runtime mode and context meter when mounted.
+  const composerMetaSlotElement = useComposerMetaSlotElement();
+  // Fork: project-local agent skills and commands join the composer menus.
+  const localAgentInventoryQuery = useEnvironmentQuery(
+    gitCwd === null
+      ? null
+      : projectEnvironment.localAgentInventory({ environmentId, input: { cwd: gitCwd } }),
+  );
+  const localAgentInventory = localAgentInventoryQuery.data ?? EMPTY_LOCAL_AGENT_INVENTORY;
+  const loadLocalAgentInventory = useAtomQueryRunner(projectEnvironment.localAgentInventory, {
+    label: "load project-local agents",
+    reportFailure: false,
+    reportDefect: true,
+  });
+  const readLocalAgentFile = useAtomQueryRunner(projectEnvironment.readFile, {
+    label: "read project-local agent file",
+    reportFailure: false,
+    reportDefect: true,
+  });
+  const activeProjectTitle =
+    useProject(
+      activeThread ? scopeProjectRef(activeThread.environmentId, activeThread.projectId) : null,
+    )?.title ?? null;
   const composerDraftTargetKey = composerTargetKey(composerDraftTarget);
   const {
     heldRequestIds,
@@ -2467,10 +2526,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasMultilinePrompt = prompt.includes("\n") || hasWrappedPrompt;
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
   const [isTasksDrawerOpen, setIsTasksDrawerOpen] = useState(false);
-  const [stashPulse, setStashPulse] = useState<{ key: number; active: boolean }>({
-    key: 0,
-    active: false,
-  });
+  // Fork: the mode pill opens Forma's add-actions menu from outside its trigger.
+  const [composerAddActionsMenuHandle] = useState(() =>
+    MenuCreateHandle<ProviderInteractionMode>(),
+  );
+  const composerAddActionsTriggerId = useId();
   // A pending question stays expanded: its card moves into the banner dock,
   // so collapsing would leave the surface empty and squashed beneath it.
   const isComposerCollapsedMobile =
@@ -2502,8 +2562,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerScrollCollapseEligibleRef = useRef(false);
   const windowRefocusInFlightRef = useRef(false);
   const composerScrollGestureRef = useRef(createComposerScrollGestureState());
-  const stashPulseKeyRef = useRef(0);
-  const stashPulseTimeoutRef = useRef<number | null>(null);
   const stashInFlightRef = useRef<Set<string>>(new Set());
   const pendingImageCompressionsRef = useRef<Map<string, number>>(new Map());
   const pendingThreadImportsRef = useRef<Map<string, number>>(new Map());
@@ -2729,24 +2787,56 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       const visibleProviderSlashCommandItems = providerSlashCommandItems.filter(
         (item) => item.command.name !== "compact" || compactSlashCommandAvailable,
       );
+      // Fork: project-local commands expand only when they open the message.
+      const localSlashCommandItems =
+        composerTrigger.rangeStart === 0
+          ? localAgentInventory.commands.map((command) => ({
+              id: `local-slash-command:${command.path}`,
+              type: "local-slash-command" as const,
+              command,
+              label: `/${command.name}`,
+              description: command.description ?? command.inputHint ?? "Run project command",
+            }))
+          : [];
       const slashCommandItems = slashCommandItemsForPromptPosition(
-        [...builtInSlashCommandItems, ...visibleProviderSlashCommandItems, ...skillItems],
+        [
+          ...builtInSlashCommandItems,
+          ...localSlashCommandItems,
+          ...visibleProviderSlashCommandItems,
+          ...skillItems,
+        ],
         composerTrigger.rangeStart === 0,
       );
       return searchSlashCommandItems(slashCommandItems, query);
     }
     if (composerTrigger.kind === "skill") {
-      return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
-        id: `skill:${selectedProvider}:${skill.name}`,
-        type: "skill" as const,
-        provider: selectedProvider,
-        skill,
-        label: formatProviderSkillDisplayName(skill),
-        description:
+      // Fork: project-local skills lead, and win a name clash with a provider skill.
+      return searchProviderSkills(
+        [...localAgentInventory.skills, ...selectedProviderSkills],
+        composerTrigger.query,
+      ).map((skill): ComposerCommandItem => {
+        const description =
           skill.shortDescription ??
           skill.description ??
-          (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-      }));
+          (skill.scope ? `${skill.scope} skill` : "Run provider skill");
+        if ("source" in skill && skill.source === "local-agents") {
+          return {
+            id: `local-skill:${skill.path}`,
+            type: "local-skill",
+            skill,
+            label: formatProviderSkillDisplayName(skill),
+            description,
+          };
+        }
+        return {
+          id: `skill:${selectedProvider}:${skill.name}`,
+          type: "skill",
+          provider: selectedProvider,
+          skill,
+          label: formatProviderSkillDisplayName(skill),
+          description,
+        };
+      });
     }
     if (
       composerTrigger.kind === "pull-request" &&
@@ -2847,6 +2937,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const isComposerMenuLoading =
     (composerTriggerKind === "path" && pathTriggerQuery.length > 0 && workspaceEntries.isPending) ||
+    // Fork: project-local skills and commands load per workspace.
+    ((composerTriggerKind === "skill" || composerTriggerKind === "slash-command") &&
+      localAgentInventoryQuery.isPending) ||
     (composerTriggerKind === "pull-request" &&
       pullRequestProjectId !== null &&
       pullRequestRepository !== null &&
@@ -3868,8 +3961,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       return;
     }
-    if (item.type === "provider-slash-command") {
-      if (item.command.name === USAGE_LIMITS_COMMAND.name && onUsageLimitsCommand) {
+    // Fork: project-local commands insert like provider commands.
+    if (item.type === "provider-slash-command" || item.type === "local-slash-command") {
+      if (
+        item.type === "provider-slash-command" &&
+        item.command.name === USAGE_LIMITS_COMMAND.name &&
+        onUsageLimitsCommand
+      ) {
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
           focusEditorAfterReplace: false,
@@ -3894,7 +3992,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       return;
     }
-    if (item.type === "skill") {
+    if (item.type === "skill" || item.type === "local-skill") {
       const replacement = `$${item.skill.name} `;
       const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
         snapshot.value,
@@ -4293,26 +4391,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const stashEntryToQueue = usePromptStashStore((state) => state.stashEntry);
   const takeStashEntry = usePromptStashStore((state) => state.takeEntry);
   const finalizeStashEntryImages = usePromptStashStore((state) => state.finalizeEntryImages);
-
-  useEffect(() => {
-    return () => {
-      if (stashPulseTimeoutRef.current !== null) {
-        window.clearTimeout(stashPulseTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const pulseStashBadge = () => {
-    stashPulseKeyRef.current += 1;
-    setStashPulse({ key: stashPulseKeyRef.current, active: true });
-    if (stashPulseTimeoutRef.current !== null) {
-      window.clearTimeout(stashPulseTimeoutRef.current);
-    }
-    stashPulseTimeoutRef.current = window.setTimeout(() => {
-      stashPulseTimeoutRef.current = null;
-      setStashPulse((current) => ({ ...current, active: false }));
-    }, 1200);
-  };
 
   const restoreStashEntry = async (menuEntry: PromptStashEntry) => {
     const filesToVerify = menuEntry.files ?? [];
@@ -4737,7 +4815,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       setComposerCursor(0);
       setComposerTrigger(null);
-      pulseStashBadge();
 
       if (evicted) {
         for (const file of evicted.files ?? []) {
@@ -5108,6 +5185,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     size: composerControlsCollapsed ? "xs" : "sm",
     hidden: composerControlsHidden || restingHiddenBlockCount > 1,
   });
+  const showFooterRuntimeMode = composerMetaSlotElement === null;
+  const showFooterInteractionModeToggle = planModeUiEnabled && composerControlsCollapsed;
   const restingBlockDefs = [
     ...(providerTraitsPicker
       ? [
@@ -5122,21 +5201,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           },
         ]
       : []),
-    {
-      id: "mode",
-      content: (
-        <ComposerFooterModeControls
-          showInteractionModeToggle={planModeUiEnabled}
-          interactionMode={interactionMode}
-          runtimeMode={compatibleRuntimeMode}
-          runtimeModeOptions={compatibleRuntimeModeOptions}
-          size={composerControlsCollapsed ? "xs" : "sm"}
-          hidden={composerControlsHidden || restingHiddenBlockCount > 0}
-          onToggleInteractionMode={toggleInteractionMode}
-          onRuntimeModeChange={handleRuntimeModeChange}
-        />
-      ),
-    },
+    // Fork: the expanded footer shows the mode as Forma's pill, and the runtime
+    // mode moves to the meta row whenever one is mounted.
+    ...(showFooterRuntimeMode || showFooterInteractionModeToggle
+      ? [
+          {
+            id: "mode",
+            content: (
+              <ComposerFooterModeControls
+                showInteractionModeToggle={showFooterInteractionModeToggle}
+                showRuntimeMode={showFooterRuntimeMode}
+                interactionMode={interactionMode}
+                runtimeMode={compatibleRuntimeMode}
+                runtimeModeOptions={compatibleRuntimeModeOptions}
+                size={composerControlsCollapsed ? "xs" : "sm"}
+                hidden={composerControlsHidden || restingHiddenBlockCount > 0}
+                onToggleInteractionMode={toggleInteractionMode}
+                onRuntimeModeChange={handleRuntimeModeChange}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
   const hiddenRestingBlockIds = restingBlockDefs
     .slice(restingBlockDefs.length - restingHiddenBlockCount)
@@ -5230,7 +5316,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 !showInlineRestingControls &&
                   "@max-[640px]/composer-surface:[&_[data-chat-provider-model-picker-label]]:w-0 @max-[640px]/composer-surface:[&_[data-chat-provider-model-picker-label]]:flex-none",
               )
-            : "-ms-2.5 min-w-13"
+            : "min-w-13"
         }
         terminalOpen={terminalOpen}
         open={isComposerModelPickerOpen}
@@ -5304,6 +5390,46 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           />
         </div>
       </>
+    </>
+  );
+  // Fork: Forma leads the expanded footer with its add-actions menu and mode pill.
+  const toggleComposerAddActionsMenu = () => {
+    if (composerAddActionsMenuHandle.isOpen) {
+      composerAddActionsMenuHandle.close();
+      return;
+    }
+    composerAddActionsMenuHandle.open(composerAddActionsTriggerId);
+  };
+  const openComposerSkillPicker = () => {
+    const snapshot = readComposerSnapshot();
+    const previousCharacter = snapshot.value[snapshot.expandedCursor - 1] ?? "";
+    const trigger = previousCharacter.length > 0 && !/\s/.test(previousCharacter) ? " $" : "$";
+    applyPromptReplacement(snapshot.expandedCursor, snapshot.expandedCursor, trigger);
+  };
+  const composerLeadingActions = showProviderUnavailable ? null : (
+    <>
+      <ComposerAddActionsMenu
+        menuHandle={composerAddActionsMenuHandle}
+        triggerId={composerAddActionsTriggerId}
+        interactionMode={interactionMode}
+        showInteractionModeActions={planModeUiEnabled}
+        imageDisabled={!showComposerAttachAction}
+        skillDisabled={
+          selectedProviderSkills.length === 0 && localAgentInventory.skills.length === 0
+        }
+        stashCount={stashQueue.length}
+        onSelectMode={handleInteractionModeChange}
+        onSelectImage={() => attachmentInputRef.current?.click()}
+        onSelectSkill={openComposerSkillPicker}
+        onOpenStash={toggleStashMenuStable}
+      />
+      {planModeUiEnabled && !isComposerFooterCompact ? (
+        <ComposerInteractionModePill
+          interactionMode={interactionMode}
+          onClick={toggleComposerAddActionsMenu}
+        />
+      ) : null}
+      <ComposerControlSeparator size="sm" />
     </>
   );
   const showTasksTab =
@@ -6108,6 +6234,44 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const openModelPickerStable = useStableCallback(openModelPicker);
 
+  // Fork: project-local agent prompts expand at send time, reading the agent
+  // files through the projects.readFile RPC.
+  const expandLocalAgentPrompt = async (text: string): Promise<string | null> => {
+    if (gitCwd === null) return text;
+    let inventory = localAgentInventoryQuery.data;
+    if (inventory === null) {
+      const result = await loadLocalAgentInventory({ environmentId, input: { cwd: gitCwd } });
+      inventory = result._tag === "Success" ? result.value : EMPTY_LOCAL_AGENT_INVENTORY;
+    }
+    if (inventory.skills.length === 0 && inventory.commands.length === 0) return text;
+    try {
+      return await expandProjectLocalAgentsPrompt({
+        cwd: gitCwd,
+        prompt: text,
+        inventory,
+        readFileContents: async (relativePath) => {
+          const result = await readLocalAgentFile({
+            environmentId,
+            input: { cwd: gitCwd, relativePath },
+          });
+          if (result._tag !== "Success") {
+            throw new Error(`Could not read ${relativePath}.`);
+          }
+          return result.value.contents;
+        },
+      });
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Project command could not be loaded",
+        description:
+          cause instanceof Error ? cause.message : "The project-local agent file is invalid.",
+      });
+      return null;
+    }
+  };
+  const expandLocalAgentPromptStable = useStableCallback(expandLocalAgentPrompt);
+
   useImperativeHandle(
     composerRef,
     () => ({
@@ -6337,10 +6501,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         setProviderInputSubmissionError(validationMessage);
         return validationMessage === null;
       },
+      expandLocalAgentPrompt: expandLocalAgentPromptStable,
     }),
     [
       activeThread,
       addComposerAttachments,
+      expandLocalAgentPromptStable,
       addComposerFoldersStable,
       foldPastedText,
       composerDraftTarget,
@@ -6487,6 +6653,34 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             restingControlsHost,
           )
         : null}
+      {/* Fork: Forma's meta row under the composer carries the runtime mode and context meter. */}
+      {composerMetaSlotElement
+        ? createPortal(
+            <>
+              <ComposerRuntimeModeControl
+                runtimeMode={compatibleRuntimeMode}
+                options={compatibleRuntimeModeOptions}
+                onRuntimeModeChange={handleRuntimeModeChange}
+              />
+              {settings.contextWindowMeterEnabled && activeContextWindow ? (
+                <>
+                  <Separator orientation="vertical" className="mx-0.5 h-3.5!" />
+                  <ContextWindowMeter
+                    usage={activeContextWindow}
+                    variant="labeled"
+                    modelDisplayName={activeThreadModelDisplayName}
+                    onCompact={compactCommandAvailable ? compactThreadContext : undefined}
+                    compactDisabled={
+                      compactDisabled || noProviderAvailable || isSendBusy || isConnecting
+                    }
+                    compactDisabledReason={resolvedCompactDisabledReason}
+                  />
+                </>
+              ) : null}
+            </>,
+            composerMetaSlotElement,
+          )
+        : null}
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack
@@ -6584,15 +6778,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             </ComposerBanner.Attachment>
           ) : null}
         </ComposerBanner.Column>
-        {!isComposerApprovalState ? (
-          <ComposerStashBadge
-            count={stashQueue.length}
-            menuOpen={isStashMenuOpen}
-            pulseKey={stashPulse.key}
-            pulsing={stashPulse.active}
-            onToggleMenu={toggleStashMenuStable}
-          />
-        ) : null}
+        {/* Fork: stashed prompts open from the composer's add-actions menu instead of a badge. */}
       </ComposerBanner.Dock>
       <div className="relative">
         <ComposerSurface.Main
@@ -6608,9 +6794,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             data-chat-composer-surface="true"
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "rounded-3xl transition-[background-color] duration-200",
-              "in-data-[thread-context-over]:bg-accent/45 in-data-[thread-context-over]:ring-1 in-data-[thread-context-over]:ring-inset in-data-[thread-context-over]:ring-primary/70",
-              isDragOverComposer ? "bg-accent/45 ring-1 ring-inset ring-primary/70" : null,
+              // Fork: Forma's opaque composer surface (see `.chat-composer-surface`).
+              "chat-composer-surface border backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-(--motion-duration-ui) ease-(--motion-ease-out) motion-reduce:transition-none",
+              "in-data-[thread-context-over]:border-primary/70! in-data-[thread-context-over]:bg-accent/30!",
+              isDragOverComposer ? "border-primary/70! bg-accent/30!" : null,
               projectSelectionRequired ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
             )}
@@ -6704,13 +6891,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   : ""}
               </div>
               {composerSuggestionsVisible && (
-                <ComposerCommandMenuLayer anchor={composerMenuAnchor}>
+                <ComposerCommandMenuLayer anchor={composerMenuAnchor} placement="floating">
                   <ComposerCommandMenu
                     listId={composerSuggestionListId}
                     items={composerMenuItems}
                     resolvedTheme={resolvedTheme}
                     isLoading={isComposerMenuLoading}
                     triggerKind={composerTriggerKind}
+                    groupSections={
+                      (composerTrigger?.kind === "slash-command" ||
+                        composerTrigger?.kind === "skill") &&
+                      composerTrigger.query.trim().length === 0
+                    }
                     emptyStateText={composerMenuEmptyState}
                     activeItemId={activeComposerMenuItem?.id ?? null}
                     onHighlightedItemChange={onComposerMenuItemHighlightedStable}
@@ -7199,7 +7391,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
                                 : phase === "disconnected"
-                                  ? DISCONNECTED_COMPOSER_PLACEHOLDER
+                                  ? // Fork: Forma names the project in a fresh thread's prompt.
+                                    activeProjectTitle
+                                    ? `What do you want to do in ${activeProjectTitle}`
+                                    : DISCONNECTED_COMPOSER_PLACEHOLDER
                                   : "Ask anything, @tag files/folders, $use skills, or / for commands"
                     }
                     disabled={
@@ -7249,13 +7444,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               message={providerInputSubmissionError ?? composerSubmissionError}
             />
 
+            {/* Fork: Forma's hairline between the prompt and its footer. */}
+            {isComposerCollapsedMobile || isComposerApprovalState || isComposerResting ? null : (
+              <div
+                aria-hidden
+                className="chat-composer-footer-separator pointer-events-none w-full shrink-0"
+                data-chat-composer-footer-separator
+              />
+            )}
+
+            {/* Bottom toolbar */}
             {isComposerCollapsedMobile || isComposerApprovalState ? null : (
               <div
                 data-chat-composer-footer="true"
                 data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
                 className={cn(
-                  "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-3 pb-3 sm:px-4 sm:pb-4",
-                  pendingUserInputs.length > 0 && "pt-2",
+                  "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-2.5 pt-2.5 pb-2.5 sm:px-3 sm:pt-3 sm:pb-3",
                   isComposerFooterCompact ? "gap-1.5" : "gap-2 sm:gap-0",
                   showMobilePendingAnswerActions && "hidden sm:flex",
                   isComposerResting &&
@@ -7264,16 +7468,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     (showInlineRestingControls ? "bottom-[calc(2rem+1px)]" : "bottom-px"),
                 )}
               >
+                {/* Fork: Forma leads the footer with the add-actions menu and mode pill. */}
                 <div
-                  ref={attachExpandedComposerControls}
-                  data-chat-composer-controls="left"
-                  data-chat-composer-footer-controls="true"
+                  data-chat-composer-footer-leading="true"
                   className={cn(
-                    "relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                    "-m-1 flex min-w-0 flex-1 items-center gap-1 p-1",
                     isComposerResting && "hidden",
                   )}
                 >
-                  {composerControlsCollapsed ? null : composerControls}
+                  {composerControlsCollapsed ? null : composerLeadingActions}
+                  <div
+                    ref={attachExpandedComposerControls}
+                    data-chat-composer-controls="left"
+                    data-chat-composer-footer-controls="true"
+                    className="relative -m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {composerControlsCollapsed ? null : composerControls}
+                  </div>
                 </div>
 
                 <div
@@ -7286,49 +7497,35 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
                 >
                   {showComposerAttachAction ? (
-                    <>
-                      <input
-                        ref={attachmentInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(event) => {
-                          const files = Array.from(event.currentTarget.files ?? []);
-                          event.currentTarget.value = "";
-                          // Inserting a chip refocuses the editor after the draft renders;
-                          // focusing synchronously here would report the editor's stale text
-                          // over the prompt that was just written.
-                          void addComposerAttachments(files).then((inserted) => {
-                            if (!inserted) focusComposer();
-                          });
-                        }}
-                      />
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onPointerDown={(event) => event.preventDefault()}
-                              onClick={() => attachmentInputRef.current?.click()}
-                              aria-label="Attach files"
-                            />
-                          }
-                        >
-                          <PaperclipIcon />
-                        </TooltipTrigger>
-                        <TooltipPopup>Attach files</TooltipPopup>
-                      </Tooltip>
-                    </>
+                    // Fork: the add-actions menu opens this picker; Forma has no paperclip button.
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        const files = Array.from(event.currentTarget.files ?? []);
+                        event.currentTarget.value = "";
+                        // Inserting a chip refocuses the editor after the draft renders;
+                        // focusing synchronously here would report the editor's stale text
+                        // over the prompt that was just written.
+                        void addComposerAttachments(files).then((inserted) => {
+                          if (!inserted) focusComposer();
+                        });
+                      }}
+                    />
                   ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
                     activeContextWindow={
-                      settings.contextWindowMeterEnabled ? activeContextWindow : null
+                      settings.contextWindowMeterEnabled && composerMetaSlotElement === null
+                        ? activeContextWindow
+                        : null
                     }
-                    reserveContextWindowMeter={reserveContextWindowMeter}
+                    reserveContextWindowMeter={
+                      reserveContextWindowMeter && composerMetaSlotElement === null
+                    }
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
