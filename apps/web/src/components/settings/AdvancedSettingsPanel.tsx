@@ -4,7 +4,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { APP_VERSION } from "../../branding";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
@@ -48,56 +48,57 @@ function useAdvancedSettingsPanelState() {
     otlpMetricsUrl: observability?.otlpMetricsUrl,
   });
 
-  const openInPreferredEditor = useCallback(
-    (target: OpenPathTarget, path: string | null, failureMessage: string) => {
-      if (!path) return;
-      setOpenPathErrorByTarget((existing) => ({ ...existing, [target]: null }));
+  const openInPreferredEditor = (
+    target: OpenPathTarget,
+    path: string | null,
+    failureMessage: string,
+  ) => {
+    if (!path) return;
+    setOpenPathErrorByTarget((existing) => ({ ...existing, [target]: null }));
 
-      const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
-      if (!editor) {
+    const editor = resolveAndPersistPreferredEditor(availableEditors ?? []);
+    if (!editor) {
+      setOpenPathErrorByTarget((existing) => ({
+        ...existing,
+        [target]: "No available editors found.",
+      }));
+      return;
+    }
+    if (environmentId === null) {
+      setOpenPathErrorByTarget((existing) => ({
+        ...existing,
+        [target]: "No environment is selected.",
+      }));
+      return;
+    }
+
+    setOpeningPathByTarget((existing) => ({ ...existing, [target]: true }));
+    void (async () => {
+      const result = await openInEditor({
+        environmentId,
+        input: {
+          cwd: path,
+          editor,
+        },
+      });
+      setOpeningPathByTarget((existing) => ({ ...existing, [target]: false }));
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
         setOpenPathErrorByTarget((existing) => ({
           ...existing,
-          [target]: "No available editors found.",
+          [target]: error instanceof Error ? error.message : failureMessage,
         }));
-        return;
       }
-      if (environmentId === null) {
-        setOpenPathErrorByTarget((existing) => ({
-          ...existing,
-          [target]: "No environment is selected.",
-        }));
-        return;
-      }
+    })();
+  };
 
-      setOpeningPathByTarget((existing) => ({ ...existing, [target]: true }));
-      void (async () => {
-        const result = await openInEditor({
-          environmentId,
-          input: {
-            cwd: path,
-            editor,
-          },
-        });
-        setOpeningPathByTarget((existing) => ({ ...existing, [target]: false }));
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          setOpenPathErrorByTarget((existing) => ({
-            ...existing,
-            [target]: error instanceof Error ? error.message : failureMessage,
-          }));
-        }
-      })();
-    },
-    [availableEditors, environmentId, openInEditor],
-  );
-
-  const openKeybindingsFile = useCallback(() => {
+  const openKeybindingsFile = () => {
     openInPreferredEditor("keybindings", keybindingsConfigPath, "Unable to open keybindings file.");
-  }, [keybindingsConfigPath, openInPreferredEditor]);
+  };
 
-  const openLogsDirectory = useCallback(() => {
+  const openLogsDirectory = () => {
     openInPreferredEditor("logsDirectory", logsDirectoryPath, "Unable to open logs folder.");
-  }, [logsDirectoryPath, openInPreferredEditor]);
+  };
 
   return {
     diagnosticsDescription,

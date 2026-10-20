@@ -48,7 +48,7 @@ export const ComposerAddActionsMenu = memo(function ComposerAddActionsMenu(props
         render={
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/72 transition-[color,transform] duration-(--motion-duration-micro) hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/60 active:scale-[0.97]"
+            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/72 transition-[color,transform] duration-(--motion-duration-micro) hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/60 active:scale-[0.97]"
             aria-label="Add composer action"
             data-composer-add-actions-trigger="true"
           />

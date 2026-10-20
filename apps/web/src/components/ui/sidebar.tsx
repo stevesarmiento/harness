@@ -758,6 +758,13 @@ const sidebarMenuButtonVariants = cva(
         // overlaid actions are hovered.
         project:
           "gap-2 px-2 py-1.5 font-medium text-sidebar-muted-foreground/80 hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-foreground",
+        // Fork: a menu trigger that keeps its hover look while its menu is open, so the
+        // menu stays visually anchored to it.
+        "menu-trigger":
+          "font-medium text-sidebar-muted-foreground/80 data-popup-open:bg-sidebar-row-hover data-popup-open:text-sidebar-foreground data-popup-open:[&>svg]:text-sidebar-foreground data-popup-open:[&>svg]:opacity-100",
+        // Fork: Forma's legacy (v1) menu trigger on the accent surface.
+        "menu-trigger-accent":
+          "rounded-lg font-medium text-muted-foreground/70 hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground data-popup-open:[&>svg]:text-sidebar-foreground data-popup-open:[&>svg]:opacity-100",
       },
     },
   },

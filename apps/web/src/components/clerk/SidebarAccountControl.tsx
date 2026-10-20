@@ -1,7 +1,7 @@
 import { UserButton, useUser } from "@clerk/react";
 import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, LogInIcon, SmartphoneIcon, UserRoundIcon } from "lucide-react";
-import { useCallback, useRef, type ComponentType } from "react";
+import { useRef, type ComponentType } from "react";
 
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
@@ -35,6 +35,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { SidebarMenuButton, useSidebar } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MobileClientsUserProfilePage } from "./MobileClientsUserProfilePage";
 import {
   CLERK_UNAVAILABLE_HINT,
@@ -212,120 +213,125 @@ function SidebarAccountRow({
   const primaryEnvironment = usePrimaryEnvironment();
   const pullRequestsSupported =
     primaryEnvironment?.serverConfig?.environment.capabilities.pullRequests === true;
-  const handlePullRequestsClick = useCallback(() => {
+  const handlePullRequestsClick = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
     void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
-  }, [isMobile, navigate, setOpenMobile]);
-  const handleUsageClick = useCallback(() => {
+  };
+  const handleUsageClick = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
     void navigate({ to: "/usage" });
-  }, [isMobile, navigate, setOpenMobile]);
+  };
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const navigateTo = useCallback(
-    (to: "/settings" | "/settings/connections") => {
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      void navigate({ to });
-    },
-    [isMobile, navigate, setOpenMobile],
-  );
+  const navigateTo = (to: "/settings" | "/settings/connections") => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to });
+  };
 
   // Clicking the name/email area toggles the Clerk menu just like the avatar.
-  const forwardToClerkTrigger = useCallback((event: React.MouseEvent) => {
+  const forwardToClerkTrigger = (event: React.MouseEvent) => {
     const trigger = profileRef.current?.querySelector<HTMLButtonElement>(
       "button.cl-userButtonTrigger",
     );
     if (trigger && !trigger.contains(event.target as Node)) {
       trigger.click();
     }
-  }, []);
+  };
 
   const statusTitle = connect.hint ?? `T3 Connect: ${connect.label}`;
 
   return (
     <div className="flex items-center justify-between gap-1" data-testid="sidebar-account-row">
       {account ? (
-        <div
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-sidebar-row-hover"
-          data-testid="sidebar-account-profile"
-          onClick={forwardToClerkTrigger}
-          ref={profileRef}
-          title={statusTitle}
-        >
-          <span className="relative inline-flex shrink-0">
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "size-7",
-                  userButtonTrigger: "rounded-full",
-                },
-              }}
-            >
-              <UserButton.UserProfilePage
-                label="Mobile clients"
-                labelIcon={<SmartphoneIcon className="size-4" />}
-                url="mobile-clients"
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-sidebar-row-hover"
+                data-testid="sidebar-account-profile"
+                onClick={forwardToClerkTrigger}
+                ref={profileRef}
+              />
+            }
+          >
+            <span className="relative inline-flex shrink-0">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "size-7",
+                    userButtonTrigger: "rounded-full",
+                  },
+                }}
               >
-                <MobileClientsUserProfilePage />
-              </UserButton.UserProfilePage>
-            </UserButton>
-            <SidebarAccountStatusDot tone={connect.tone} />
-          </span>
-          <span className="min-w-0 flex-1 leading-tight">
-            <span className="block truncate font-medium text-sidebar-foreground/90 text-xs">
-              {account.name}
+                <UserButton.UserProfilePage
+                  label="Mobile clients"
+                  labelIcon={<SmartphoneIcon className="size-4" />}
+                  url="mobile-clients"
+                >
+                  <MobileClientsUserProfilePage />
+                </UserButton.UserProfilePage>
+              </UserButton>
+              <SidebarAccountStatusDot tone={connect.tone} />
             </span>
-            {account.email && account.email !== account.name ? (
-              <span className="block truncate text-muted-foreground text-ui-2xs">
-                {account.email}
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate font-medium text-sidebar-foreground/90 text-xs">
+                {account.name}
               </span>
-            ) : null}
-          </span>
-        </div>
-      ) : (
-        <button
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left",
-            onSignIn ? "cursor-pointer hover:bg-sidebar-row-hover" : "cursor-default opacity-70",
-          )}
-          data-testid="sidebar-account-sign-in"
-          disabled={!onSignIn}
-          onClick={onSignIn ?? undefined}
-          title={statusTitle}
-          type="button"
-        >
-          <span className="relative inline-flex shrink-0">
-            <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <UserRoundIcon className="size-4" />
+              {account.email && account.email !== account.name ? (
+                <span className="block truncate text-muted-foreground text-ui-2xs">
+                  {account.email}
+                </span>
+              ) : null}
             </span>
-            <SidebarAccountStatusDot tone={connect.tone} />
-          </span>
-          <span className="min-w-0 truncate text-muted-foreground text-xs">
-            {onSignIn ? "Sign in" : "Not signed in"}
-          </span>
-        </button>
+          </TooltipTrigger>
+          <TooltipPopup side="top">{statusTitle}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left",
+                  onSignIn
+                    ? "cursor-pointer hover:bg-sidebar-row-hover"
+                    : "cursor-default opacity-70",
+                )}
+                data-testid="sidebar-account-sign-in"
+                disabled={!onSignIn}
+                onClick={onSignIn ?? undefined}
+                type="button"
+              />
+            }
+          >
+            <span className="relative inline-flex shrink-0">
+              <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <UserRoundIcon className="size-4" />
+              </span>
+              <SidebarAccountStatusDot tone={connect.tone} />
+            </span>
+            <span className="min-w-0 truncate text-muted-foreground text-xs">
+              {onSignIn ? "Sign in" : "Not signed in"}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">{statusTitle}</TooltipPopup>
+        </Tooltip>
       )}
       <Menu>
         <MenuTrigger
           render={
             <SidebarMenuButton
               aria-label="Connect and settings"
-              className={cn(
-                "shrink-0",
-                // Mirror hover while open so the menu stays anchored to its trigger visually.
-                "data-popup-open:bg-sidebar-row-hover data-popup-open:text-sidebar-foreground data-popup-open:[&>svg]:text-sidebar-foreground data-popup-open:[&>svg]:opacity-100",
-                variant === "v1"
-                  ? "size-7 rounded-lg text-muted-foreground/70 hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
-                  : "size-8",
-              )}
+              className={cn("shrink-0", variant === "v1" ? "size-7" : "size-8")}
               data-testid="sidebar-connect-settings-trigger"
               size="icon"
+              variant={variant === "v1" ? "menu-trigger-accent" : "menu-trigger"}
               title={statusTitle}
             />
           }

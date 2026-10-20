@@ -61,7 +61,7 @@ export function ContextWindowMeter(props: {
               "inline-flex cursor-pointer items-center justify-center border border-transparent text-muted-foreground outline-none transition-colors",
               isLabeled ? "h-7 gap-1 rounded-md px-1.5" : "size-7 rounded-full",
               "hover:bg-accent data-[pressed]:bg-accent",
-              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+              "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
             )}
             aria-label={
               usage.maxTokens !== null && usedPercentage

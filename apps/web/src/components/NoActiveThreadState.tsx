@@ -4,7 +4,7 @@ import {
   IconChevronRight as ChevronRightIcon,
   IconMagnifyingglass as SearchIcon,
 } from "symbols-react";
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { openCommandPalette } from "../commandPaletteBus";
 import { isElectron } from "../env";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
@@ -31,18 +31,18 @@ import {
 } from "./ThreadBreadcrumb";
 import { ThreadRowLeadingStatus } from "./ThreadStatusIndicators";
 import { AddProjectIcon, HouseIcon, NewThreadIcon, SettingsHexIcon } from "./icons/custom";
-import { Button } from "./ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "~/components/ui/sidebar";
 import { WorkspaceHeaderTitle } from "~/components/WorkspaceHeaderTitle";
 
 const SECTION_HEADING_CLASS_NAME =
-  "text-ui-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/64";
-const LIST_TABLE_SHELL_CLASS_NAME = "rounded-[1.3rem] bg-foreground/5 p-1";
+  "text-ui-xs font-medium uppercase tracking-eyebrow text-muted-foreground/64";
+const LIST_TABLE_SHELL_CLASS_NAME = "rounded-3xl bg-foreground/5 p-1";
 const LIST_TABLE_INNER_CLASS_NAME =
-  "relative flex flex-col text-card-foreground overflow-hidden rounded-[1.15rem] border border-border/55 bg-white dark:bg-white/5 shadow-sm";
+  "relative flex flex-col text-card-foreground overflow-hidden rounded-2xl border border-border/55 bg-white dark:bg-white/5 shadow-sm";
 const LIST_TABLE_HEADER_ROW_CLASS_NAME = "hidden items-center gap-4 px-4 py-2 md:grid";
 const LIST_TABLE_HEADER_CELL_CLASS_NAME =
-  "text-ui-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/68";
+  "text-ui-2xs font-semibold uppercase tracking-eyebrow-tight text-muted-foreground/68";
 const RECENT_THREAD_TABLE_GRID_CLASS_NAME = "md:grid-cols-[minmax(0,1fr)_3rem]";
 const PROJECT_TABLE_GRID_CLASS_NAME = "md:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)_auto]";
 
@@ -89,19 +89,16 @@ function ThreadListRow({
 }) {
   const workspacePath = resolveThreadWorkspacePath(item);
 
-  const handleRowKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.target !== event.currentTarget) {
-        return;
-      }
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-      event.preventDefault();
-      onOpen();
-    },
-    [onOpen],
-  );
+  const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    onOpen();
+  };
 
   return (
     <div className="group/recent-thread">
@@ -110,7 +107,7 @@ function ThreadListRow({
         tabIndex={0}
         data-testid={`no-active-thread-thread-row-${item.thread.id}`}
         className={cn(
-          "group/recent-thread-row relative flex w-full flex-col gap-3 rounded-[1rem] px-4 py-3 text-left transition-colors hover:bg-accent/12 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:bg-accent/12",
+          "group/recent-thread-row relative flex w-full flex-col gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent/12 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:bg-accent/12",
           RECENT_THREAD_TABLE_GRID_CLASS_NAME,
           "md:grid md:items-center md:gap-4",
         )}
@@ -125,36 +122,50 @@ function ThreadListRow({
             </span>
           </div>
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground/72">
-            <span
-              className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
-              title={workspacePath ?? resolveThreadProjectLabel(item)}
-            >
-              <ThreadBreadcrumbProjectChipContent
-                icon={
-                  <ProjectFavicon
-                    project={
-                      item.project ?? {
-                        environmentId: item.thread.environmentId,
-                        workspaceRoot: item.thread.worktreePath ?? "",
-                        title: resolveThreadProjectLabel(item),
-                      }
-                    }
-                    className="size-3 shrink-0"
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
                   />
                 }
-                label={resolveThreadProjectLabel(item)}
-              />
-            </span>
-            {item.thread.branch ? (
-              <span
-                className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
-                title={item.thread.branch}
               >
-                <ThreadBreadcrumbChipContent
-                  icon={<ThreadBranchIcon />}
-                  label={item.thread.branch}
+                <ThreadBreadcrumbProjectChipContent
+                  icon={
+                    <ProjectFavicon
+                      project={
+                        item.project ?? {
+                          environmentId: item.thread.environmentId,
+                          workspaceRoot: item.thread.worktreePath ?? "",
+                          title: resolveThreadProjectLabel(item),
+                        }
+                      }
+                      className="size-3 shrink-0"
+                    />
+                  }
+                  label={resolveThreadProjectLabel(item)}
                 />
-              </span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {workspacePath ?? resolveThreadProjectLabel(item)}
+              </TooltipPopup>
+            </Tooltip>
+            {item.thread.branch ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={`${THREAD_BREADCRUMB_PROJECT_CHIP_CLASS_NAME} text-ui-xs leading-none`}
+                    />
+                  }
+                >
+                  <ThreadBreadcrumbChipContent
+                    icon={<ThreadBranchIcon />}
+                    label={item.thread.branch}
+                  />
+                </TooltipTrigger>
+                <TooltipPopup side="top">{item.thread.branch}</TooltipPopup>
+              </Tooltip>
             ) : null}
             <span className="text-ui-xs shrink-0 text-muted-foreground/68">
               {formatRelativeTimeLabel(getThreadTimestamp(item.thread))}
@@ -184,7 +195,7 @@ function ProjectListRow({
       type="button"
       data-testid={`no-active-thread-project-row-${item.project.id}`}
       className={cn(
-        "group/project-row flex w-full flex-col gap-3 rounded-[1rem] px-4 py-3 text-left transition-colors hover:bg-accent/12 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+        "group/project-row flex w-full flex-col gap-3 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-accent/12 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         PROJECT_TABLE_GRID_CLASS_NAME,
         "md:grid md:items-center md:gap-4",
       )}
@@ -225,132 +236,111 @@ export function NoActiveThreadState() {
   const sidebarThreadSortOrder = useClientSettings((settings) => settings.sidebarThreadSortOrder);
   const { handleNewThread } = useHandleNewThread();
 
-  const variant = useMemo(
-    () =>
-      resolveNoActiveThreadStateVariant({
-        projects,
-        threads,
-      }),
-    [projects, threads],
-  );
-  const recentThreadItems = useMemo(
-    () =>
-      getNoActiveThreadRecentThreadItems({
-        projects,
-        threads,
-        sortOrder: sidebarThreadSortOrder,
-      }),
-    [projects, sidebarThreadSortOrder, threads],
-  );
-  const projectItems = useMemo(
-    () =>
-      getNoActiveThreadProjectItems({
-        projects,
-        threads,
-        projectOrder,
-        projectSortOrder: sidebarProjectSortOrder,
-        threadSortOrder: sidebarThreadSortOrder,
-      }),
-    [projectOrder, projects, sidebarProjectSortOrder, sidebarThreadSortOrder, threads],
-  );
+  const variant = resolveNoActiveThreadStateVariant({ projects, threads });
+  const recentThreadItems = getNoActiveThreadRecentThreadItems({
+    projects,
+    threads,
+    sortOrder: sidebarThreadSortOrder,
+  });
+  const projectItems = getNoActiveThreadProjectItems({
+    projects,
+    threads,
+    projectOrder,
+    projectSortOrder: sidebarProjectSortOrder,
+    threadSortOrder: sidebarThreadSortOrder,
+  });
   const singleProject = projects.length === 1 ? (projects[0] ?? null) : null;
 
-  const openThread = useCallback(
-    async (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => {
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-      });
-    },
-    [navigate],
-  );
-  const handleProjectRowClick = useCallback(
-    async (item: { project: Project; latestThread: SidebarThreadSummary | null }) => {
-      if (item.latestThread) {
-        await openThread(item.latestThread);
-        return;
-      }
-      await handleNewThread(scopeProjectRef(item.project.environmentId, item.project.id));
-    },
-    [handleNewThread, openThread],
-  );
-  const handleSingleProjectNewThread = useCallback(async () => {
+  const openThread = async (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => {
+    await navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+    });
+  };
+  const handleProjectRowClick = async (item: {
+    project: Project;
+    latestThread: SidebarThreadSummary | null;
+  }) => {
+    if (item.latestThread) {
+      await openThread(item.latestThread);
+      return;
+    }
+    await handleNewThread(scopeProjectRef(item.project.environmentId, item.project.id));
+  };
+  const handleSingleProjectNewThread = async () => {
     if (!singleProject) {
       return;
     }
     await handleNewThread(scopeProjectRef(singleProject.environmentId, singleProject.id));
-  }, [handleNewThread, singleProject]);
-  const actions = useMemo(() => {
-    if (variant === "no-projects") {
-      return [
-        {
-          title: "Add project",
-          description: "Browse for a repo and create your first thread.",
-          icon: <AddProjectIcon className="size-5 fill-current" />,
-          testId: "no-active-thread-action-add-project",
-          onClick: () => openCommandPalette({ open: "add-project" }),
-        },
-        {
-          title: "Search",
-          description: "Open commands, projects, and threads from one place.",
-          icon: <SearchIcon className="size-5 fill-current" />,
-          testId: "no-active-thread-action-search",
-          onClick: () => openCommandPalette(),
-        },
-        {
-          title: "Open settings",
-          description: "Adjust defaults, keybindings, and local app behavior.",
-          icon: <SettingsHexIcon className="size-5 text-current" />,
-          testId: "no-active-thread-action-settings",
-          onClick: () => {
-            void navigate({ to: "/settings" });
+  };
+  const actions =
+    variant === "no-projects"
+      ? [
+          {
+            title: "Add project",
+            description: "Browse for a repo and create your first thread.",
+            icon: <AddProjectIcon className="size-5 fill-current" />,
+            testId: "no-active-thread-action-add-project",
+            onClick: () => openCommandPalette({ open: "add-project" }),
           },
-        },
-      ];
-    }
-
-    return [
-      {
-        title: singleProject ? `New thread in ${singleProject.title}` : "New thread in...",
-        description: singleProject
-          ? "Create a fresh thread in this project."
-          : "Create a fresh thread in any project.",
-        icon: <NewThreadIcon className="size-5 fill-current" />,
-        testId: "no-active-thread-action-new-thread",
-        onClick: () => {
-          if (singleProject) {
-            void handleSingleProjectNewThread();
-            return;
-          }
-          openCommandPalette({ open: "new-thread-in" });
-        },
-      },
-      {
-        title: "Search",
-        description: "Jump straight to a project or thread.",
-        icon: <SearchIcon className="size-5 fill-current" />,
-        testId: "no-active-thread-action-search",
-        onClick: () => openCommandPalette(),
-      },
-      {
-        title: "Add project",
-        description: "Bring in a project into the workspace.",
-        icon: <AddProjectIcon className="size-5 fill-current" />,
-        testId: "no-active-thread-action-add-project",
-        onClick: () => openCommandPalette({ open: "add-project" }),
-      },
-    ];
-  }, [handleSingleProjectNewThread, navigate, singleProject, variant]);
+          {
+            title: "Search",
+            description: "Open commands, projects, and threads from one place.",
+            icon: <SearchIcon className="size-5 fill-current" />,
+            testId: "no-active-thread-action-search",
+            onClick: () => openCommandPalette(),
+          },
+          {
+            title: "Open settings",
+            description: "Adjust defaults, keybindings, and local app behavior.",
+            icon: <SettingsHexIcon className="size-5 text-current" />,
+            testId: "no-active-thread-action-settings",
+            onClick: () => {
+              void navigate({ to: "/settings" });
+            },
+          },
+        ]
+      : [
+          {
+            title: singleProject ? `New thread in ${singleProject.title}` : "New thread in...",
+            description: singleProject
+              ? "Create a fresh thread in this project."
+              : "Create a fresh thread in any project.",
+            icon: <NewThreadIcon className="size-5 fill-current" />,
+            testId: "no-active-thread-action-new-thread",
+            onClick: () => {
+              if (singleProject) {
+                void handleSingleProjectNewThread();
+                return;
+              }
+              openCommandPalette({ open: "new-thread-in" });
+            },
+          },
+          {
+            title: "Search",
+            description: "Jump straight to a project or thread.",
+            icon: <SearchIcon className="size-5 fill-current" />,
+            testId: "no-active-thread-action-search",
+            onClick: () => openCommandPalette(),
+          },
+          {
+            title: "Add project",
+            description: "Bring in a project into the workspace.",
+            icon: <AddProjectIcon className="size-5 fill-current" />,
+            testId: "no-active-thread-action-add-project",
+            onClick: () => openCommandPalette({ open: "add-project" }),
+          },
+        ];
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground md:h-auto">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none md:h-auto">
       <header
         className={cn(
           "workspace-topbar bg-background px-3 sm:px-5 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]",
           isElectron && "drag-region [--workspace-topbar-height:39px]",
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2 wco:pr-[var(--workspace-native-controls-inset)]">
+        <div className="flex min-w-0 flex-1 items-center gap-2 wco:pr-(--workspace-native-controls-inset)">
           <SidebarTrigger className="size-7 shrink-0 md:hidden" />
           <DesktopSidebarReopenButton className="md:ml-0" />
           <WorkspaceHeaderTitle
@@ -365,7 +355,10 @@ export function NoActiveThreadState() {
       </header>
 
       <SidebarInsetCard className="overflow-x-hidden">
-        <div className="min-h-0 flex-1 overflow-y-auto" data-testid="no-active-thread-state">
+        <div
+          className="scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
+          data-testid="no-active-thread-state"
+        >
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-14">
             <section className="flex items-start">
               <div className="inline-flex size-12 items-center justify-center text-foreground sm:size-14">

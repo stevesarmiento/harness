@@ -1,20 +1,12 @@
 import { DEFAULT_APP_ICON_ID, type AppIconId } from "@t3tools/contracts";
-import {
-  DEFAULT_CODE_FONT_SIZE,
-  DEFAULT_INTERFACE_FONT_SIZE,
-  DEFAULT_UNIFIED_SETTINGS,
-  MAX_INTERFACE_FONT_SIZE,
-  MIN_INTERFACE_FONT_SIZE,
-  type ResponseStreamingMode,
-} from "@t3tools/contracts/settings";
-import { useNavigate } from "@tanstack/react-router";
+import { DEFAULT_UNIFIED_SETTINGS, type ResponseStreamingMode } from "@t3tools/contracts/settings";
 import { IconCircleLefthalfFilledRighthalfStripedHorizontalInverse as ContrastIcon } from "symbols-react";
 import {
   LightModeIcon as SunIcon,
   NightModeIcon as MoonIcon,
   SystemModeIcon as DisplayIcon,
 } from "../icons/custom";
-import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 
 import { APP_ICON_OPTIONS } from "../../appIcon";
 import {
@@ -24,25 +16,9 @@ import {
   useUpdatePrimarySettings,
 } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
-import {
-  DEFAULT_CODE_FONT_SIZE_PX,
-  DEFAULT_MAC_OS_FONT_SMOOTHING,
-  DEFAULT_UI_FONT_SIZE_PX,
-  MAX_INTERFACE_FONT_SIZE_PX,
-  MIN_INTERFACE_FONT_SIZE_PX,
-  applyInterfaceSettingsToDocument,
-  readStoredInterfaceAppearanceSettings,
-  resolveCodeFontSizePx,
-  resolveMacOsFontSmoothing,
-  resolveUiFontSizePx,
-  writeStoredInterfaceAppearanceSettings,
-  type InterfaceAppearanceSettings,
-} from "../../interfaceAppearance";
-import { cn, isMacPlatform } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
-import { Button } from "../ui/button";
 import { MathRenderingRow, TypographySection } from "./SettingsPanels";
-import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import {
   SettingResetButton,
@@ -98,68 +74,6 @@ function ThemeModeOptionLabel({ mode }: { mode: ThemeMode }) {
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "system" || value === "light" || value === "dark" || value === "highContrast";
-}
-
-function parseFontSizeInput(value: string): number | null {
-  if (value.trim() === "") {
-    return null;
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  return Math.max(MIN_INTERFACE_FONT_SIZE_PX, Math.min(MAX_INTERFACE_FONT_SIZE_PX, parsed));
-}
-
-function PixelSettingInput({
-  ariaLabel,
-  value,
-  onCommit,
-}: {
-  ariaLabel: string;
-  value: number;
-  onCommit: (value: number) => void;
-}) {
-  const [draftValue, setDraftValue] = useState(String(value));
-
-  useEffect(() => {
-    setDraftValue(String(value));
-  }, [value]);
-
-  const commitDraft = useCallback(() => {
-    const parsed = parseFontSizeInput(draftValue);
-    if (parsed === null) {
-      setDraftValue(String(value));
-      return;
-    }
-    setDraftValue(String(parsed));
-    if (parsed !== value) {
-      onCommit(parsed);
-    }
-  }, [draftValue, onCommit, value]);
-
-  return (
-    <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-      <Input
-        aria-label={ariaLabel}
-        className="w-full sm:w-24"
-        max={MAX_INTERFACE_FONT_SIZE_PX}
-        min={MIN_INTERFACE_FONT_SIZE_PX}
-        nativeInput
-        onBlur={commitDraft}
-        onChange={(event) => setDraftValue(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur();
-          }
-        }}
-        step={1}
-        type="number"
-        value={draftValue}
-      />
-      <span className="text-ui-xs text-muted-foreground">px</span>
-    </div>
-  );
 }
 
 function AppIconPreview({ id, src }: { id: AppIconId; src: string }) {
@@ -228,29 +142,9 @@ function AppIconPicker({
 export function InterfaceSettingsPanel() {
   const { themeSettings, setThemeHue, setThemeMode, setThemeSaturation, resolvedTheme } =
     useTheme();
-  const [appearance, setAppearance] = useState<InterfaceAppearanceSettings>(() =>
-    readStoredInterfaceAppearanceSettings(),
-  );
   const appIcon = useClientSettings((settings) => settings.appIcon);
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
-  const navigate = useNavigate();
-  const clampSettingsFontSize = (value: number) =>
-    Math.min(MAX_INTERFACE_FONT_SIZE, Math.max(MIN_INTERFACE_FONT_SIZE, Math.round(value)));
-
-  const updateAppearance = useCallback((next: Partial<InterfaceAppearanceSettings>) => {
-    setAppearance((current) => {
-      const updated = { ...current, ...next };
-      writeStoredInterfaceAppearanceSettings(updated);
-      applyInterfaceSettingsToDocument(updated);
-      return updated;
-    });
-  }, []);
-
-  const fontSizeInterface = settings.fontSizeInterface;
-  const fontSizeCode = settings.fontSizeCode;
-  const fontSmoothing = settings.fontSmoothing;
-
   return (
     <SettingsPageContainer>
       <SettingsSection title="Theme">
