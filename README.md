@@ -27,6 +27,12 @@ Install the latest version of the desktop app from [GitHub Releases](https://git
 winget install Forma.Forma
 ```
 
+#### Windows (`scoop`)
+
+```bash
+scoop install extras/t3code
+```
+
 #### macOS (Homebrew)
 
 ```bash

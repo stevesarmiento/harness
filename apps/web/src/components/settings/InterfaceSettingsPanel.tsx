@@ -18,9 +18,9 @@ import { useCallback, useEffect, useState, type ComponentType } from "react";
 
 import { APP_ICON_OPTIONS } from "../../appIcon";
 import {
+  updateClientSettings,
   useClientSettings,
   usePrimarySettings,
-  useUpdateClientSettings,
   useUpdatePrimarySettings,
 } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
@@ -41,7 +41,7 @@ import {
 import { cn, isMacPlatform } from "../../lib/utils";
 import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
 import { Button } from "../ui/button";
-import { TypographySection } from "./SettingsPanels";
+import { MathRenderingRow, TypographySection } from "./SettingsPanels";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import {
@@ -232,7 +232,6 @@ export function InterfaceSettingsPanel() {
     readStoredInterfaceAppearanceSettings(),
   );
   const appIcon = useClientSettings((settings) => settings.appIcon);
-  const updateClientSettings = useUpdateClientSettings();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const navigate = useNavigate();
@@ -412,6 +411,7 @@ export function InterfaceSettingsPanel() {
             </Select>
           }
         />
+        <MathRenderingRow />
       </SettingsSection>
     </SettingsPageContainer>
   );

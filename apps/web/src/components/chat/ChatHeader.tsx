@@ -25,8 +25,6 @@ import {
 } from "symbols-react";
 import {
   memo,
-  useCallback,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -63,6 +61,9 @@ interface ChatHeaderProps {
   /** Drafts have no server thread yet, so the title carries no action menu. */
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
+  /** The thread this one was forked or spawned from; shown as a breadcrumb step. */
+  parentThreadLink: { threadId: ThreadId; title: string } | null;
+  onOpenThread: (threadId: ThreadId) => void;
   /** Omitted while git status is unknown; false shows the "No Git" badge. */
   isGitRepo?: boolean;
   /** Fork: rendered after the thread pill inside the breadcrumb (the right-panel tab strip). */
@@ -108,7 +109,7 @@ export function selectHeaderThreads(
 }
 
 const HEADER_PILL_CLASS_NAME =
-  "flex h-6 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [-webkit-app-region:no-drag]";
+  "flex h-6 cursor-pointer items-center gap-1.5 rounded-md bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [-webkit-app-region:no-drag]";
 
 export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
@@ -116,6 +117,8 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadTitle,
   isServerThread,
   activeProject,
+  parentThreadLink,
+  onOpenThread,
   isGitRepo,
   breadcrumbTrailing,
   actionsLeading,
@@ -123,12 +126,9 @@ export const ChatHeader = memo(function ChatHeader({
   onNewThreadInProject,
   onOpenProjectSettings,
 }: ChatHeaderProps) {
-  const activeProjectName = activeProject?.title;
+  const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
-  const activeThreadRef = useMemo(
-    () => scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
-    [activeThreadEnvironmentId, activeThreadId],
-  );
+  const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -159,7 +159,7 @@ export const ChatHeader = memo(function ChatHeader({
       ? renaming.title
       : null;
   const renameCommittedRef = useRef(false);
-  const startRename = useCallback(() => {
+  const startRename = () => {
     if (
       !isServerThread ||
       !readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)
@@ -171,84 +171,72 @@ export const ChatHeader = memo(function ChatHeader({
       threadId: activeThreadId,
       title: activeThreadTitle,
     });
-  }, [activeThreadEnvironmentId, activeThreadId, activeThreadTitle, isServerThread]);
-  const commitRename = useCallback(
-    (title: string) => {
-      setRenaming(null);
-      if (!readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)) return;
-      const resolution = resolveRenameCommit({ title, originalTitle: activeThreadTitle });
-      if (resolution.action === "reject-empty") {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
-        return;
+  };
+  const commitRename = (title: string) => {
+    setRenaming(null);
+    if (!readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)) return;
+    const resolution = resolveRenameCommit({ title, originalTitle: activeThreadTitle });
+    if (resolution.action === "reject-empty") {
+      toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+      return;
+    }
+    if (resolution.action === "noop") return;
+    void updateThreadMetadata({
+      environmentId: activeThreadEnvironmentId,
+      input: { threadId: activeThreadId, title: resolution.title },
+    }).then((result) => {
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Failed to rename thread",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
       }
-      if (resolution.action === "noop") return;
-      void updateThreadMetadata({
-        environmentId: activeThreadEnvironmentId,
-        input: { threadId: activeThreadId, title: resolution.title },
-      }).then((result) => {
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: "Failed to rename thread",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        }
-      });
-    },
-    [activeThreadEnvironmentId, activeThreadId, activeThreadTitle, updateThreadMetadata],
-  );
+    });
+  };
   const { openMenu, closeMenu } = useThreadActionMenu({
     threadRef: isServerThread ? activeThreadRef : null,
     projectCwd: activeProjectCwd,
     onStartRename: startRename,
   });
-  const handleTitleDoubleClick = useCallback(
-    (event: ReactMouseEvent) => {
-      if (!isServerThread) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      // The chevron is the explicit switcher affordance; only the title text renames.
-      if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
-      closeMenu();
-      startRename();
-    },
-    [closeMenu, isServerThread, startRename],
-  );
-  const handleHeaderContextMenu = useCallback(
-    (event: ReactMouseEvent) => {
-      if (renamingTitle !== null) return;
-      if (!isServerThread && onOpenProjectSettings === undefined) return;
-      event.preventDefault();
-      if (!isServerThread) {
-        const api = readLocalApi();
-        if (!api) return;
-        void api.contextMenu
-          .show([{ id: "project-settings", label: "Project settings", icon: "settings" }], {
-            x: event.clientX,
-            y: event.clientY,
-          })
-          .then((action) => {
-            if (action === "project-settings") onOpenProjectSettings?.();
-          });
-        return;
-      }
-      openMenu({ x: event.clientX, y: event.clientY });
-    },
-    [isServerThread, onOpenProjectSettings, openMenu, renamingTitle],
-  );
-  const handleRenameKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-      if (event.key === "Enter") {
-        renameCommittedRef.current = true;
-        commitRename(event.currentTarget.value);
-      } else if (event.key === "Escape") {
-        renameCommittedRef.current = true;
-        setRenaming(null);
-      }
-    },
-    [commitRename],
-  );
+  const handleTitleDoubleClick = (event: ReactMouseEvent) => {
+    if (!isServerThread) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    // The chevron is the explicit switcher affordance; only the title text renames.
+    if ((event.target as HTMLElement).closest("[data-thread-title-chevron]") !== null) return;
+    closeMenu();
+    startRename();
+  };
+  const handleHeaderContextMenu = (event: ReactMouseEvent) => {
+    if (renamingTitle !== null) return;
+    if (!isServerThread && onOpenProjectSettings === undefined) return;
+    event.preventDefault();
+    if (!isServerThread) {
+      const api = readLocalApi();
+      if (!api) return;
+      void api.contextMenu
+        .show([{ id: "project-settings", label: "Project settings", icon: "settings" }], {
+          x: event.clientX,
+          y: event.clientY,
+        })
+        .then((action) => {
+          if (action === "project-settings") onOpenProjectSettings?.();
+        });
+      return;
+    }
+    openMenu({ x: event.clientX, y: event.clientY });
+  };
+  const handleRenameKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.key === "Enter") {
+      renameCommittedRef.current = true;
+      commitRename(event.currentTarget.value);
+    } else if (event.key === "Escape") {
+      renameCommittedRef.current = true;
+      setRenaming(null);
+    }
+  };
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2" onContextMenu={handleHeaderContextMenu}>
@@ -277,6 +265,31 @@ export const ChatHeader = memo(function ChatHeader({
                   <span className="min-w-0 truncate">{activeProjectName}</span>
                 </TooltipTrigger>
                 <TooltipPopup side="bottom">Switch project · {activeProjectName}</TooltipPopup>
+              </Tooltip>
+              <ChevronRightIcon
+                className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                aria-hidden
+              />
+            </>
+          ) : null}
+          {parentThreadLink ? (
+            <>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label={`Open parent thread: ${parentThreadLink.title}`}
+                      onClick={() => onOpenThread(parentThreadLink.threadId)}
+                      className={cn(HEADER_PILL_CLASS_NAME, "min-w-0 max-w-40 shrink-[2]")}
+                    />
+                  }
+                >
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {parentThreadLink.title}
+                  </span>
+                </TooltipTrigger>
+                <TooltipPopup side="bottom">{parentThreadLink.title}</TooltipPopup>
               </Tooltip>
               <ChevronRightIcon
                 className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
@@ -421,15 +434,11 @@ function ThreadSwitcherItems({
   const navigate = useNavigate();
   const threadShells = useThreadShells();
   const threadSortOrder = useClientSettings((settings) => settings.sidebarThreadSortOrder);
-  const visibleThreads = useMemo(
-    () =>
-      selectHeaderThreads(
-        threadShells,
-        activeThreadEnvironmentId,
-        activeProjectId,
-        threadSortOrder,
-      ),
-    [activeProjectId, activeThreadEnvironmentId, threadShells, threadSortOrder],
+  const visibleThreads = selectHeaderThreads(
+    threadShells,
+    activeThreadEnvironmentId,
+    activeProjectId,
+    threadSortOrder,
   );
 
   if (visibleThreads.length === 0) {

@@ -19,7 +19,6 @@ export interface PanelLayoutControlsProps {
   threadPanelPresentation: ThreadPanelPresentation;
   threadPanelPopoverHandle?: ReturnType<typeof PopoverCreateHandle>;
   threadPanelShortcutLabel: string | null;
-  threadPanelHasAttention: boolean;
   rightPanelAvailable: boolean;
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
@@ -42,7 +41,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   threadPanelPresentation,
   threadPanelPopoverHandle,
   threadPanelShortcutLabel,
-  threadPanelHasAttention,
   rightPanelAvailable,
   rightPanelOpen,
   rightPanelShortcutLabel,
@@ -61,12 +59,6 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       size="sm"
     >
       <SquareMenuIcon className="size-4" />
-      {threadPanelHasAttention ? (
-        <span
-          className="absolute right-1 top-1 size-1.5 rounded-full bg-warning ring-2 ring-background"
-          aria-hidden="true"
-        />
-      ) : null}
     </Toggle>
   );
   const threadPanelTooltip = (trigger: ReactElement) => (
@@ -176,6 +168,7 @@ export const RightPanelToggleControl = memo(function RightPanelToggleControl({
             className="relative shrink-0 [-webkit-app-region:no-drag]"
             pressed={open}
             onPressedChange={onToggle}
+            data-right-panel-toggle
             aria-label={
               liveAgentCount > 0
                 ? `${open ? "Close" : "Open"} right panel, ${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} working`

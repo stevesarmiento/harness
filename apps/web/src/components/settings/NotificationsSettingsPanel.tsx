@@ -1,6 +1,6 @@
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
 import { Switch } from "../ui/switch";
 import { NotificationSettings } from "./NotificationSettings";
 import {
@@ -20,7 +20,6 @@ export function NotificationsSettingsPanel() {
   const inAppNotificationsEnabled = useClientSettings(
     (settings) => settings.inAppNotificationsEnabled,
   );
-  const updateClientSettings = useUpdateClientSettings();
 
   return (
     <SettingsPageContainer>

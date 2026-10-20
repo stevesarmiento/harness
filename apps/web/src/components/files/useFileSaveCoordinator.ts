@@ -6,7 +6,7 @@ import {
   type ProjectFileVersion,
 } from "@t3tools/contracts";
 import { Schema } from "effect";
-import { createRef, useEffect, useMemo, useRef, useState } from "react";
+import { createRef, useEffect, useState } from "react";
 
 import { projectEnvironment } from "~/state/projects";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
@@ -49,70 +49,35 @@ export function useFileSaveCoordinator({
   onPendingChange,
 }: FileSaveOptions): FileSaveSession {
   const canWriteFiles = useEnvironmentScope(environmentId, AuthFilesystemWriteScope);
-  const writeFile = useAtomCommand(projectEnvironment.writeFile);
+  const writeFile = useProjectFileWriter();
   // Fork: versioned writes. A conflict pauses autosave until the user reloads
   // or overwrites; until then the last confirmed version stays the baseline.
   const [conflict, setConflict] = useState<ProjectFileVersionConflictError | null>(null);
-  const confirmedVersionRef = useRef(version);
-  const forceNextWriteRef = useRef(false);
-  useEffect(() => {
-    if (conflict === null) confirmedVersionRef.current = version;
-  }, [conflict, version]);
+  // A session owns the pending debounce, so it must outlive rerenders and be
+  // replaced only when what it writes to changes.
+  const inputs = { environmentId, cwd, relativePath, onPendingChange, writeFile };
+  const [current, setCurrent] = useState(() => ({
+    inputs,
+    session: createFileSaveSession({ ...inputs, version, onConflict: setConflict }),
+  }));
+  if (
+    current.inputs.environmentId !== environmentId ||
+    current.inputs.cwd !== cwd ||
+    current.inputs.relativePath !== relativePath ||
+    current.inputs.onPendingChange !== onPendingChange ||
+    current.inputs.writeFile !== writeFile
+  ) {
+    setCurrent({
+      inputs,
+      session: createFileSaveSession({ ...inputs, version, onConflict: setConflict }),
+    });
+    setConflict(null);
+  }
+  const session = current.session;
 
-  const session = useMemo(() => {
-    const coordinatorRef = createRef<Pick<FileSaveCoordinator, "change" | "reset" | "resume">>();
-    return {
-      change: (contents: string) => coordinatorRef.current?.change(contents),
-      reset: () => coordinatorRef.current?.reset(),
-      resume: () => coordinatorRef.current?.resume(),
-      setup: () => {
-        const coordinator = new FileSaveCoordinator({
-          debounceMs: FILE_SAVE_DEBOUNCE_MS,
-          canPersist: () => readEnvironmentScope(environmentId, AuthFilesystemWriteScope),
-          onPendingChange: (pending) => onPendingChange(relativePath, pending),
-          persist: (nextContents) => {
-            const expectedVersion = forceNextWriteRef.current
-              ? undefined
-              : confirmedVersionRef.current;
-            return writeFile({
-              environmentId,
-              input: {
-                cwd,
-                relativePath,
-                contents: nextContents,
-                ...(expectedVersion !== undefined ? { expectedVersion } : {}),
-              },
-            });
-          },
-          onConfirmed: (confirmedContents, result) => {
-            forceNextWriteRef.current = false;
-            const confirmedVersion = result?.version;
-            confirmedVersionRef.current = confirmedVersion;
-            setConflict(null);
-            return confirmProjectFileQueryData(
-              environmentId,
-              cwd,
-              relativePath,
-              confirmedContents,
-              confirmedVersion,
-            );
-          },
-          onFailed: (result) => {
-            forceNextWriteRef.current = false;
-            const cause = squashAtomCommandFailure(result);
-            if (!isVersionConflict(cause)) return { pause: false };
-            setConflict(cause);
-            return { pause: true };
-          },
-        });
-        coordinatorRef.current = coordinator;
-        return () => {
-          coordinatorRef.current = null;
-          coordinator.dispose();
-        };
-      },
-    };
-  }, [cwd, environmentId, onPendingChange, relativePath, writeFile]);
+  useEffect(() => {
+    if (conflict === null) session.setConfirmedVersion(version);
+  }, [conflict, session, version]);
 
   // StrictMode replays effect setup. Retired file sessions stay inert, while the
   // replay gets a fresh coordinator instead of reusing a disposed one.
@@ -130,19 +95,90 @@ export function useFileSaveCoordinator({
       cancelled = true;
     };
   }, [canWriteFiles, cwd, environmentId, relativePath, session]);
-  return useMemo(
-    () => ({
-      change: session.change,
-      conflict,
-      reloadFromDisk: () => {
-        session.reset();
-        setConflict(null);
-      },
-      overwrite: () => {
-        forceNextWriteRef.current = true;
-        session.resume();
-      },
-    }),
-    [conflict, session],
-  );
+  return {
+    change: session.change,
+    conflict,
+    reloadFromDisk: () => {
+      session.reset();
+      setConflict(null);
+    },
+    overwrite: session.overwrite,
+  };
+}
+
+function useProjectFileWriter() {
+  return useAtomCommand(projectEnvironment.writeFile);
+}
+
+function createFileSaveSession({
+  environmentId,
+  cwd,
+  relativePath,
+  version,
+  onPendingChange,
+  onConflict,
+  writeFile,
+}: FileSaveOptions & {
+  onConflict: (conflict: ProjectFileVersionConflictError | null) => void;
+  writeFile: ReturnType<typeof useProjectFileWriter>;
+}) {
+  const coordinatorRef = createRef<Pick<FileSaveCoordinator, "change" | "reset" | "resume">>();
+  // Fork: the version the next write is checked against, and whether the user
+  // chose to overwrite a conflicting file on disk.
+  let confirmedVersion = version;
+  let forceNextWrite = false;
+  return {
+    change: (contents: string) => coordinatorRef.current?.change(contents),
+    reset: () => coordinatorRef.current?.reset(),
+    overwrite: () => {
+      forceNextWrite = true;
+      coordinatorRef.current?.resume();
+    },
+    setConfirmedVersion: (nextVersion: ProjectFileVersion | undefined) => {
+      confirmedVersion = nextVersion;
+    },
+    setup: () => {
+      const coordinator = new FileSaveCoordinator({
+        debounceMs: FILE_SAVE_DEBOUNCE_MS,
+        canPersist: () => readEnvironmentScope(environmentId, AuthFilesystemWriteScope),
+        onPendingChange: (pending) => onPendingChange(relativePath, pending),
+        persist: (nextContents) => {
+          const expectedVersion = forceNextWrite ? undefined : confirmedVersion;
+          return writeFile({
+            environmentId,
+            input: {
+              cwd,
+              relativePath,
+              contents: nextContents,
+              ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+            },
+          });
+        },
+        onConfirmed: (confirmedContents, result) => {
+          forceNextWrite = false;
+          confirmedVersion = result?.version;
+          onConflict(null);
+          return confirmProjectFileQueryData(
+            environmentId,
+            cwd,
+            relativePath,
+            confirmedContents,
+            confirmedVersion,
+          );
+        },
+        onFailed: (result) => {
+          forceNextWrite = false;
+          const cause = squashAtomCommandFailure(result);
+          if (!isVersionConflict(cause)) return { pause: false };
+          onConflict(cause);
+          return { pause: true };
+        },
+      });
+      coordinatorRef.current = coordinator;
+      return () => {
+        coordinatorRef.current = null;
+        coordinator.dispose();
+      };
+    },
+  };
 }

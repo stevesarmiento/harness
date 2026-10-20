@@ -1,7 +1,7 @@
 import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
-import { proposedPlanTitle } from "../proposedPlan";
+import { proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
 import type { Project, Thread } from "../types";
 
 export interface ThreadMarkdownExportInput {

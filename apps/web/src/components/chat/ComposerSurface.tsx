@@ -1,7 +1,6 @@
 import {
   createContext,
   use,
-  useMemo,
   useState,
   type ComponentProps,
   type Dispatch,
@@ -43,10 +42,7 @@ function Shell({
   ...props
 }: ComponentProps<"div"> & { contextStrip?: boolean }) {
   const [metaSlotElement, setMetaSlotElement] = useState<HTMLDivElement | null>(null);
-  const metaSlot = useMemo(
-    () => ({ element: metaSlotElement, setElement: setMetaSlotElement }),
-    [metaSlotElement],
-  );
+  const metaSlot = { element: metaSlotElement, setElement: setMetaSlotElement };
   return (
     <ComposerMetaSlotContext value={metaSlot}>
       <div

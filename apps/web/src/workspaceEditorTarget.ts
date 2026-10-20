@@ -1,6 +1,5 @@
-import { splitFilePathPosition } from "@t3tools/client-runtime/markdown-links";
+import { resolvePathLinkTarget, splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
-import { resolvePathLinkTarget } from "./terminal-links";
 
 export interface WorkspaceEditorTarget {
   relativePath: string;

@@ -1,8 +1,6 @@
+import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import type { ServerLocalAgentSkill, ServerProviderSkill } from "@t3tools/contracts";
-import {
-  formatProviderSkillDisplayName,
-  isProviderSkillUserInvocable,
-} from "@t3tools/client-runtime/providerSkills";
+import { isProviderSkillUserInvocable } from "@t3tools/client-runtime/providerSkills";
 import {
   insertRankedSearchResult,
   normalizeSearchQuery,

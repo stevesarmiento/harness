@@ -152,10 +152,14 @@ it("resolves relay client tracing from runtime config with build-time fallback",
     tracesToken: "embedded-token",
   };
 
-  assert.deepEqual(resolveRelayClientTracingConfig({}, fallback), fallback);
+  // Fork: Forma relay tracing is opt-in.
+  const optIn = { T3CODE_TELEMETRY_ENABLED: "true" };
+  assert.equal(resolveRelayClientTracingConfig({}, fallback), null);
+  assert.deepEqual(resolveRelayClientTracingConfig(optIn, fallback), fallback);
   assert.deepEqual(
     resolveRelayClientTracingConfig(
       {
+        ...optIn,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
@@ -171,7 +175,34 @@ it("resolves relay client tracing from runtime config with build-time fallback",
   assert.equal(
     resolveRelayClientTracingConfig(
       {
+        ...optIn,
         T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "http://insecure.example.test/v1/traces",
+        T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
+        T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
+      },
+      fallback,
+    ),
+    null,
+  );
+});
+
+it("product opt-out disables relay tracing with either built-in or runtime credentials", () => {
+  const fallback = {
+    tracesUrl: "https://embedded.example.test/v1/traces",
+    tracesDataset: "embedded-dataset",
+    tracesToken: "embedded-token",
+  };
+  const env = {
+    T3CODE_TELEMETRY_ENABLED: "false",
+    T3CODE_OTEL_SDK_DISABLED: "false",
+  };
+
+  assert.equal(resolveRelayClientTracingConfig(env, fallback), null);
+  assert.equal(
+    resolveRelayClientTracingConfig(
+      {
+        ...env,
+        T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
         T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
       },

@@ -1,7 +1,7 @@
 import type { DesktopBridge, DesktopTheme } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import * as Schema from "effect/Schema";
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   DEFAULT_CUSTOM_THEME_SETTINGS,
   THEME_MEDIA_QUERY,
@@ -292,58 +292,55 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+function updateTheme(next: Partial<CustomThemeSettings>): void {
+  if (typeof window === "undefined") return;
+  const updated = { ...getStored(), ...next };
+  try {
+    writeThemePreference(updated);
+  } catch (cause) {
+    const error = isThemeStorageError(cause)
+      ? cause
+      : new ThemeStorageError({
+          operation: "write",
+          storageKey: THEME_STORAGE_KEY,
+          theme: updated.mode,
+          cause,
+        });
+    console.error(error.message, {
+      operation: error.operation,
+      storageKey: error.storageKey,
+      theme: updated.mode,
+      ...safeErrorLogAttributes(error),
+    });
+    return;
+  }
+  applyTheme(updated, true);
+  emitChange();
+}
+
+function setTheme(mode: ThemeMode): void {
+  updateTheme({ mode });
+}
+
+function setThemeHue(hue: number): void {
+  updateTheme({ hue });
+}
+
+function setThemeSaturation(saturation: number): void {
+  updateTheme({ saturation });
+}
+
+/** The light/dark appearance currently rendered, for code and diff highlighting. */
+export function useRenderedAppearance() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return resolveThemeMode(snapshot.theme, snapshot.systemDark);
+}
+
 export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const themeSettings = snapshot.theme;
   const resolvedTheme = resolveThemeMode(themeSettings, snapshot.systemDark);
   const isDark = resolvedTheme === "dark";
-
-  const updateTheme = useCallback((next: Partial<CustomThemeSettings>) => {
-    if (typeof window === "undefined") return;
-    const updated = { ...getStored(), ...next };
-    try {
-      writeThemePreference(updated);
-    } catch (cause) {
-      const error = isThemeStorageError(cause)
-        ? cause
-        : new ThemeStorageError({
-            operation: "write",
-            storageKey: THEME_STORAGE_KEY,
-            theme: updated.mode,
-            cause,
-          });
-      console.error(error.message, {
-        operation: error.operation,
-        storageKey: error.storageKey,
-        theme: updated.mode,
-        ...safeErrorLogAttributes(error),
-      });
-      return;
-    }
-    applyTheme(updated, true);
-    emitChange();
-  }, []);
-
-  const setTheme = useCallback(
-    (mode: ThemeMode) => {
-      updateTheme({ mode });
-    },
-    [updateTheme],
-  );
-
-  const setThemeHue = useCallback(
-    (hue: number) => {
-      updateTheme({ hue });
-    },
-    [updateTheme],
-  );
-
-  const setThemeSaturation = useCallback(
-    (saturation: number) => {
-      updateTheme({ saturation });
-    },
-    [updateTheme],
-  );
 
   // Keep DOM in sync on mount/change
   useEffect(() => {

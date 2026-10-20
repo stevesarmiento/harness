@@ -1,4 +1,4 @@
-import { memo, useRef } from "react";
+import { memo, useRef, type ComponentType } from "react";
 import { IconCheckmark as CheckIcon } from "symbols-react";
 import { Button } from "../ui/button";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -12,13 +12,16 @@ import { MessageCopyIcon } from "../icons/custom";
 
 export const MessageCopyButton = memo(function MessageCopyButton({
   text,
+  label = "Copy message",
+  icon: Icon = MessageCopyIcon,
   extraFlavors,
   size = "xs",
   variant = "outline",
   className,
 }: {
   text: string;
-  /** Additional clipboard types written beside `text/plain` when the platform allows it. */
+  label?: string;
+  icon?: ComponentType<{ className?: string }>;
   extraFlavors?: Readonly<Record<string, string>>;
   size?: "xs" | "icon-xs";
   /** "subtle" is Forma's quiet outline for message actions. */
@@ -38,7 +41,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
       <TooltipTrigger
         render={
           <Button
-            aria-label="Copy message"
+            aria-label={label}
             disabled={isCopied}
             onClick={() => copyToClipboard(text)}
             ref={ref}
@@ -58,11 +61,11 @@ export const MessageCopyButton = memo(function MessageCopyButton({
         {isCopied ? (
           <CheckIcon className="size-3 fill-success text-success" />
         ) : (
-          <MessageCopyIcon className="size-3 fill-current" />
+          <Icon className="size-3 fill-current" />
         )}
       </TooltipTrigger>
       <TooltipPopup>
-        <p>Copy message</p>
+        <p>{label}</p>
       </TooltipPopup>
     </Tooltip>
   );

@@ -25,7 +25,15 @@ export default Effect.gen(function* () {
   yield* Migration0026;
   yield* Migration0027;
   yield* Migration0028;
-  yield* Migration0029;
+  // Upstream 063 drops the V1 projections 029 indexes; once they are gone the
+  // replay has nothing left to repair.
+  const activityTables = yield* sql<{ readonly name: string }>`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name = 'projection_thread_activities'
+  `;
+  if (activityTables.length > 0) {
+    yield* Migration0029;
+  }
   yield* Migration0030;
 
   const pairingColumns = yield* sql<{ readonly name: string }>`

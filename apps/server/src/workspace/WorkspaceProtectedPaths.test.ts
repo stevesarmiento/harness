@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { layerTest as serverSettingsLayerTest } from "../serverSettings.ts";
 import * as WorkspaceProtectedPaths from "./WorkspaceProtectedPaths.ts";
@@ -14,7 +14,7 @@ const homeDir = NodeOS.homedir();
 const protectedDocumentsPath = NodePath.join(homeDir, "Documents", "notes.txt");
 
 const withDarwinPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.provideService(effect, HostProcessPlatform, "darwin");
+  Effect.provideService(effect, HostProcess.Platform, "darwin");
 
 describe("WorkspaceProtectedPaths", () => {
   it.effect("defaults to enabled when the settings service is unavailable", () =>

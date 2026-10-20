@@ -37,3 +37,4 @@ export function resolveDefaultBuildAppIconId(
 }
 
 export const APP_DEFAULT_ICON_ID = resolveDefaultBuildAppIconId();
+export const DESKTOP_DOWNLOAD_URL = "https://t3.codes/download";

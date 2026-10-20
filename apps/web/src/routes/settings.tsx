@@ -87,12 +87,9 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
       </SettingsScopeNotice>
     );
   }
-  // Device-local pages ignore the scope entirely; the project page follows
-  // remembered members while a grouping change replaces its URL key.
   if (SETTINGS_DEVICE_ONLY_PATHS.has(pathname) || pathname === "/settings/projects") {
     return children;
   }
-  // Keep the scope sentence on screen so the selection can be changed back.
   if (scope.kind === "unavailable")
     return (
       <SettingsPageContainer>
@@ -115,13 +112,17 @@ function SettingsContentLayout() {
   const location = useLocation();
   const navigateToMainApp = useNavigateToMainApp();
   useEscapeToGoBack(navigateToMainApp);
-  const { search } = useSettingsScope();
+  const { search, environment } = useSettingsScope();
+  const contentScopeKey =
+    location.pathname === "/settings/diagnostics" || location.pathname === "/settings/providers"
+      ? environment?.environmentId
+      : JSON.stringify(search);
   const [restoreSignal, setRestoreSignal] = useState(0);
   const showRestoreDefaults = location.pathname === "/settings/general";
   const handleRestored = () => setRestoreSignal((value) => value + 1);
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground isolate md:h-auto">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate md:h-auto">
       {!isElectron && (
         <header className="workspace-topbar border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]">
           <div className="flex min-w-0 w-full items-center gap-2">
@@ -144,7 +145,7 @@ function SettingsContentLayout() {
       )}
 
       {isElectron && (
-        <div className="workspace-topbar drag-region border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:39px] wco:pr-[var(--workspace-native-controls-inset)]">
+        <div className="workspace-topbar drag-region border-b border-border bg-background px-3 sm:px-5 md:border-b-0 md:bg-transparent md:pl-0 [--workspace-topbar-height:39px] wco:pr-(--workspace-native-controls-inset)">
           <div className="flex min-w-0 items-center gap-2">
             <DesktopSidebarReopenButton className="md:ml-0" />
             <WorkspaceHeaderTitle
@@ -164,10 +165,7 @@ function SettingsContentLayout() {
       )}
 
       <SidebarInsetCard>
-        <div
-          key={`${JSON.stringify(search)}:${restoreSignal}`}
-          className="min-h-0 flex flex-1 flex-col"
-        >
+        <div key={`${contentScopeKey}:${restoreSignal}`} className="min-h-0 flex flex-1 flex-col">
           <SettingsScopeBoundary pathname={location.pathname}>
             <Outlet />
           </SettingsScopeBoundary>

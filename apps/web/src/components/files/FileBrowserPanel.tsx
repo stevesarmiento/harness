@@ -5,10 +5,12 @@ import type {
 } from "@pierre/trees";
 import type { EnvironmentId, ProjectEntry, ScopedThreadRef } from "@t3tools/contracts";
 import { FileTree, useFileTree, useFileTreeSearch, useFileTreeSelector } from "@pierre/trees/react";
+import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Cause from "effect/Cause";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
@@ -17,6 +19,7 @@ import { toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh";
 import { useFileContextMenu, type FileContextMenuAction } from "~/fileContextMenu";
@@ -27,9 +30,11 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { projectEnvironment } from "~/state/projects";
 import { useRightPanelStore } from "~/rightPanelStore";
 
+import { joinHostPath } from "./filePath";
 import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import { areAllDirectoriesExpanded, setAllDirectoriesExpanded } from "./fileTreeExpansion";
 import { buildFileTreePathUpdates } from "./fileTreePathReconciliation";
+import { loadFileAncestors } from "./loadFileAncestors";
 import { useDirectoryEntries } from "./useDirectoryEntries";
 import { useProjectPathSearch } from "~/state/queries";
 
@@ -37,12 +42,18 @@ interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
-  threadRef: ScopedThreadRef;
-  /** Entry currently open in the surface; revealed and selected in the tree. A directory is expanded. */
+  /** Fork: the thread whose open file surfaces follow a rename or delete. */
+  threadRef?: ScopedThreadRef;
   selectedPath: string | null;
-  /** Bumped when the same path should be revealed again (e.g. re-opened from search). */
   selectedPathRevealId: number;
   onOpenFile: (relativePath: string) => void;
+  /**
+   * Set when `cwd` is a host folder outside the workspace rather than the
+   * workspace root. Entries then open and mention as host paths. A host folder can
+   * be a home directory, so nothing walks it whole: there is no expand-all, and
+   * search filters the folders already loaded instead of indexing on the server.
+   */
+  hostFolder?: boolean;
   onRefreshSelectedFile?: () => void;
   workspaceMutationId: string | null;
 }
@@ -100,6 +111,38 @@ function FileSearchField(props: {
   );
 }
 
+// The tree diffs `treePaths` by identity, so the panel must keep this result cached
+// across the hooks that read it.
+function buildTreeEntries(
+  directoryEntries: readonly ProjectEntry[],
+  searchEntries: readonly ProjectEntry[],
+  searchPending: boolean,
+  query: string,
+) {
+  const result = new Map(directoryEntries.map((entry) => [entry.path, entry]));
+  if (query.trim() && !searchPending) {
+    for (const entry of searchEntries) {
+      if (!result.has(entry.path)) result.set(entry.path, entry);
+      const segments = entry.path.split("/");
+      for (let index = 1; index < segments.length; index++) {
+        const path = segments.slice(0, index).join("/");
+        if (!result.has(path)) result.set(path, { path, kind: "directory" });
+      }
+    }
+  }
+  const entries = [...result.values()];
+  const entryKinds: ReadonlyMap<string, ProjectEntry["kind"]> = new Map(
+    entries.map((entry) => [entry.path, entry.kind] as const),
+  );
+  const treePaths = entries.map(treePath);
+  const directories = entries.filter((entry) => entry.kind === "directory");
+  const directoryPaths = directories.map(treePath);
+  // Expanding a folder lists it, and an ignored one such as `node_modules` can hold tens of
+  // thousands, so expand all skips ignored folders. They still open by hand.
+  const expandableDirectoryPaths = directories.filter((entry) => !entry.ignored).map(treePath);
+  return { entries, entryKinds, treePaths, directoryPaths, expandableDirectoryPaths };
+}
+
 export default function FileBrowserPanel({
   environmentId,
   cwd,
@@ -110,7 +153,10 @@ export default function FileBrowserPanel({
   onOpenFile,
   onRefreshSelectedFile,
   workspaceMutationId,
+  hostFolder = false,
 }: FileBrowserPanelProps) {
+  const panelPath = (relativePath: string) =>
+    hostFolder ? joinHostPath(cwd, relativePath) : relativePath;
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
   const fileContextMenu = useFileContextMenu(environmentId);
@@ -121,38 +167,22 @@ export default function FileBrowserPanel({
     ready,
     error,
     isPending,
+    loadingDirectories,
   } = useDirectoryEntries(environmentId, cwd);
   const [query, setQuery] = useState("");
   const [expandAll, setExpandAll] = useState(false);
-  const pathSearch = useProjectPathSearch({ environmentId, cwd, query: query.slice(0, 256) }, 200);
-  const entries = useMemo(() => {
-    const result = new Map(directoryEntries.map((entry) => [entry.path, entry]));
-    if (query.trim() && !pathSearch.isPending) {
-      for (const entry of pathSearch.entries) {
-        if (!result.has(entry.path)) result.set(entry.path, entry);
-        const segments = entry.path.split("/");
-        for (let index = 1; index < segments.length; index++) {
-          const path = segments.slice(0, index).join("/");
-          if (!result.has(path)) result.set(path, { path, kind: "directory" });
-        }
-      }
-    }
-    return [...result.values()];
-  }, [directoryEntries, pathSearch.entries, pathSearch.isPending, query]);
+  const pathSearch = useProjectPathSearch(
+    { environmentId, cwd: hostFolder ? null : cwd, query: query.slice(0, 256) },
+    200,
+  );
+  const { entries, entryKinds, treePaths, directoryPaths, expandableDirectoryPaths } =
+    buildTreeEntries(directoryEntries, pathSearch.entries, pathSearch.isPending, query);
+  const entryKindsRef = useRef(entryKinds);
+  // Fork: workspace entry create/rename/delete from the tree's context menu.
   const writeFile = useAtomCommand(projectEnvironment.writeFile);
   const createDirectory = useAtomCommand(projectEnvironment.createDirectory);
   const renameEntry = useAtomCommand(projectEnvironment.renameEntry);
   const deleteEntry = useAtomCommand(projectEnvironment.deleteEntry);
-  const entryKinds = useMemo(
-    () => new Map(entries.map((entry) => [entry.path, entry.kind] as const)),
-    [entries],
-  );
-  const entryKindsRef = useRef<ReadonlyMap<string, ProjectEntry["kind"]>>(entryKinds);
-  const treePaths = useMemo(() => entries.map(treePath), [entries]);
-  const directoryPaths = useMemo(
-    () => entries.filter((entry) => entry.kind === "directory").map(treePath),
-    [entries],
-  );
   const previousTreePathsRef = useRef<readonly string[] | null>(null);
   const syncingSelectionRef = useRef(false);
   const treeSelectionPathRef = useRef<string | null>(null);
@@ -170,198 +200,201 @@ export default function FileBrowserPanel({
     return () => document.removeEventListener("contextmenu", capturePointer, true);
   }, []);
 
-  /** Combines the file actions (open/reveal/open with) with the panel's own mention actions. */
-  const showEntryContextMenu = async (
-    item: TreeContextMenuItem,
-    context: TreeContextMenuOpenContext,
-  ) => {
-    const api = readLocalApi();
-    if (!api) {
-      context.close();
-      return;
-    }
-    const relativePath = item.path.replace(/\/$/, "");
-    const kind =
-      entryKindsRef.current.get(relativePath) ?? (item.path.endsWith("/") ? "directory" : "file");
-    const mention = serializeComposerFileLink(relativePath);
-    const pointer = contextMenuPointerRef.current;
-    const pointerIsFresh = pointer !== null && performance.now() - pointer.at < 1000;
-    const anchorRect = context.anchorElement.getBoundingClientRect();
-    const position = pointerIsFresh
-      ? { x: pointer.x, y: pointer.y }
-      : { x: anchorRect.left, y: anchorRect.bottom };
-    const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
-    const fileMenuItems = fileContextMenu.buildItems(fileTarget);
-    try {
-      const clicked = await api.contextMenu.show(
-        [
-          { id: "new-file", label: "New file" },
-          { id: "new-folder", label: "New folder" },
-          { id: "rename", label: "Rename" },
-          { id: "delete", label: "Delete", destructive: true },
-          ...fileMenuItems,
-          { id: "copy-mention", label: "Copy mention" },
-          { id: "add-to-chat", label: "Add to chat" },
-        ],
-        position,
-      );
-      if (clicked === null) return;
-      const parentPath =
-        kind === "directory"
-          ? relativePath
-          : relativePath.includes("/")
+  const showEntryContextMenu = useStableCallback(
+    (item: TreeContextMenuItem, context: TreeContextMenuOpenContext) => {
+      const api = readLocalApi();
+      if (!api) {
+        context.close();
+        return;
+      }
+      const relativePath = item.path.replace(/\/$/, "");
+      const kind =
+        entryKindsRef.current.get(relativePath) ?? (item.path.endsWith("/") ? "directory" : "file");
+      const mention = serializeComposerFileLink(panelPath(relativePath));
+      const pointer = contextMenuPointerRef.current;
+      const pointerIsFresh = pointer !== null && performance.now() - pointer.at < 1000;
+      const anchorRect = context.anchorElement.getBoundingClientRect();
+      const position = pointerIsFresh
+        ? { x: pointer.x, y: pointer.y }
+        : { x: anchorRect.left, y: anchorRect.bottom };
+      const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
+      const fileMenuItems = fileContextMenu.buildItems(fileTarget);
+      void settlePromise(async () => {
+        const clicked = await api.contextMenu.show(
+          [
+            // Fork: entry management stays inside the workspace; host folders are browse-only.
+            ...(hostFolder
+              ? []
+              : [
+                  { id: "new-file", label: "New file" },
+                  { id: "new-folder", label: "New folder" },
+                  { id: "rename", label: "Rename" },
+                  { id: "delete", label: "Delete", destructive: true },
+                ]),
+            ...fileMenuItems,
+            { id: "copy-mention", label: "Copy mention" },
+            { id: "add-to-chat", label: "Add to chat" },
+          ],
+          position,
+        );
+        if (clicked === null) return;
+        const parentPath =
+          kind === "directory"
+            ? relativePath
+            : relativePath.includes("/")
+              ? relativePath.slice(0, relativePath.lastIndexOf("/"))
+              : "";
+        if (clicked === "new-file" || clicked === "new-folder") {
+          const label = clicked === "new-file" ? "file" : "folder";
+          const name = window.prompt(`Name the new ${label}`);
+          if (!name?.trim()) return;
+          const targetPath = [parentPath, name.trim()].filter(Boolean).join("/");
+          const result =
+            clicked === "new-file"
+              ? await writeFile({
+                  environmentId,
+                  input: { cwd, relativePath: targetPath, contents: "", expectedVersion: null },
+                })
+              : await createDirectory({
+                  environmentId,
+                  input: { cwd, relativePath: targetPath },
+                });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: `Failed to create ${label}`,
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          refresh();
+          if (clicked === "new-file") onOpenFile(targetPath);
+          return;
+        }
+        if (clicked === "rename") {
+          const name = window.prompt(
+            `Rename ${kind}`,
+            relativePath.slice(relativePath.lastIndexOf("/") + 1),
+          );
+          if (!name?.trim()) return;
+          const sourceParent = relativePath.includes("/")
             ? relativePath.slice(0, relativePath.lastIndexOf("/"))
             : "";
-      if (clicked === "new-file" || clicked === "new-folder") {
-        const label = clicked === "new-file" ? "file" : "folder";
-        const name = window.prompt(`Name the new ${label}`);
-        if (!name?.trim()) return;
-        const targetPath = [parentPath, name.trim()].filter(Boolean).join("/");
-        const result =
-          clicked === "new-file"
-            ? await writeFile({
-                environmentId,
-                input: { cwd, relativePath: targetPath, contents: "", expectedVersion: null },
-              })
-            : await createDirectory({
-                environmentId,
-                input: { cwd, relativePath: targetPath },
-              });
-        if (result._tag === "Failure") {
-          const cause = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: `Failed to create ${label}`,
-            description: cause instanceof Error ? cause.message : String(cause),
+          const targetPath = [sourceParent, name.trim()].filter(Boolean).join("/");
+          if (targetPath === relativePath) return;
+          const result = await renameEntry({
+            environmentId,
+            input: { cwd, fromRelativePath: relativePath, toRelativePath: targetPath },
           });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: "Failed to rename entry",
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          if (threadRef) {
+            useRightPanelStore
+              .getState()
+              .renameFileSurfaces(threadRef, relativePath, targetPath, result.value.kind);
+          }
+          refresh();
           return;
         }
-        refresh();
-        if (clicked === "new-file") onOpenFile(targetPath);
-        return;
-      }
-      if (clicked === "rename") {
-        const name = window.prompt(
-          `Rename ${kind}`,
-          relativePath.slice(relativePath.lastIndexOf("/") + 1),
-        );
-        if (!name?.trim()) return;
-        const sourceParent = relativePath.includes("/")
-          ? relativePath.slice(0, relativePath.lastIndexOf("/"))
-          : "";
-        const targetPath = [sourceParent, name.trim()].filter(Boolean).join("/");
-        if (targetPath === relativePath) return;
-        const result = await renameEntry({
-          environmentId,
-          input: { cwd, fromRelativePath: relativePath, toRelativePath: targetPath },
-        });
-        if (result._tag === "Failure") {
-          const cause = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: "Failed to rename entry",
-            description: cause instanceof Error ? cause.message : String(cause),
+        if (clicked === "delete") {
+          const confirmed = await api.dialogs.confirm(
+            `Delete ${kind} “${relativePath}”?${kind === "directory" ? " Its contents will also be deleted." : ""}`,
+          );
+          if (!confirmed) return;
+          const result = await deleteEntry({
+            environmentId,
+            input: { cwd, relativePath, recursive: kind === "directory" },
           });
+          if (result._tag === "Failure") {
+            const cause = squashAtomCommandFailure(result);
+            toastManager.add({
+              type: "error",
+              title: "Failed to delete entry",
+              description: cause instanceof Error ? cause.message : String(cause),
+            });
+            return;
+          }
+          if (threadRef) {
+            useRightPanelStore
+              .getState()
+              .removeFileSurfaces(threadRef, relativePath, result.value.kind);
+          }
+          refresh();
           return;
         }
-        useRightPanelStore
-          .getState()
-          .renameFileSurfaces(threadRef, relativePath, targetPath, result.value.kind);
-        refresh();
-        return;
-      }
-      if (clicked === "delete") {
-        const confirmed = await api.dialogs.confirm(
-          `Delete ${kind} “${relativePath}”?${kind === "directory" ? " Its contents will also be deleted." : ""}`,
-        );
-        if (!confirmed) return;
-        const result = await deleteEntry({
-          environmentId,
-          input: { cwd, relativePath, recursive: kind === "directory" },
-        });
-        if (result._tag === "Failure") {
-          const cause = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: "Failed to delete entry",
-            description: cause instanceof Error ? cause.message : String(cause),
-          });
+        // "Open with" submenu selections report the child id ("editor:<id>"),
+        // which is not present in the top-level item list.
+        const isFileMenuAction =
+          fileMenuItems.some((entry) => entry.id === clicked) || clicked.startsWith("editor:");
+        if (isFileMenuAction) {
+          await fileContextMenu.activate(clicked as FileContextMenuAction, fileTarget);
           return;
         }
-        useRightPanelStore
-          .getState()
-          .removeFileSurfaces(threadRef, relativePath, result.value.kind);
-        refresh();
-        return;
-      }
-      // "Open with" submenu selections report the child id ("editor:<id>"),
-      // which is not present in the top-level item list.
-      const isFileMenuAction =
-        fileMenuItems.some((entry) => entry.id === clicked) || clicked.startsWith("editor:");
-      if (isFileMenuAction) {
-        await fileContextMenu.activate(clicked as FileContextMenuAction, fileTarget);
-        return;
-      }
-      if (clicked === "copy-mention") {
-        try {
-          await writeTextToClipboard(mention);
-          toastManager.add({ type: "success", title: "Mention copied", description: relativePath });
-        } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Failed to copy mention",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        }
-        return;
-      }
-      if (clicked === "add-to-chat") {
-        const composer = composerRef?.current;
-        if (!composer) {
-          toastManager.add({
-            type: "error",
-            title: "Unable to add to chat",
-            description: "Open a chat for this project and try again.",
-          });
+        if (clicked === "copy-mention") {
+          try {
+            await writeTextToClipboard(mention);
+            toastManager.add({
+              type: "success",
+              title: "Mention copied",
+              description: relativePath,
+            });
+          } catch (error) {
+            toastManager.add({
+              type: "error",
+              title: "Failed to copy mention",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            });
+          }
           return;
         }
-        const inserted = composer.insertTextAtEnd(`${mention} `, { ensureLeadingBoundary: true });
-        if (!inserted) {
-          toastManager.add({
-            type: "error",
-            title: "Unable to add to chat",
-            description: "The chat isn't ready to accept input right now.",
-          });
+        if (clicked === "add-to-chat") {
+          const composer = composerRef?.current;
+          if (!composer) {
+            toastManager.add({
+              type: "error",
+              title: "Unable to add to chat",
+              description: "Open a chat for this project and try again.",
+            });
+            return;
+          }
+          const inserted = composer.insertTextAtEnd(`${mention} `, { ensureLeadingBoundary: true });
+          if (!inserted) {
+            toastManager.add({
+              type: "error",
+              title: "Unable to add to chat",
+              description: "The chat isn't ready to accept input right now.",
+            });
+          }
         }
-      }
-    } finally {
-      context.close();
-    }
-  };
-  const showEntryContextMenuRef = useRef(showEntryContextMenu);
-  useEffect(() => {
-    showEntryContextMenuRef.current = showEntryContextMenu;
-  });
+      }).then((result) => {
+        context.close();
+        // Keep surfacing unexpected failures as unhandled rejections.
+        if (!AsyncResult.isSuccess(result)) throw Cause.squash(result.cause);
+      });
+    },
+  );
 
-  const treeModelRef = useRef<ReturnType<typeof useFileTree>["model"] | null>(null);
-  const dragMention = useMemo(
-    () =>
-      createFileTreeDragMentionController({
-        deselect: (path) => treeModelRef.current?.getItem(path)?.deselect(),
-      }),
-    [],
+  const loadingDirectoriesRef = useRef(loadingDirectories);
+  const dragMention = createFileTreeDragMentionController(
+    hostFolder ? { mentionPath: (path: string) => joinHostPath(cwd, path) } : {},
   );
   const { model } = useFileTree({
     composition: {
       contextMenu: {
         triggerMode: "right-click",
         onOpen: (item, context) => {
-          void showEntryContextMenuRef.current(item, context);
+          showEntryContextMenu(item, context);
         },
       },
     },
-    // Rows only need to be draggable so entries can be dropped into the chat
-    // composer; rearranging files inside the tree stays off.
     dragAndDrop: { canDrop: () => false },
     density: "compact",
     fileTreeSearchMode: "hide-non-matches",
@@ -372,33 +405,46 @@ export default function FileBrowserPanel({
       // The drag controller's selection cache must track every change,
       // including reveal-driven ones, or drags act on a stale selection.
       dragMention.handleSelectionChange(selectedPaths);
-      // Selection changes driven by the reveal sync below are echoes of an
-      // already-open file, not a request to open it again.
       if (syncingSelectionRef.current) return;
-      // Starting a drag selects the dragged row; that selection is a side
-      // effect of the gesture, not a request to open the file.
       if (dragMention.isDragInProgress()) {
         return;
       }
       const selectedPath = selectedPaths.at(-1)?.replace(/\/$/, "");
       if (selectedPath && entryKindsRef.current.get(selectedPath) === "file") {
         treeSelectionPathRef.current = selectedPath;
-        onOpenFile(selectedPath);
+        onOpenFile(panelPath(selectedPath));
       }
     },
     paths: [],
+    renderRowDecoration: ({ item, row }) =>
+      row.kind === "directory" &&
+      row.isExpanded &&
+      loadingDirectoriesRef.current.has(item.path.replace(/\/$/, ""))
+        ? { icon: "t3-tree-icon-loading", title: "Loading…" }
+        : null,
     search: false,
     onSearchChange: (value) => setQuery(value ?? ""),
     unsafeCSS: PIERRE_TREE_UNSAFE_CSS,
   });
+  useEffect(() => {
+    if (loadingDirectoriesRef.current === loadingDirectories) return;
+    loadingDirectoriesRef.current = loadingDirectories;
+    model.setComposition(model.getComposition());
+  }, [loadingDirectories, model]);
   const search = useFileTreeSearch(model);
+  // Pierre restores the unfiltered tree when a search has no matches.
+  const hasNoSearchMatches = search.value.trim().length > 0 && search.matchingPaths.length === 0;
   const allDirectoriesExpanded = useFileTreeSelector(model, (currentModel) =>
-    areAllDirectoriesExpanded(currentModel, directoryPaths),
+    areAllDirectoriesExpanded(currentModel, expandableDirectoryPaths),
   );
   const toggleAllDirectories = () => {
     const expanded = !(expandAll || allDirectoriesExpanded);
     setExpandAll(expanded);
-    setAllDirectoriesExpanded(model, directoryPaths, expanded);
+    setAllDirectoriesExpanded(
+      model,
+      expanded ? expandableDirectoryPaths : directoryPaths,
+      expanded,
+    );
   };
   const closeSearch = () => {
     setQuery("");
@@ -441,12 +487,7 @@ export default function FileBrowserPanel({
   useEffect(() => {
     if (!selectedPath) return;
     const controller = new AbortController();
-    void (async () => {
-      const segments = selectedPath.split("/");
-      for (let index = 0; index < segments.length && !controller.signal.aborted; index++) {
-        await load(segments.slice(0, index).join("/"));
-      }
-    })();
+    void loadFileAncestors(selectedPath, load, { signal: controller.signal });
     return () => {
       controller.abort();
     };
@@ -488,8 +529,9 @@ export default function FileBrowserPanel({
   }, [ready, entryKinds, model, treePaths]);
 
   useEffect(() => {
-    if (expandAll && !query.trim()) setAllDirectoriesExpanded(model, directoryPaths, true);
-  }, [directoryPaths, expandAll, model, query]);
+    if (expandAll && !query.trim())
+      setAllDirectoriesExpanded(model, expandableDirectoryPaths, true);
+  }, [expandableDirectoryPaths, expandAll, model, query]);
 
   useEffect(() => {
     if (!selectedPath) {
@@ -497,8 +539,6 @@ export default function FileBrowserPanel({
       return;
     }
     const selectedKind = entryKinds.get(selectedPath);
-    // An unloaded entry has no row to reveal yet; folders do, and chat links can
-    // point at them.
     if (selectedKind === undefined) {
       handledRevealRef.current = null;
       return;
@@ -513,7 +553,6 @@ export default function FileBrowserPanel({
     ) {
       return;
     }
-    // Directory rows are registered with a trailing slash (see treePath).
     const selectedTreePath = selectedKind === "directory" ? `${selectedPath}/` : selectedPath;
     const selectedItem = model.getItem(selectedTreePath);
     if (!selectedItem) return;
@@ -561,30 +600,24 @@ export default function FileBrowserPanel({
     });
   }, [entryKinds, model, selectedPath, selectedPathRevealId]);
 
-  // Tag tree drags with the composer mention payload. The row is read from
-  // the composed event path (the tree's shadow root is open), so this does
-  // not depend on running after the tree's own dragstart handler; the drag
-  // data store is writable for every dragstart listener in the dispatch.
   // The capture phase runs before the tree's own dragstart handler selects
   // the dragged row, so the drag flag is up before that selection emits.
   const panelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    treeModelRef.current = model;
-  }, [model]);
   useEffect(() => {
     const panel = panelRef.current;
     if (panel === null) {
       return;
     }
     const handleDragStart = (event: DragEvent) => dragMention.handleDragStart(event);
-    const handleDragEnd = () => dragMention.handleDragEnd();
+    const handleDragEnd = () =>
+      dragMention.handleDragEnd((path) => model.getItem(path)?.deselect());
     panel.addEventListener("dragstart", handleDragStart, true);
     panel.addEventListener("dragend", handleDragEnd);
     return () => {
       panel.removeEventListener("dragstart", handleDragStart, true);
       panel.removeEventListener("dragend", handleDragEnd);
     };
-  }, [dragMention]);
+  }, [dragMention, model]);
 
   return (
     <div
@@ -604,7 +637,7 @@ export default function FileBrowserPanel({
           onValueChange={handleSearchValueChange}
           onClose={closeSearch}
         />
-        {directoryPaths.length > 0 ? (
+        {directoryPaths.length > 0 && !hostFolder ? (
           <Tooltip>
             <TooltipTrigger
               render={
@@ -646,17 +679,32 @@ export default function FileBrowserPanel({
           More matches available. Refine your search.
         </div>
       ) : null}
-      {(isPending || pathSearch.isPending) && (
-        <div role="status" className="px-3 py-1 text-xs text-muted-foreground">
+      {(!ready || pathSearch.isPending) && (
+        <div
+          role="status"
+          className={
+            entries.length > 0 && !hasNoSearchMatches
+              ? "sr-only"
+              : "px-3 py-1 text-xs text-muted-foreground"
+          }
+        >
           Loading files…
         </div>
       )}
-      <FileTree
-        model={model}
-        aria-label={`${projectName} files`}
-        className="min-h-0 flex-1 overflow-hidden"
-        style={pierreTreeStyle(resolvedTheme)}
-      />
+      {hasNoSearchMatches ? (
+        ready && !isPending && !pathSearch.isPending && !error && !pathSearch.error ? (
+          <div role="status" className="px-3 py-4 text-xs text-muted-foreground">
+            No matching files.
+          </div>
+        ) : null
+      ) : (
+        <FileTree
+          model={model}
+          aria-label={`${projectName} files`}
+          className="min-h-0 flex-1 overflow-hidden"
+          style={pierreTreeStyle(resolvedTheme)}
+        />
+      )}
     </div>
   );
 }

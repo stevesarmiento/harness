@@ -1,5 +1,4 @@
 import { buildCodeContextInlineChipLabel, type CodeContextSelection } from "~/lib/codeContext";
-import { inferEntryKindFromPath } from "~/pierre-icons";
 import { ContextChipShell } from "../contextChipParts";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { readResolvedThemeModeFromDocument } from "../../theme";
@@ -17,13 +16,7 @@ export function CodeContextInlineChip(props: CodeContextInlineChipProps) {
   return (
     <ContextChipShell
       kind="file"
-      icon={
-        <PierreEntryIcon
-          pathValue={selection.filePath}
-          kind={inferEntryKindFromPath(selection.filePath)}
-          theme={theme}
-        />
-      }
+      icon={<PierreEntryIcon pathValue={selection.filePath} kind="file" theme={theme} />}
       label={label}
       tooltip={tooltipText}
     />

@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { runMigrations } from "./Migrations.ts";
@@ -8,6 +9,24 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 const backfillLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 const idempotencyLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
 const v2UpgradeLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const postV2UpgradeLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+const clashLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
+
+// The whole fork block, recorded the way live Forma databases carry it.
+const recordForkBlock = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    INSERT INTO effect_sql_migrations (migration_id, name)
+    VALUES
+      (935, 'ProjectionProjectComponentPreviewConfig'),
+      (936, 'ProjectionProjectComponentPreviewWorkspaceRecords'),
+      (937, 'ResetProjectComponentPreviewState'),
+      (938, 'ReconcileLegacyForkMigrationHistory'),
+      (939, 'ThreadExtensionQueue'),
+      (940, 'ProjectionThreadsForkLineage'),
+      (941, 'ReconcileLegacyForkUpstreamOverlap')
+  `.withoutTransform;
+});
 
 backfillLayer("Migrations backfill", (it) => {
   it.effect("applies upstream migrations that sort below an already-recorded fork 9xx id", () =>
@@ -47,7 +66,7 @@ backfillLayer("Migrations backfill", (it) => {
 
 v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
   it.effect(
-    "applies upstream 041-059, including OrchestrationV2, on a Forma 040 + 9xx ledger",
+    "applies upstream 041-066, including OrchestrationV2, on a Forma 040 + 9xx ledger",
     () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
@@ -55,22 +74,12 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
         // The live Forma ledger before the V2 merge: upstream 1-40 plus the
         // whole fork block, so the stock Migrator's high-water mark is 941.
         yield* runMigrations({ toMigrationInclusive: 40 });
-        yield* sql`
-          INSERT INTO effect_sql_migrations (migration_id, name)
-          VALUES
-            (935, 'ProjectionProjectComponentPreviewConfig'),
-            (936, 'ProjectionProjectComponentPreviewWorkspaceRecords'),
-            (937, 'ResetProjectComponentPreviewState'),
-            (938, 'ReconcileLegacyForkMigrationHistory'),
-            (939, 'ThreadExtensionQueue'),
-            (940, 'ProjectionThreadsForkLineage'),
-            (941, 'ReconcileLegacyForkUpstreamOverlap')
-        `.withoutTransform;
+        yield* recordForkBlock;
 
         const executed = yield* runMigrations();
         assert.deepStrictEqual(
           executed.map(([id]) => id),
-          Array.from({ length: 19 }, (_, index) => index + 41),
+          Array.from({ length: 26 }, (_, index) => index + 41),
         );
 
         const tables = yield* sql<{ readonly name: string }>`
@@ -80,6 +89,42 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
         assert.strictEqual(tables.length, 1);
         assert.deepStrictEqual(yield* runMigrations(), []);
       }),
+  );
+});
+
+postV2UpgradeLayer("Migrations backfill after V2", (it) => {
+  it.effect("applies upstream 060-066 on a Forma ledger already through 059", () =>
+    Effect.gen(function* () {
+      // The live Forma ledger after the first V2 sync: upstream 1-59 plus the
+      // fork block. The V2 id check must not treat 060-066 as skipped.
+      yield* runMigrations({ toMigrationInclusive: 59 });
+      yield* recordForkBlock;
+
+      const executed = yield* runMigrations();
+      assert.deepStrictEqual(
+        executed.map(([id]) => id),
+        [60, 61, 62, 63, 64, 65, 66],
+      );
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }),
+  );
+});
+
+clashLayer("Migrations backfill V2 clash", (it) => {
+  it.effect("still refuses a V2 id recorded under another name", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 59 });
+      yield* recordForkBlock;
+      yield* sql`
+        INSERT INTO effect_sql_migrations (migration_id, name)
+        VALUES (60, 'SiteLocalMigration')
+      `.withoutTransform;
+
+      const exit = yield* Effect.exit(runMigrations());
+      assert.isTrue(Exit.isFailure(exit));
+      assert.include(String(exit), "60_ThreadSnapshotWindowIndexes (recorded: SiteLocalMigration)");
+    }),
   );
 });
 

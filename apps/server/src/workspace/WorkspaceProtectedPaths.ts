@@ -17,7 +17,7 @@ import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   getProtectedAbsolutePaths,
   getProtectedDirectoryNames,
@@ -62,7 +62,7 @@ const EMPTY_NAME_SET: ReadonlySet<string> = new Set<string>();
 
 export const makeProtectedPathsGuard: Effect.Effect<ProtectedPathsGuard> = Effect.gen(function* () {
   const serverSettingsOption = yield* Effect.serviceOption(ServerSettingsService);
-  const platform = yield* HostProcessPlatform;
+  const platform = yield* HostProcess.Platform;
   const homeDir = NodeOS.homedir();
 
   const isEnabled: Effect.Effect<boolean> = Option.match(serverSettingsOption, {

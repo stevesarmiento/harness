@@ -114,14 +114,20 @@ with `apps/server/src/orchestration-v2/`. The fork adopted V2 wholesale.
   notifications (`desktopNotifyOn*`; upstream `notificationMode` replaces them).
 - **Kept fork features**: protected paths (Settings → Safety), workspace entry
   create/rename/delete and versioned file writes, local agent inventory,
-  `git.listOpenPullRequests`, app icons, thread cleanup, Markdown export and
-  fork actions (rebuilt on V2 in `useThreadActions`).
+  app icons, thread cleanup, Markdown export and fork actions (rebuilt on V2
+  in `useThreadActions`).
 - **Migration ledger**: fork migrations 935–941 stay registered (live databases
   recorded them) even where their tables are now unused. `backfillSkippedMigrations`
   runs after upstream's `reconcileV2PreviewMigration` so upstream 041+ apply on
   Forma ledgers whose high-water mark is 941. Upstream logs legacy fork ids
   26–31 as "divergent" on old databases; 938/941 already reconcile those, so
   the warning is expected.
+- **Migration id check** (#15925): upstream's `assertV2MigrationsCanRun` treats
+  an unrecorded V2 id below the high-water mark as a clash. A Forma ledger's
+  high-water mark is always 941, so the fork only fails on an id recorded under
+  another name; unrecorded ids are left to `backfillSkippedMigrations`.
+  Upstream 063 drops V1 projections, so 938 skips its 029 index replay once
+  they are gone (fresh databases run 938 after 063).
 - **Data**: V2 copies `~/.forma/userdata/state.sqlite` once into
   `statev2.sqlite` and imports threads lazily; `state.sqlite` is left untouched.
 - **Desktop identity**: Forma keeps its own Chromium profiles (`forma-v2`,
@@ -133,11 +139,21 @@ with `apps/server/src/orchestration-v2/`. The fork adopted V2 wholesale.
 ## Anonymous usage telemetry (#16564, synced 2026-10-07)
 
 Upstream defaults `T3CODE_TELEMETRY_ENABLED` to on and reports to T3's
-PostHog project; #16564 added an onboarding note and a Settings privacy-policy
+ingest endpoint; #16564 added an onboarding note and a Settings privacy-policy
 row about it. Forma defaults telemetry **off** (`AnalyticsService.ts`, `// Fork:`)
 and drops the onboarding note, the privacy row, its settings-search entry and
-`legalLinks.ts`. Setting `T3CODE_TELEMETRY_ENABLED=true` still opts in.
+`legalLinks.ts`. Relay (T3 Connect) client tracing follows the same opt-in
+(`isRelayTracingEnabled` in `packages/shared/src/otelEnvironment.ts`). Setting
+`T3CODE_TELEMETRY_ENABLED=true` opts in to both.
 
 Also from that sync: the fork-only `git.listOpenPullRequests` RPC was removed
 (nothing called it after the V2 merge, and upstream moved `GitHubCli` to
 GitHub's API).
+
+## Alpha → Beta rename (#20032, skipped 2026-10-20)
+
+Upstream renamed its product stage to Beta. Forma keeps "Forma (Alpha)"
+(`apps/desktop/package.json` productName, the launcher display name, the
+`DesktopEnvironment` stage label, `branding.ts`, `index.html`): renaming the
+app renames the installed bundle. The contracts stage union includes Beta;
+that is harmless.
