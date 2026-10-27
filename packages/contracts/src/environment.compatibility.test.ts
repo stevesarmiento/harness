@@ -23,7 +23,7 @@ const FrozenUpstreamDescriptor = Schema.Struct({
 
 describe("execution environment extension compatibility", () => {
   it("accepts an upstream-shaped descriptor with no fork capabilities", () => {
-    const descriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor)({
+    const descriptor = Schema.decodeSync(ExecutionEnvironmentDescriptor)({
       environmentId: "00000000-0000-4000-8000-000000000001",
       label: "Upstream",
       platform: { os: "darwin", arch: "arm64" },

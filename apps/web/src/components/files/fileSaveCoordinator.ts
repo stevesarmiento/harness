@@ -6,10 +6,14 @@ export interface FileSaveCoordinatorOptions<A, E> {
   readonly persist: (contents: string) => Promise<AtomCommandResult<A, E>>;
   readonly onPendingChange: (pending: boolean) => void;
   /** Return false when another editor has newer unsaved contents. */
+  // Fork: `value` carries the persist result (the new file version).
   readonly onConfirmed: (contents: string, value: A) => boolean | void;
+  /** Fork: lets the owner pause autosave after a failed persist, such as a version conflict. */
   readonly onFailed?: (result: Extract<AtomCommandResult<A, E>, { readonly _tag: "Failure" }>) => {
     readonly pause: boolean;
   };
+  /** Called when a write pass ends with nothing further scheduled. */
+  readonly onSettled?: () => void;
 }
 
 export class FileSaveCoordinator<A = unknown, E = unknown> {
@@ -21,6 +25,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   private saving = false;
   private disposed = false;
   private paused = false;
+  private flushing = false;
 
   constructor(private readonly options: FileSaveCoordinatorOptions<A, E>) {}
 
@@ -47,6 +52,18 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
     this.options.onPendingChange(false);
   }
 
+  /** The newest contents not yet written, which is the last write this coordinator will make. */
+  get unconfirmedContents(): string | null {
+    return this.latestRevision === this.confirmedRevision ? null : this.latestContents;
+  }
+
+  /** Writes the newest draft now instead of after the debounce, then any draft queued behind it. */
+  flush(): void {
+    this.clearTimer();
+    this.flushing = true;
+    void this.persistLatest();
+  }
+
   dispose(): void {
     this.disposed = true;
     this.clearTimer();
@@ -68,8 +85,13 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
   }
 
   private async persistLatest(): Promise<void> {
-    if (this.saving || this.latestRevision === this.confirmedRevision) return;
-    if (this.options.canPersist?.() === false) {
+    if (this.saving) return;
+    if (
+      this.paused ||
+      this.latestRevision === this.confirmedRevision ||
+      this.options.canPersist?.() === false
+    ) {
+      this.settle();
       return;
     }
 
@@ -90,6 +112,7 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
     this.saving = false;
     if (revision === this.latestRevision || this.paused) {
       if (confirmed) this.options.onPendingChange(false);
+      this.settle();
       return;
     }
 
@@ -97,10 +120,15 @@ export class FileSaveCoordinator<A = unknown, E = unknown> {
       0,
       this.options.debounceMs - (Date.now() - this.lastChangeAt),
     );
-    if (this.disposed) {
+    if (this.disposed || this.flushing) {
       void this.persistLatest();
     } else {
       this.schedule(remainingDebounce);
     }
+  }
+
+  private settle(): void {
+    this.flushing = false;
+    this.options.onSettled?.();
   }
 }

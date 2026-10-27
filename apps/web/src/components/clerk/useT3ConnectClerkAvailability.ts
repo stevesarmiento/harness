@@ -18,6 +18,7 @@ export function useT3ConnectClerkAvailability(): T3ConnectClerkAvailability {
   const { isLoaded, isSignedIn } = useAuth();
   const [loadTimedOut, setLoadTimedOut] = useState(false);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- a timer bounds how long the sidebar waits for Clerk to load.
   useEffect(() => {
     if (isLoaded) {
       return undefined;

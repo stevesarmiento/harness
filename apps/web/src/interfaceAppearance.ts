@@ -1,8 +1,5 @@
-// Forma interface appearance: custom UI/code font sizing and macOS font
-// smoothing. The fork originally persisted these through the settings
-// contracts (@t3tools/contracts/settings); the current upstream contracts do
-// not carry these fields, so the constants live here and preferences persist
-// to localStorage until the contract fields are re-added.
+// Forma UI/code font sizing and macOS font smoothing. Upstream's settings
+// contracts don't carry these fields, so preferences persist to localStorage.
 
 export type MacOsFontSmoothing = "auto" | "grayscale";
 export type UiFontSizePx = number;

@@ -199,7 +199,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<PullRequestIcon className="fill-current" />}
-              label="Pull Requests"
+              label="Pull requests"
               onClick={handlePullRequestsClick}
             />
           ) : null}
@@ -217,13 +217,15 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter({
   variant,
+  showUndoNotice = false,
 }: {
   variant: "v1" | "v2";
+  showUndoNotice?: boolean;
 }) {
   return (
     // Fork: Forma's evenly inset footer.
     <SidebarFooter size="inset">
-      <SidebarThreadUndoNotice />
+      {showUndoNotice ? <SidebarThreadUndoNotice /> : null}
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <div className="flex items-center gap-1">

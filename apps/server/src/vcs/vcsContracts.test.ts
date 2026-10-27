@@ -4,6 +4,6 @@ import { VcsDriverKind } from "@t3tools/contracts";
 
 describe("VCS contracts", () => {
   it("keeps git as a supported driver kind", () => {
-    expect(Schema.decodeUnknownSync(VcsDriverKind)("git")).toBe("git");
+    expect(Schema.decodeSync(VcsDriverKind)("git")).toBe("git");
   });
 });

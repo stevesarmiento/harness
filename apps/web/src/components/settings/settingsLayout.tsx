@@ -2,18 +2,11 @@ import { SettingsGroup } from "./SettingsGroup";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { usePrimaryEnvironmentId, usePrimaryEnvironment } from "../../state/environments";
 import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
-import { IconArrowTurnUpLeft as Undo2Icon, IconInfoCircle as InfoIcon } from "symbols-react";
+import { InfoIcon, Undo2Icon } from "lucide-react";
 import { DEFAULT_SERVER_SETTINGS, type ServerSettings } from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import {
-  createContext,
-  type ComponentPropsWithoutRef,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { createContext, type ComponentPropsWithoutRef, type ReactNode, useContext } from "react";
 
 import {
   PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE,
@@ -40,11 +33,6 @@ import {
 } from "./SettingInheritance";
 
 const EMPTY_SETTING_KEYS: readonly (keyof ServerSettings)[] = [];
-
-/** Forma's settings card surface, layered over the shared grouped SettingsGroup. */
-const SETTINGS_CARD_CLASSNAME =
-  // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: mirrors the ui Card's inset highlight and inner radius.
-  "overflow-hidden rounded-2xl border-border bg-card text-card-foreground shadow-sm/4 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:shadow-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)] [&>*+*]:border-border/60";
 
 declare module "@tanstack/react-router" {
   interface HistoryState {
@@ -188,7 +176,9 @@ export function SettingsSearchTarget({
   );
 }
 
-export const SETTINGS_PICKER_TRIGGER_CLASSNAME = "min-w-0 max-w-none shrink-0";
+// Settings pickers reuse composer controls but match the bordered selects beside them.
+export const SETTINGS_PICKER_TRIGGER_CLASSNAME =
+  "min-w-0 max-w-none shrink-0 border-input bg-background font-normal text-foreground shadow-xs/5 hover:bg-accent/50 dark:bg-input/32 [&_svg[data-composer-control-chevron]]:stroke-[1.75] [&_svg[data-composer-control-chevron]]:opacity-70";
 
 export function PolicyTooltip({ children }: { readonly children: string }) {
   return (
@@ -204,15 +194,6 @@ export function PolicyTooltip({ children }: { readonly children: string }) {
       <TooltipPopup side="top">{children}</TooltipPopup>
     </Tooltip>
   );
-}
-
-export function useRelativeTimeTick(intervalMs = 1_000) {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return nowMs;
 }
 
 export function SettingsSection({
@@ -248,27 +229,19 @@ export function SettingsSection({
       ) : (
         <div
           data-settings-scroll-target
-          className="flex min-h-8 items-center justify-between gap-4 px-1"
+          className="flex min-h-7 items-start justify-between gap-4 px-3 sm:px-4"
         >
           <div className="flex min-w-0 items-center gap-1">
-            <h2
-              // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: Forma's eyebrow tracking sits between the wide and widest steps.
-              className="text-ui-xs flex min-w-0 items-center gap-2 font-semibold uppercase tracking-[0.08em] text-foreground/50"
-            >
-              <span aria-hidden className="inline-block h-px w-3 bg-border" />
+            <h2 className="flex min-h-7 items-center gap-2 text-base font-semibold text-foreground">
               {icon}
               {title}
             </h2>
             {titleAction}
           </div>
-          {headerAction}
+          <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
         </div>
       )}
-      <SettingsGroup
-        data-settings-scroll-target={hideTitle ? "" : undefined}
-        variant={variant}
-        className={cn(variant === "grouped" && SETTINGS_CARD_CLASSNAME)}
-      >
+      <SettingsGroup data-settings-scroll-target={hideTitle ? "" : undefined} variant={variant}>
         {children}
       </SettingsGroup>
     </section>
@@ -486,19 +459,47 @@ export function SettingsRow({
       tabIndex={rowProps.id ? -1 : rowProps.tabIndex}
       data-slot="settings-row"
       className={cn(
-        "@container/settings-row px-4 sm:px-5 aria-disabled:opacity-64 aria-disabled:[&_*]:text-muted-foreground",
-        children ? "pt-4 pb-0" : "py-4",
+        "group/settings-row @container/settings-row rounded-xl px-3 sm:px-4 aria-disabled:opacity-64 aria-disabled:[&_*]:text-muted-foreground",
+        children ? "pt-3 pb-1" : "py-3",
         className,
       )}
     >
-      <SettingsRowBody
-        control={renderedControl}
-        description={description}
-        inheritance={renderedInheritance}
-        resetAction={renderedReset}
-        status={renderedStatus}
-        title={title}
-      />
+      <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex min-h-5 items-center gap-1.5">
+            <h3 className="text-sm font-medium text-foreground">{title}</h3>
+            {renderedInheritance ? (
+              <span
+                className={cn(
+                  "inline-flex h-5 w-5 shrink-0 items-center justify-center",
+                  // Values set right here explain nothing new, so their marker waits for hover or focus.
+                  (inheritance.state === "default" || inheritance.state === "environment") &&
+                    overridingProjects.length === 0 &&
+                    "opacity-0 group-hover/settings-row:opacity-100 has-focus-visible:opacity-100 has-data-popup-open:opacity-100",
+                )}
+              >
+                {renderedInheritance}
+              </span>
+            ) : null}
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+              {renderedReset}
+            </span>
+          </div>
+          {description ? (
+            <p className="max-w-2xl text-balance text-xs leading-normal text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+          {renderedStatus ? (
+            <div className="pt-0.5 text-xs text-muted-foreground">{renderedStatus}</div>
+          ) : null}
+        </div>
+        {renderedControl ? (
+          <div className="flex w-full min-w-0 shrink-0 items-center gap-2 @min-[32rem]/settings-row:w-auto @min-[32rem]/settings-row:justify-end">
+            {renderedControl}
+          </div>
+        ) : null}
+      </div>
       {unavailable && children ? (
         <div inert className="opacity-50">
           {children}
@@ -510,79 +511,35 @@ export function SettingsRow({
   );
 }
 
-function SettingsRowBody({
-  title,
-  description,
-  status,
-  inheritance,
-  resetAction,
-  control,
-}: {
-  title: ReactNode;
-  description?: ReactNode;
-  status?: ReactNode;
-  inheritance?: ReactNode;
-  resetAction?: ReactNode;
-  control?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex min-h-5 items-center gap-1.5">
-          <h3
-            // oxlint-disable-next-line shadcn/no-arbitrary-values -- Fork: Forma's row titles tighten less than the tight step.
-            className="text-ui-sm font-semibold tracking-[-0.01em] text-foreground"
-          >
-            {title}
-          </h3>
-          {inheritance ? (
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-              {inheritance}
-            </span>
-          ) : null}
-          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-            {resetAction}
-          </span>
-        </div>
-        {description ? (
-          <p className="max-w-xl text-xs leading-relaxed text-muted-foreground/80">{description}</p>
-        ) : null}
-        {status ? <div className="text-ui-xs pt-0.5 text-muted-foreground">{status}</div> : null}
-      </div>
-      {control ? (
-        <div className="flex w-full min-w-0 shrink-0 items-center gap-2 @min-[32rem]/settings-row:w-auto @min-[32rem]/settings-row:justify-end">
-          {control}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
+/** Fork: nested rows inside a SettingsRow, used by Forma's hue and saturation controls. */
 export function SettingsSubRows({ children }: { children: ReactNode }) {
-  return (
-    <div className="mt-4 -mx-4 sm:-mx-5" data-settings-subrows>
-      {children}
-    </div>
-  );
+  return <div className="mt-3 -mx-3 sm:-mx-4">{children}</div>;
 }
 
 export function SettingsSubRow({
   title,
   description,
-  status,
   control,
 }: {
   title: ReactNode;
   description: ReactNode;
-  status?: ReactNode;
   control?: ReactNode;
 }) {
   return (
-    <div
-      className="@container/settings-row border-t border-border/60 px-4 py-4 sm:px-5"
-      data-settings-subrow
-    >
-      <SettingsRowBody control={control} description={description} status={status} title={title} />
+    <div className="@container/settings-row border-t border-border/50 px-3 py-3 sm:px-4">
+      <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h4 className="text-sm font-medium text-foreground">{title}</h4>
+          <p className="max-w-2xl text-balance text-xs leading-normal text-muted-foreground">
+            {description}
+          </p>
+        </div>
+        {control ? (
+          <div className="flex w-full min-w-0 shrink-0 items-center gap-2 @min-[32rem]/settings-row:w-auto @min-[32rem]/settings-row:justify-end">
+            {control}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -590,13 +547,13 @@ export function SettingsSubRow({
 export function SettingResetButton({
   label,
   tooltip = "Reset to default",
-  onClick,
   disabled = false,
+  onClick,
 }: {
   label: string;
   tooltip?: string;
-  onClick: () => void;
   disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
     <Tooltip>
@@ -656,14 +613,7 @@ export function SettingsPageContainer({
         className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto"
         data-settings-page-scroll
       >
-        <WorkspacePageContainer
-          width={width}
-          className={cn(
-            "gap-8 px-4 pt-10 pb-7 sm:px-8 sm:pt-12 sm:pb-10",
-            width === "readable" && "max-w-3xl",
-            className,
-          )}
-        >
+        <WorkspacePageContainer width={width} className={cn("gap-8", className)}>
           <SettingsScopeSentence />
           {children}
         </WorkspacePageContainer>

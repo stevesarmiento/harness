@@ -59,25 +59,23 @@ Not yet ported onto v2 (opt-in surface only; the default Forma sidebar has
 them): "Export as Markdown" and "Fork thread" context-menu items
 (`buildThreadActionMenuItems`), and the fork's `NewThreadIcon`.
 
-## Upstream chrome/composer/header layout rewrites — Forma look on upstream behaviour
+## Upstream design overhaul (#24865, #25778) — adopted except the sidebar
 
-Recurring conflict areas where upstream keeps iterating its own layout while
-the fork has an equivalent Forma look. Since orchestration V2 these files are
-data-coupled to V2, so the policy is: **upstream's file and behaviour win,
-Forma's look is re-applied on top** (fix-forward commits after the merge):
+Since the 2026-10-27 sync, upstream's redesign is the only design and the fork
+takes it for the composer, chat view, header, panels, timeline, Settings and
+Usage. Settings and Usage are upstream's modals (#24847); Forma-only pages
+(Safety, app icons, Interface appearance, Legacy features) live inside them.
 
-- `ChatView.tsx` top bar / right-panel layout (fork: workspace chrome +
-  inset card + breadcrumb tab strip)
-- `ChatComposer.tsx` footer + `ComposerFooterModeControls` (fork:
-  `ComposerMetaBar` + `ComposerRuntimeModeControl` +
-  `ComposerInteractionModePill`)
-- `ComposerPrimaryActions.tsx` send/stop buttons (fork design)
-- `ChatHeader.tsx` thread-title actions (fork's `ThreadTitleMenu` predates
-  upstream's #5592 equivalent)
-- `MessagesTimeline.tsx` user-message cards and the `PixelGridLoader`
-  working indicator
-- lucide-icon → `symbols-react` swaps and Forma font-scale tokens
-  (`text-ui-*`, `text-code-*`) throughout
+The **sidebar** is the exception: `Sidebar.tsx`, `LegacySidebar.tsx`,
+`sidebar/*` and `ui/sidebar.tsx` keep Forma's look and behaviour (grouped
+projects with drag-reorder, shelves, compact rows, Forma status icons). Take
+upstream's behaviour and performance fixes there, never its styling.
+
+Forma features that survive the redesign and must be re-applied on top of
+upstream rewrites: right-panel tabs in the header breadcrumb
+(`RightPanelTabStrip`), the `PixelGridLoader` working row with no pulse,
+project-local agents, file entry mutations and versioned saves, Markdown
+export and fork actions.
 
 ## Theme-library follow-ups (v0.0.33) — same policy as #5226
 

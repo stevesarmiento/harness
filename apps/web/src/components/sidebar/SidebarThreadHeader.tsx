@@ -1,16 +1,7 @@
-/**
- * The sidebar header: a search pill above a label row holding project scope,
- * new project and new thread.
- *
- * Fork: Forma's legacy-style layout. Search is a bordered pill on the accent
- * surface; the controls sit in a compact label row whose label names the
- * current scope ("Projects" or the scoped project), so the scope icon can
- * stay Forma's filter mark instead of swapping to the project favicon.
- *
- * The scope picker itself is passed in: its combobox state lives with the rest
- * of the sidebar's scope logic. `scopeAnchorRef` lands on the label row so the
- * picker's popup can anchor to that width rather than to its small trigger.
- */
+// Fork: Forma's search pill above a label row that names the current scope, so
+// the scope trigger keeps Forma's filter mark instead of a project favicon. The
+// scope picker is passed in; `scopeAnchorRef` lands on the label row so its
+// popup anchors to that width rather than to the small trigger.
 import { PlusIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -73,9 +64,7 @@ export function SidebarThreadHeader({
   onClearSearch,
 }: SidebarThreadHeaderProps) {
   const resultsVisible = isSearching && searchResultCount > 0;
-  // Results shrink as the query narrows, so the active index can outrun the
-  // list; pointing aria-activedescendant at a removed option strands the
-  // screen reader on nothing.
+  // Shrinking results can remove the active option; never leave aria-activedescendant pointing at it.
   const activeResultExists = resultsVisible && activeSearchResultIndex < searchResultCount;
   const newThreadLabel = newThreadShortcutLabel
     ? `New thread (${newThreadShortcutLabel})`
@@ -161,14 +150,10 @@ export function SidebarThreadHeader({
   );
 }
 
-/**
- * Compact icon button with a tooltip, sized for the header's label row. Spreads
- * unknown props through so it can serve as a popup trigger's render target,
- * which injects its own handlers, ref and aria state.
- *
- * Fork: Forma's compact size-5 ghost buttons (upstream: 28px sidebar menu
- * buttons); Button carries the coarse-pointer hit area itself.
- */
+// Spreads unknown props so it can be a popup trigger's render target, which
+// injects its own handlers, ref and aria state.
+// Fork: Forma's compact size-5 ghost buttons (upstream: 28px sidebar menu
+// buttons); Button carries the coarse-pointer hit area itself.
 export function SidebarHeaderIconButton({
   label,
   tooltip = label,

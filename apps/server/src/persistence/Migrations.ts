@@ -69,6 +69,9 @@ import Migration0063 from "./Migrations/063_DropUnusedV1Projections.ts";
 import Migration0064 from "./Migrations/064_CanonicalizeThreadPullRequestLinks.ts";
 import Migration0065 from "./Migrations/065_CodexUsageNativeTurnIndex.ts";
 import Migration0066 from "./Migrations/066_RepairClientSettlementTimestamps.ts";
+import Migration0067 from "./Migrations/067_WebhookDedupe.ts";
+import Migration0068 from "./Migrations/068_ShellStopRequestIndex.ts";
+import Migration0069 from "./Migrations/069_ThreadMessageSearch.ts";
 // Fork: fork-only migrations live in the reserved 9xx id block (935+) so
 // upstream can keep shipping 057, 058, ... without ever colliding with us.
 import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
@@ -79,7 +82,7 @@ import Migration0939 from "./Migrations/939_ThreadExtensionQueue.ts";
 import Migration0940 from "./Migrations/940_ProjectionThreadsForkLineage.ts";
 import Migration0941 from "./Migrations/941_ReconcileLegacyForkUpstreamOverlap.ts";
 
-export const migrationEntries = [
+const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -147,6 +150,9 @@ export const migrationEntries = [
   [64, "CanonicalizeThreadPullRequestLinks", Migration0064],
   [65, "CodexUsageNativeTurnIndex", Migration0065],
   [66, "RepairClientSettlementTimestamps", Migration0066],
+  [67, "WebhookDedupe", Migration0067],
+  [68, "ShellStopRequestIndex", Migration0068],
+  [69, "ThreadMessageSearch", Migration0069],
   // Fork: ids 935-941 are the reserved fork block; lower ids belong to
   // upstream. 935-937 and 939-940 back V1-era fork features that V2 dropped;
   // they stay registered because existing Forma databases recorded them. These migrations briefly shipped locally as ids 35-40, but no
@@ -177,12 +183,7 @@ const makeMigrationLoader = (throughId?: number) =>
 
 const FIRST_V2_MIGRATION_ID = 55;
 
-/**
- * Fail before migrating when the migrator would skip one of V2's own
- * migrations. It skips every id up to the highest recorded one, whatever name
- * was recorded, so a database that took a V2 id for another migration would
- * start without V2's schema and fail on first use.
- */
+// Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.
 const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
   throughId?: number,
 ) {

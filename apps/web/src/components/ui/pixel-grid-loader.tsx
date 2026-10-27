@@ -191,6 +191,7 @@ export function PixelGridLoader({
   const resolvedCellColors = colors ?? ("colors" in config ? config.colors : undefined);
   const useInlineContainerColor = color !== "currentColor" && !isNamedColor(color);
 
+  // oxlint-disable-next-line t3code/react-effect-budget -- drives the cell timers and pauses them offscreen via IntersectionObserver.
   useEffect(() => {
     const container = containerRef.current;
     const cells = cellRefs.current.slice(0, PIXEL_GRID_CELL_IDS.length);

@@ -45,7 +45,7 @@ export class ThemeStorageError extends Schema.TaggedError<ThemeStorageError>()(
   }
 }
 
-export const isThemeStorageError = Schema.is(ThemeStorageError);
+const isThemeStorageError = Schema.is(ThemeStorageError);
 
 export class DesktopThemeSyncError extends Schema.TaggedError<DesktopThemeSyncError>()(
   "DesktopThemeSyncError",
@@ -59,7 +59,7 @@ export class DesktopThemeSyncError extends Schema.TaggedError<DesktopThemeSyncEr
   }
 }
 
-export const isDesktopThemeSyncError = Schema.is(DesktopThemeSyncError);
+const isDesktopThemeSyncError = Schema.is(DesktopThemeSyncError);
 
 let listeners: Array<() => void> = [];
 let lastSnapshot: ThemeSnapshot | null = null;
@@ -92,7 +92,7 @@ export function readThemePreference(): CustomThemeSettings {
   }
 }
 
-export function writeThemePreference(theme: ThemeMode | CustomThemeSettings): void {
+function writeThemePreference(theme: ThemeMode | CustomThemeSettings): void {
   if (typeof window === "undefined") return;
   const settings: CustomThemeSettings =
     typeof theme === "string" ? { ...DEFAULT_CUSTOM_THEME_SETTINGS, mode: theme } : theme;
@@ -208,7 +208,7 @@ function applyTheme(settings: CustomThemeSettings, suppressTransitions = false) 
   }
 }
 
-export async function syncDesktopThemePreference(
+async function syncDesktopThemePreference(
   bridge: DesktopThemeBridge,
   theme: DesktopTheme,
 ): Promise<void> {
@@ -219,7 +219,7 @@ export async function syncDesktopThemePreference(
   }
 }
 
-export function syncDesktopTheme(theme: DesktopTheme) {
+function syncDesktopTheme(theme: DesktopTheme) {
   if (typeof window === "undefined") return;
   const bridge = window.desktopBridge;
   if (!bridge || typeof bridge.setTheme !== "function" || lastDesktopTheme === theme) {
@@ -292,8 +292,8 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-function updateTheme(next: Partial<CustomThemeSettings>): void {
-  if (typeof window === "undefined") return;
+function updateTheme(next: Partial<CustomThemeSettings>): boolean {
+  if (typeof window === "undefined") return false;
   const updated = { ...getStored(), ...next };
   try {
     writeThemePreference(updated);
@@ -312,14 +312,15 @@ function updateTheme(next: Partial<CustomThemeSettings>): void {
       theme: updated.mode,
       ...safeErrorLogAttributes(error),
     });
-    return;
+    return false;
   }
   applyTheme(updated, true);
   emitChange();
+  return true;
 }
 
-function setTheme(mode: ThemeMode): void {
-  updateTheme({ mode });
+function setTheme(mode: ThemeMode): boolean {
+  return updateTheme({ mode });
 }
 
 function setThemeHue(hue: number): void {
@@ -328,6 +329,30 @@ function setThemeHue(hue: number): void {
 
 function setThemeSaturation(saturation: number): void {
   updateTheme({ saturation });
+}
+
+/** For shortcuts and other handlers outside React that read the theme at event time. */
+export function getThemeSnapshot() {
+  const snapshot = getSnapshot();
+  return {
+    appearanceMode: snapshot.theme.mode,
+    resolvedTheme: resolveThemeMode(snapshot.theme, snapshot.systemDark),
+  } as const;
+}
+
+/** Fork: Forma's theme mode doubles as the appearance mode upstream shortcuts cycle. */
+export function setAppearanceMode(mode: ThemeMode): boolean {
+  return setTheme(mode);
+}
+
+/** For code outside React (worker pools) that follows the rendered appearance. */
+export function subscribeRenderedAppearance(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
+export function getRenderedAppearance() {
+  const snapshot = getSnapshot();
+  return resolveThemeMode(snapshot.theme, snapshot.systemDark);
 }
 
 /** The light/dark appearance currently rendered, for code and diff highlighting. */

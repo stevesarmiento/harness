@@ -35,11 +35,14 @@ import { openCommandPalette } from "~/commandPaletteBus";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
 import { cn } from "~/lib/utils";
+import { textDirection } from "~/textDirection";
 import { sortThreads } from "~/lib/threadSort";
 import { readLocalApi } from "~/localApi";
 import { useThreadShells } from "~/state/entities";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { threadEnvironment } from "../../state/threads";
+import { canShareWithGuestAtom } from "./guestShareAvailability";
+import { useAtomValue } from "@effect/atom-react";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
@@ -49,6 +52,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/men
 import { SidebarTrigger } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { GuestShareIndicator } from "./GuestShareControls";
 
 // Fork: Forma's header — sidebar reopen button, a flat project pill that opens
 // the project switcher, and a thread pill that opens the project's thread
@@ -80,7 +84,7 @@ interface ChatHeaderProps {
  * Rename commit rule shared with the sidebar's inline rename: trim, reject
  * empty (the caller toasts), and skip the mutation when nothing changed.
  */
-export function resolveRenameCommit(input: {
+function resolveRenameCommit(input: {
   readonly title: string;
   readonly originalTitle: string;
 }): { action: "commit"; title: string } | { action: "reject-empty" } | { action: "noop" } {
@@ -91,7 +95,7 @@ export function resolveRenameCommit(input: {
 }
 
 /** Unarchived threads of one project in one environment, in the sidebar's order. */
-export function selectHeaderThreads(
+function selectHeaderThreads(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   environmentId: EnvironmentId,
   projectId: ProjectId,
@@ -133,6 +137,7 @@ export const ChatHeader = memo(function ChatHeader({
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
   );
+  const canShareWithGuest = useAtomValue(canShareWithGuestAtom(activeThreadEnvironmentId));
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -199,6 +204,7 @@ export const ChatHeader = memo(function ChatHeader({
     threadRef: isServerThread ? activeThreadRef : null,
     projectCwd: activeProjectCwd,
     onStartRename: startRename,
+    canShareWithGuest,
   });
   const handleTitleDoubleClick = (event: ReactMouseEvent) => {
     if (!isServerThread) return;
@@ -300,6 +306,7 @@ export const ChatHeader = memo(function ChatHeader({
           {renamingTitle !== null ? (
             <input
               autoFocus
+              dir="auto"
               aria-label="Thread title"
               className="h-6 min-w-0 flex-1 rounded-md bg-muted/40 px-2 text-xs font-medium text-foreground outline-none ring-1 ring-ring/50 focus:ring-ring [-webkit-app-region:no-drag]"
               defaultValue={renamingTitle}
@@ -334,6 +341,7 @@ export const ChatHeader = memo(function ChatHeader({
                 render={
                   <h2
                     aria-label={activeThreadTitle}
+                    dir={textDirection(activeThreadTitle)}
                     className="min-w-0 flex-1 truncate px-2 py-0.5 text-sm font-medium text-foreground"
                     onDoubleClick={handleTitleDoubleClick}
                   />
@@ -346,6 +354,7 @@ export const ChatHeader = memo(function ChatHeader({
           )}
           {breadcrumbTrailing}
         </nav>
+        {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
         {activeProject && isGitRepo === false ? (
           <Badge variant="warning" className="shrink-0">
             No Git
@@ -395,7 +404,9 @@ function ThreadTitleMenu({
           }
         >
           <ThreadIcon className="size-3.5 shrink-0 fill-current opacity-50" aria-hidden />
-          <h2 className="min-w-0 truncate">{activeThreadTitle}</h2>
+          <h2 className="min-w-0 truncate" dir={textDirection(activeThreadTitle)}>
+            {activeThreadTitle}
+          </h2>
           <ChevronDownIcon
             aria-hidden
             data-thread-title-chevron

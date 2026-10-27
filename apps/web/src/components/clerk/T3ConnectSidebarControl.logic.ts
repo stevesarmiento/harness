@@ -71,12 +71,8 @@ export interface T3ConnectSidebarView {
 }
 
 /**
- * Local-first decision tree for the sidebar Connect control. The LOCAL
- * environment link state (read over the environment session, independent of
- * Clerk) is the primary signal; the Clerk web session only decides whether the
- * sign-in affordance is offered, and never blocks status display. Clerk that
- * never loads ("unavailable") degrades to local state with a hint instead of
- * an indefinite "Connecting…".
+ * Local link state drives the Connect control; Clerk only decides whether to
+ * offer sign-in. Clerk that never loads degrades to local state with a hint.
  */
 export function resolveT3ConnectSidebarView({
   clerk,
