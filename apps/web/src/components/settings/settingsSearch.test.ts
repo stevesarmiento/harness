@@ -64,7 +64,7 @@ describe("searchSettings", () => {
     expect(searchSettings("  WORD   WRAP  ", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     expect(searchSettings("glass").map((item) => item.id)).toEqual(["setting-glass-opacity"]);
     expect(searchSettings("panel animations").map((item) => item.id)).toEqual(["panel-animations"]);
-    expect(searchSettings("thè\u{1ab0}mes")[0]?.id).toBe("theme");
+    expect(searchSettings("thè\u{1ab0}me")[0]?.id).toBe("theme");
     const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockReturnValue("gıt");
     try {
       expect(searchSettings("GIT")[0]?.id).toBe("git-fetch-interval");
@@ -305,6 +305,31 @@ describe("movedSettingsPath", () => {
     expect(movedSettingsPath("/settings/storage", "")).toBe("/settings/maintenance");
     expect(movedSettingsPath("/settings/integrations", "devices")).toBe("/settings/devices");
     expect(movedSettingsPath("/settings/beta", "")).toBe("/settings/labs");
+  });
+
+  // Fork: Forma's pre-modal pages fold into upstream's pages.
+  it("sends Forma's old settings pages to their new homes", () => {
+    expect(movedSettingsPath("/settings/interface", "app-icon")).toBe("/settings/appearance");
+    expect(movedSettingsPath("/settings/interface", "time-format")).toBe("/settings/general");
+    expect(movedSettingsPath("/settings/notifications", "")).toBe("/settings/general");
+    expect(movedSettingsPath("/settings/advanced", "legacy-sidebar")).toBe("/settings/labs");
+    expect(movedSettingsPath("/settings/advanced", "")).toBe("/settings/about");
+  });
+
+  it("finds Forma-only rows on their pages", () => {
+    expect(searchSettings("app icon")[0]).toMatchObject({
+      id: "app-icon",
+      to: "/settings/appearance",
+    });
+    expect(searchSettings("protected paths")[0]).toMatchObject({
+      id: "protected-paths",
+      to: "/settings/safety",
+    });
+    expect(searchSettings("thread cleanup")[0]).toMatchObject({
+      id: "thread-cleanup-window",
+      to: "/settings/threads",
+    });
+    expect(searchSettings("privacy policy").map((item) => item.id)).not.toContain("privacy-policy");
   });
 
   it("leaves current pages alone", () => {

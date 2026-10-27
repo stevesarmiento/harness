@@ -113,6 +113,7 @@ function makeFakeBrowserWindow() {
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
     setAutoHideCursor: vi.fn(),
+    setWindowButtonVisibility: vi.fn(),
     setFullScreen: vi.fn(),
     setOpacity: vi.fn(),
     setTitle: vi.fn(),
@@ -141,6 +142,7 @@ function makeFakeBrowserWindow() {
     setWindowButtonPosition: window.setWindowButtonPosition,
     setBackgroundThrottling: webContents.setBackgroundThrottling,
     setAutoHideCursor: window.setAutoHideCursor,
+    setWindowButtonVisibility: window.setWindowButtonVisibility,
     setFullScreen: window.setFullScreen,
     setOpacity: window.setOpacity,
     webContentsListeners,
@@ -164,6 +166,7 @@ const layerDesktopAssets = Layer.succeed(DesktopAssets.DesktopAssets, {
     png: Option.none<string>(),
   }),
   resolveResourcePath: () => Effect.succeed(Option.none<string>()),
+  resolveAppIconPath: () => Effect.succeed(Option.none<string>()),
 } satisfies DesktopAssets.DesktopAssets["Service"]);
 
 const layerDesktopServerExposure = Layer.succeed(DesktopServerExposure.DesktopServerExposure, {

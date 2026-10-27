@@ -49,6 +49,8 @@ export const SETTINGS_DEVICE_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/settings/diffs",
   "/settings/snap-shot",
   "/settings/connections",
+  // Fork: protected paths always edit the primary environment's settings.
+  "/settings/safety",
   // Network access and authorized clients belong to the environment serving this app.
   "/settings/access",
   "/settings/about",

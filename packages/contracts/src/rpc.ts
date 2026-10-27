@@ -227,14 +227,27 @@ import {
   ProjectCreateNewInput,
   ProjectCreateNewResult,
   ProjectEnsureScratchResult,
+  ProjectCreateDirectoryError,
+  ProjectCreateDirectoryInput,
+  ProjectCreateDirectoryResult,
+  ProjectDeleteEntryError,
+  ProjectDeleteEntryInput,
+  ProjectDeleteEntryResult,
+  ProjectFileVersionConflictError,
   ProjectListEntriesError,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
+  ProjectLocalAgentInventoryError,
+  ProjectLocalAgentInventoryInput,
+  ProjectLocalAgentInventoryResult,
   ProjectListIgnoredFilesInput,
   ProjectListIgnoredFilesResult,
   ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
+  ProjectRenameEntryError,
+  ProjectRenameEntryInput,
+  ProjectRenameEntryResult,
   ProjectSearchContentsError,
   ProjectSearchContentsInput,
   ProjectSearchContentsResult,
@@ -391,6 +404,10 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectsLocalAgentInventory: "projects.localAgentInventory",
+  projectsCreateDirectory: "projects.createDirectory",
+  projectsRenameEntry: "projects.renameEntry",
+  projectsDeleteEntry: "projects.deleteEntry",
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
@@ -578,6 +595,7 @@ export const WS_METHODS = {
   subscribeTerminalEvents: "subscribeTerminalEvents",
   subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribePreviewEvents: "subscribePreviewEvents",
+  // Fork: component preview harness project events
   subscribeDiscoveredLocalServers: "subscribeDiscoveredLocalServers",
   subscribeDeviceState: "subscribeDeviceState",
   subscribeServerConfig: "subscribeServerConfig",
@@ -1247,7 +1265,35 @@ const WsProjectsReadFileRpc = Rpc.make(WS_METHODS.projectsReadFile, {
 const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   payload: ProjectWriteFileInput,
   success: ProjectWriteFileResult,
-  error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
+  error: Schema.Union([
+    ProjectFileVersionConflictError,
+    ProjectWriteFileError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+export const WsProjectsLocalAgentInventoryRpc = Rpc.make(WS_METHODS.projectsLocalAgentInventory, {
+  payload: ProjectLocalAgentInventoryInput,
+  success: ProjectLocalAgentInventoryResult,
+  error: Schema.Union([ProjectLocalAgentInventoryError, EnvironmentAuthorizationError]),
+});
+
+export const WsProjectsCreateDirectoryRpc = Rpc.make(WS_METHODS.projectsCreateDirectory, {
+  payload: ProjectCreateDirectoryInput,
+  success: ProjectCreateDirectoryResult,
+  error: Schema.Union([ProjectCreateDirectoryError, EnvironmentAuthorizationError]),
+});
+
+export const WsProjectsRenameEntryRpc = Rpc.make(WS_METHODS.projectsRenameEntry, {
+  payload: ProjectRenameEntryInput,
+  success: ProjectRenameEntryResult,
+  error: Schema.Union([ProjectRenameEntryError, EnvironmentAuthorizationError]),
+});
+
+export const WsProjectsDeleteEntryRpc = Rpc.make(WS_METHODS.projectsDeleteEntry, {
+  payload: ProjectDeleteEntryInput,
+  success: ProjectDeleteEntryResult,
+  error: Schema.Union([ProjectDeleteEntryError, EnvironmentAuthorizationError]),
 });
 
 const WsProjectsMutateRpc = Rpc.make(WS_METHODS.projectsMutate, {
@@ -2031,6 +2077,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsWriteFileRpc,
+  WsProjectsLocalAgentInventoryRpc,
+  WsProjectsCreateDirectoryRpc,
+  WsProjectsRenameEntryRpc,
+  WsProjectsDeleteEntryRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,

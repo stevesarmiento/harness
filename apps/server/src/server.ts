@@ -87,6 +87,7 @@ import * as ServerOwnership from "./serverOwnership.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { ProjectAgentInventoryLive } from "./project/ProjectAgentInventory.ts";
 import * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts";
 import * as NativeAppIconResolver from "./assets/NativeAppIconResolver.ts";
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
@@ -449,11 +450,17 @@ const layerDevice = DeviceService.layer.pipe(
   Layer.provide(NetService.layer),
 );
 
-const layerWorkspaceEntries = WorkspaceEntries.layer.pipe(Layer.provide(WorkspacePaths.layer));
+// Fork: the protected-paths guard (Settings → Safety) reads server settings;
+// without them it fails safe (always enabled).
+const layerWorkspaceEntries = WorkspaceEntries.layer.pipe(
+  Layer.provide(WorkspacePaths.layer),
+  Layer.provide(layerServerSettings),
+);
 
 const layerWorkspaceFileSystem = WorkspaceFileSystem.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
   Layer.provide(layerWorkspaceEntries),
+  Layer.provide(layerServerSettings),
   Layer.provide(layerKnownWorkspaces),
 );
 
@@ -461,6 +468,8 @@ const layerWorkspace = Layer.mergeAll(
   WorkspacePaths.layer,
   layerWorkspaceEntries,
   layerWorkspaceFileSystem,
+  // Fork: local agent inventory for the Forma composer and file panel.
+  ProjectAgentInventoryLive,
 );
 
 const layerProjectFaviconResolver = ProjectFaviconResolver.layer.pipe(

@@ -27,6 +27,7 @@ import { Route as ChatSettingsStorageRouteImport } from './routes/_chat.settings
 import { Route as ChatSettingsSourceControlRouteImport } from './routes/_chat.settings.source-control'
 import { Route as ChatSettingsSnapShotRouteImport } from './routes/_chat.settings.snap-shot'
 import { Route as ChatSettingsScheduledTasksRouteImport } from './routes/_chat.settings.scheduled-tasks'
+import { Route as ChatSettingsSafetyRouteImport } from './routes/_chat.settings.safety'
 import { Route as ChatSettingsProvidersRouteImport } from './routes/_chat.settings.providers'
 import { Route as ChatSettingsProjectsRouteImport } from './routes/_chat.settings.projects'
 import { Route as ChatSettingsOpenSourceLicensesRouteImport } from './routes/_chat.settings.open-source-licenses'
@@ -140,6 +141,11 @@ const ChatSettingsScheduledTasksRoute =
     path: '/scheduled-tasks',
     getParentRoute: () => ChatSettingsRoute,
   } as any)
+const ChatSettingsSafetyRoute = ChatSettingsSafetyRouteImport.update({
+  id: '/safety',
+  path: '/safety',
+  getParentRoute: () => ChatSettingsRoute,
+} as any)
 const ChatSettingsProvidersRoute = ChatSettingsProvidersRouteImport.update({
   id: '/providers',
   path: '/providers',
@@ -282,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/settings/open-source-licenses': typeof ChatSettingsOpenSourceLicensesRoute
   '/settings/projects': typeof ChatSettingsProjectsRoute
   '/settings/providers': typeof ChatSettingsProvidersRoute
+  '/settings/safety': typeof ChatSettingsSafetyRoute
   '/settings/scheduled-tasks': typeof ChatSettingsScheduledTasksRoute
   '/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/settings/source-control': typeof ChatSettingsSourceControlRoute
@@ -322,6 +329,7 @@ export interface FileRoutesByTo {
   '/settings/open-source-licenses': typeof ChatSettingsOpenSourceLicensesRoute
   '/settings/projects': typeof ChatSettingsProjectsRoute
   '/settings/providers': typeof ChatSettingsProvidersRoute
+  '/settings/safety': typeof ChatSettingsSafetyRoute
   '/settings/scheduled-tasks': typeof ChatSettingsScheduledTasksRoute
   '/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/settings/source-control': typeof ChatSettingsSourceControlRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/_chat/settings/open-source-licenses': typeof ChatSettingsOpenSourceLicensesRoute
   '/_chat/settings/projects': typeof ChatSettingsProjectsRoute
   '/_chat/settings/providers': typeof ChatSettingsProvidersRoute
+  '/_chat/settings/safety': typeof ChatSettingsSafetyRoute
   '/_chat/settings/scheduled-tasks': typeof ChatSettingsScheduledTasksRoute
   '/_chat/settings/snap-shot': typeof ChatSettingsSnapShotRoute
   '/_chat/settings/source-control': typeof ChatSettingsSourceControlRoute
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/safety'
     | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
@@ -446,6 +456,7 @@ export interface FileRouteTypes {
     | '/settings/open-source-licenses'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/safety'
     | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/_chat/settings/open-source-licenses'
     | '/_chat/settings/projects'
     | '/_chat/settings/providers'
+    | '/_chat/settings/safety'
     | '/_chat/settings/scheduled-tasks'
     | '/_chat/settings/snap-shot'
     | '/_chat/settings/source-control'
@@ -631,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/scheduled-tasks'
       fullPath: '/settings/scheduled-tasks'
       preLoaderRoute: typeof ChatSettingsScheduledTasksRouteImport
+      parentRoute: typeof ChatSettingsRoute
+    }
+    '/_chat/settings/safety': {
+      id: '/_chat/settings/safety'
+      path: '/safety'
+      fullPath: '/settings/safety'
+      preLoaderRoute: typeof ChatSettingsSafetyRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
     '/_chat/settings/providers': {
@@ -803,6 +822,7 @@ interface ChatSettingsRouteChildren {
   ChatSettingsOpenSourceLicensesRoute: typeof ChatSettingsOpenSourceLicensesRoute
   ChatSettingsProjectsRoute: typeof ChatSettingsProjectsRoute
   ChatSettingsProvidersRoute: typeof ChatSettingsProvidersRoute
+  ChatSettingsSafetyRoute: typeof ChatSettingsSafetyRoute
   ChatSettingsScheduledTasksRoute: typeof ChatSettingsScheduledTasksRoute
   ChatSettingsSnapShotRoute: typeof ChatSettingsSnapShotRoute
   ChatSettingsSourceControlRoute: typeof ChatSettingsSourceControlRoute
@@ -831,6 +851,7 @@ const ChatSettingsRouteChildren: ChatSettingsRouteChildren = {
   ChatSettingsOpenSourceLicensesRoute: ChatSettingsOpenSourceLicensesRoute,
   ChatSettingsProjectsRoute: ChatSettingsProjectsRoute,
   ChatSettingsProvidersRoute: ChatSettingsProvidersRoute,
+  ChatSettingsSafetyRoute: ChatSettingsSafetyRoute,
   ChatSettingsScheduledTasksRoute: ChatSettingsScheduledTasksRoute,
   ChatSettingsSnapShotRoute: ChatSettingsSnapShotRoute,
   ChatSettingsSourceControlRoute: ChatSettingsSourceControlRoute,

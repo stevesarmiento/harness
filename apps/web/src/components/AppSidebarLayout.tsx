@@ -30,7 +30,7 @@ import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useLegacySidebarEnabled } from "../hooks/useSettings";
+import { useLegacySidebarEnabled } from "../hooks/useSettings";
 import {
   PanelAnimationSuppressionProvider,
   usePanelAnimationSettings,
@@ -42,7 +42,6 @@ import ThreadSidebar from "./Sidebar";
 import { SidebarBrandWidthProbe } from "./sidebar/SidebarChrome";
 import { isAppModalPage } from "./sidebar/mainAppLocation";
 import type { SidebarRouteReveal } from "./sidebar/routeReveal";
-import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import {
   clampThreadSidebarWidth,
   resolveInitialThreadSidebarWidth,
@@ -60,6 +59,7 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { registerCommands, registerMenuAction } from "../shortcuts/dispatcher";
 import { resolveThreadRouteRef } from "../threadRoutes";
@@ -283,16 +283,21 @@ function registerAppShellCommands(router: AnyRouter, shellElement: Element): () 
   };
 }
 
+// Fork: Forma's sidebar header owns the collapse trigger while the sidebar is
+// open; the layout listens for the toggle shortcut and floats upstream's
+// trigger only while collapsed, so the sidebar can always be reopened.
 function SidebarControl() {
   const router = useRouter();
   const usagePageOpen = useLocation({ select: (location) => location.pathname === "/usage" });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar, isMobile, mobileSheetMounted } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
-  const stageBackdropVariant = useSidebarStageBackdropVariant(
-    environmentIdentificationMode === "artwork",
-  );
+  // Fork: Forma's home, settings, and chat headers mount their own reopen button.
+  const onInlineReopenPage = useLocation({
+    select: (location) => location.pathname === "/" || location.pathname.startsWith("/settings"),
+  });
+  const onThreadRoute = useThreadRouteTarget() !== null;
+  const hasInlineReopenButton = onInlineReopenPage || onThreadRoute;
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle", {
     context: { usagePageOpen },
   });
@@ -352,23 +357,18 @@ function SidebarControl() {
       )}
       data-sidebar-control=""
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <SidebarTrigger
-              variant={isSidebarVisible && stageBackdropVariant ? "media-navigation" : "ghost"}
-              className={cn(
-                "pointer-events-auto",
-                isSidebarVisible && stageBackdropVariant && "relative top-auto translate-y-0",
-              )}
-              aria-label="Toggle main sidebar"
-            />
-          }
-        />
-        <TooltipPopup side="bottom">
-          Toggle main sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
-        </TooltipPopup>
-      </Tooltip>
+      {/* Fork: the element stays mounted for the shell commands; only the
+          trigger hides while the sidebar or an inline reopen button shows. */}
+      {isSidebarVisible || hasInlineReopenButton ? null : (
+        <Tooltip>
+          <TooltipTrigger
+            render={<SidebarTrigger className="pointer-events-auto" aria-label="Open sidebar" />}
+          />
+          <TooltipPopup side="bottom">
+            Open sidebar{shortcutLabel ? ` (${shortcutLabel})` : ""}
+          </TooltipPopup>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -384,6 +384,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const pathname = useLocation({ select: (location) => location.pathname });
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
+  // Fork: Forma paints the legacy (v1) sidebar by default; v2 theme only for upstream's sidebar.
+  const useSidebarV2Theme = !legacySidebarEnabled;
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
   // A clamped drag may not change width, so viewport changes need a separate subscription.
@@ -418,6 +420,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
       <SidebarProvider
         className="h-dvh! min-h-0!"
+        // Fork: data-shell-theme (not data-sidebar-version) scopes only the chrome
+        // token; the sidebar-version blocks repaint --background/--card and
+        // would blacken the whole content area if placed on the wrapper.
+        data-shell-theme={useSidebarV2Theme ? "v2" : "v1"}
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
         defaultOpen
         style={sidebarProviderStyle}
@@ -427,6 +433,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           side="left"
           collapsible="offcanvas"
           data-app-sidebar=""
+          // Fork: Forma's inset sidebar card and version-scoped theme tokens
+          // (index.css paints the surface and text from data-sidebar-version).
+          data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
+          variant="inset"
           role="navigation"
           aria-label="Threads"
           resizable={{

@@ -40,7 +40,11 @@ import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
-import { loadRepoEnv } from "./lib/public-config.ts";
+import {
+  assertCompleteT3ConnectPublicConfig,
+  loadRepoEnv,
+  resolvePublicConfig,
+} from "./lib/public-config.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -62,7 +66,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DESKTOP_APP_ID = "local.forma.desktop";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -981,6 +985,11 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/cursor-sdk/**/*",
   // The installed Claude CLI is supplied explicitly; exclude optional bundled executables, retaining SDK JavaScript.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
+  // Selectable app icons ship as real files via extraResources — the dock and
+  // window icon APIs need real paths — so keep the staged copy out of the asar.
+  "!apps/desktop/resources/app-icons/**",
+  // Nothing in the packaged app enables source maps or serves them: the web
+  // client's maps alone were 50 MB of app.asar that no request ever read.
   "!**/*.map",
   "!**/*.d.cts",
   "!apps/desktop/resources/browser-secret",
@@ -1088,6 +1097,13 @@ export const DESKTOP_EXTRA_RESOURCES = [
   {
     from: "apps/desktop/prod-resources/resource-monitor",
     to: "resource-monitor",
+  },
+  // Selectable app icons (Settings → App icon). DesktopAssets.resolveAppIconPath
+  // probes <resourcesPath>/app-icons/<id>.png in packaged builds; in dev it
+  // reads apps/web/public/app-icons from the repo instead.
+  {
+    from: "apps/desktop/resources/app-icons",
+    to: "app-icons",
   },
 ] as const;
 export const LINUX_CAPTURE_EXTRA_RESOURCES = [
@@ -2718,17 +2734,19 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  // Forma desktop art. The nightly/linux upstream brand assets are T3-branded,
+  // so this fork points those slots at the Forma renders in assets/ instead.
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+      macIconPng: "assets/nightly/blueprint-macos-1024.png",
+      linuxIconPng: "assets/nightly/blueprint-macos-1024.png",
+      windowsIconIco: "assets/nightly/forma-nightly-windows.ico",
     };
   }
 
   return {
     macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
-    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
+    linuxIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
     windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
   };
 }
@@ -2750,8 +2768,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "Forma (Nightly)"
+    : (desktopPackageJson.productName ?? "Forma");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2773,7 +2791,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: "Forma-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2846,8 +2864,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: "Forma",
+          // The renderer origin scheme stays t3code:// (the server's allowed
+          // desktop origins are hardcoded upstream); forma:// is registered
+          // alongside it so the Forma install keeps its own identity.
+          schemes: ["forma", "forma-dev", "t3code", "t3code-dev"],
         },
         {
           name: "Web site URL",
@@ -2891,7 +2912,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const repoRoot = yield* RepoRoot;
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code",
+      executableName: "forma",
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -2904,7 +2925,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ],
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: "forma",
         },
       },
     };
@@ -3584,6 +3605,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const workspaceOverrides = workspaceConfig.overrides ?? {};
   const workspacePatchedDependencies = workspaceConfig.patchedDependencies ?? {};
   const workspaceAllowBuilds = workspaceConfig.allowBuilds ?? {};
+  yield* Effect.sync(() => {
+    assertCompleteT3ConnectPublicConfig(resolvePublicConfig(loadRepoEnv({ repoRoot })));
+  });
 
   const platformConfig = PLATFORM_CONFIG[options.platform];
   if (!platformConfig) {
@@ -3794,6 +3818,14 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
+  // Staged after the prod-resources copy so the icons ship exactly once, as
+  // the app-icons extraResources entry (excluded from the asar via
+  // DESKTOP_FILE_EXCLUSIONS).
+  yield* fs.copy(
+    path.join(repoRoot, "apps/web/public/app-icons"),
+    path.join(stageResourcesDir, "app-icons"),
+  );
+
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
       ? yield* Effect.try({
@@ -3852,7 +3884,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: "forma",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,

@@ -72,6 +72,10 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProjectCreateDirectoryError,
+  ProjectDeleteEntryError,
+  ProjectFileVersionConflictError,
+  ProjectRenameEntryError,
   ProjectMutationError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
@@ -216,6 +220,8 @@ import * as ProjectService from "./project/ProjectService.ts";
 import { threadWorkspaceRoot } from "./project/threadWorkspaceRoot.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import { projectMutationOperation } from "./project/ProjectMutation.ts";
+// Fork: local agent inventory and workspace entry mutations back the Forma file panel.
+import { ProjectAgentInventory } from "./project/Services/ProjectAgentInventory.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
@@ -268,6 +274,10 @@ import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
 const isProviderUploadFeedbackError = Schema.is(ProviderUploadFeedbackError);
+const isProjectFileVersionConflictError = Schema.is(ProjectFileVersionConflictError);
+const isProjectCreateDirectoryError = Schema.is(ProjectCreateDirectoryError);
+const isProjectRenameEntryError = Schema.is(ProjectRenameEntryError);
+const isProjectDeleteEntryError = Schema.is(ProjectDeleteEntryError);
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -492,6 +502,14 @@ function projectEntriesFailureContext(error: WorkspaceEntries.WorkspaceEntriesEr
         normalizedCwd: error.cwd,
         detail: error.reason,
       };
+    // Fork: protected paths behave as hidden: report the workspace root as
+    // not found instead of widening the `ProjectEntriesFailure` wire union.
+    case "WorkspaceEntriesProtectedPathError":
+      return {
+        failure: "workspace_root_not_found",
+        normalizedCwd: error.path,
+        detail: "Path is protected by Forma safety settings.",
+      };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -509,6 +527,9 @@ function filesystemBrowseFailureContext(error: WorkspaceEntries.WorkspaceEntries
       return { failure: "current_project_required" };
     case "WorkspaceEntriesReadDirectoryError":
       return { failure: "read_directory_failed", parentPath: error.parentPath };
+    // Fork: reported as a read failure to avoid widening the wire union.
+    case "WorkspaceEntriesProtectedPathError":
+      return { failure: "read_directory_failed", parentPath: error.path };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -547,6 +568,10 @@ function projectFileFailureContext(
       return { failure: "path_not_file", resolvedPath: error.resolvedPath };
     case "WorkspaceBinaryFileError":
       return { failure: "binary_file", resolvedPath: error.resolvedPath };
+    // Fork: reported as a generic operation failure to avoid widening the
+    // `ProjectFileFailure` wire union.
+    case "WorkspaceProtectedPathError":
+      return { failure: "operation_failed", resolvedPath: error.resolvedPath };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -1346,6 +1371,7 @@ export const layerWsRpc = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+      const projectAgentInventory = yield* ProjectAgentInventory;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -2826,15 +2852,64 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.projectsWriteFile]: (input) =>
           workspaceFileSystem.writeFile(input).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ProjectWriteFileError({
-                  cwd: input.cwd,
-                  relativePath: input.relativePath,
-                  ...projectFileFailureContext(cause),
-                  cause,
-                }),
+            Effect.mapError((cause) => {
+              // Fork: versioned writes surface conflicts to the Forma file editor.
+              if (isProjectFileVersionConflictError(cause)) {
+                return cause;
+              }
+              return new ProjectWriteFileError({
+                cwd: input.cwd,
+                relativePath: input.relativePath,
+                ...projectFileFailureContext(cause),
+                cause,
+              });
+            }),
+          ),
+        // Fork: local agent inventory and workspace entry mutations (Forma file panel).
+        [WS_METHODS.projectsLocalAgentInventory]: (input) =>
+          projectAgentInventory.getInventory(input.cwd),
+        [WS_METHODS.projectsCreateDirectory]: (input) =>
+          workspaceFileSystem.createDirectory(input).pipe(
+            Effect.mapError((cause) =>
+              isProjectCreateDirectoryError(cause)
+                ? cause
+                : new ProjectCreateDirectoryError({
+                    cwd: input.cwd,
+                    relativePath: input.relativePath,
+                    message: `Failed to create workspace directory '${input.relativePath}'.`,
+                    cause,
+                  }),
             ),
+            Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
+          ),
+        [WS_METHODS.projectsRenameEntry]: (input) =>
+          workspaceFileSystem.renameEntry(input).pipe(
+            Effect.mapError((cause) =>
+              isProjectRenameEntryError(cause)
+                ? cause
+                : new ProjectRenameEntryError({
+                    cwd: input.cwd,
+                    fromRelativePath: input.fromRelativePath,
+                    toRelativePath: input.toRelativePath,
+                    message: `Failed to rename workspace entry '${input.fromRelativePath}'.`,
+                    cause,
+                  }),
+            ),
+            Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
+          ),
+        [WS_METHODS.projectsDeleteEntry]: (input) =>
+          workspaceFileSystem.deleteEntry(input).pipe(
+            Effect.mapError((cause) =>
+              isProjectDeleteEntryError(cause)
+                ? cause
+                : new ProjectDeleteEntryError({
+                    cwd: input.cwd,
+                    relativePath: input.relativePath,
+                    message: `Failed to delete workspace entry '${input.relativePath}'.`,
+                    cause,
+                  }),
+            ),
+            Effect.tap(() => projectAgentInventory.invalidate(input.cwd)),
           ),
         [WS_METHODS.projectsMutate]: (mutation) =>
           startup.enqueueCommand(mutateProject(mutation)).pipe(

@@ -779,8 +779,13 @@ export function useComposerSend(input: ComposerSendInput) {
       previewAnnotations: composerPreviewAnnotationsSnapshot,
       reviewComments: composerReviewCommentsSnapshot,
       threadContexts: composerThreadContextsSnapshot,
-      messageText: messageTextForSend,
+      messageText: messageTextBeforeLocalAgents,
     } = sendSnapshot;
+    // Fork: project-local agent skills and commands expand before dispatch.
+    const messageTextForSend = composerRef.current
+      ? await composerRef.current.expandLocalAgentPrompt(messageTextBeforeLocalAgents)
+      : messageTextBeforeLocalAgents;
+    if (messageTextForSend === null) return;
     const {
       missingWorktreeBaseBranch,
       baseBranchForWorktree,

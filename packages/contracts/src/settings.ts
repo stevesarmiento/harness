@@ -71,7 +71,12 @@ export const SidebarProjectGroupingMode = Schema.Literals([
   "separate",
 ]);
 export type SidebarProjectGroupingMode = typeof SidebarProjectGroupingMode.Type;
-const DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE: SidebarProjectGroupingMode = "repository";
+export const DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE: SidebarProjectGroupingMode = "repository";
+
+export const ThreadCleanupInactiveDays = Schema.Literals([1, 3, 7, 14, 30]);
+export type ThreadCleanupInactiveDays = typeof ThreadCleanupInactiveDays.Type;
+export const DEFAULT_THREAD_CLEANUP_INACTIVE_DAYS: ThreadCleanupInactiveDays = 1;
+
 export const MIN_SIDEBAR_THREAD_PREVIEW_COUNT = 1;
 export const MAX_SIDEBAR_THREAD_PREVIEW_COUNT = 15;
 export const SidebarThreadPreviewCount = Schema.Int.check(
@@ -243,6 +248,28 @@ const QuitConfirmationModeSetting = Schema.Union([QuitConfirmationMode, LegacyCo
 
 export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
 export type FontFamilyPreference = typeof FontFamilyPreference.Type;
+const AppIconPreference = Schema.Literals([
+  "default",
+  "forma-arc",
+  "forma-fluted",
+  "forma-foil",
+  "forma-blueprint",
+]);
+const LegacyBuildAppIconId = Schema.Literals(["forma-prod", "forma-dev", "forma-nightly"]);
+export const AppIconId = Schema.Union([AppIconPreference, LegacyBuildAppIconId]).pipe(
+  Schema.decodeTo(
+    AppIconPreference,
+    SchemaTransformation.transform({
+      decode: (value): typeof AppIconPreference.Type =>
+        value === "forma-prod" || value === "forma-dev" || value === "forma-nightly"
+          ? "default"
+          : value,
+      encode: (value) => value,
+    }),
+  ),
+);
+export type AppIconId = typeof AppIconId.Type;
+export const DEFAULT_APP_ICON_ID: AppIconId = "default";
 
 /** Clients apply each environment theme set once; later local choices persist until the next set. Empty clears it. */
 export const DefaultThemePreference = Schema.String.check(Schema.isMaxLength(64));
@@ -307,6 +334,7 @@ export type ModelPreferences = {
 };
 
 export const ClientSettingsSchema = Schema.Struct({
+  appIcon: AppIconId.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_APP_ICON_ID))),
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
   ),
@@ -408,8 +436,10 @@ export const ClientSettingsSchema = Schema.Struct({
   onboardingCompletedAt: Schema.NullOr(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  // Fork: Forma's meta row (environment, workspace, branch, access, context)
+  // stays under the composer in active threads too.
   persistComposerContextStrip: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
+    Schema.withDecodingDefault(Effect.succeed(true)),
   ),
 
   favorites: ModelFavorites.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -424,8 +454,15 @@ export const ClientSettingsSchema = Schema.Struct({
   pullRequestLinksOpenInApp: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 
   planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  contextWindowMeterEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  composerCollapseOnScroll: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Legacy context window meter. The composer hides it by default; users who
+  // still want the old usage indicator can restore it from Settings.
+  // Fork: Forma shows the context meter in the composer meta row by default.
+  contextWindowMeterEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Desktop resting composer: scrolling an existing thread's conversation
+  // settles the composer into its single-line layout. Losing focus never does.
+  // Fork: the Forma composer stays expanded unless the user opts in.
+  composerCollapseOnScroll: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Rich text is the default; users can opt out for literal Markdown editing.
   composerRichTextEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
@@ -435,8 +472,19 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  sidebarWorkingShelfEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Legacy sidebar (the original per-project tree). Deliberately a fresh key
+  // (was `sidebarV2Enabled` + `sidebarV2ConfiguredByUser`): decoding drops the
+  // old keys, so everyone, including prior beta opt-outs, resets to the new
+  // default sidebar.
+  // Fork: Forma's project-grouped sidebar (LegacySidebar) stays the default;
+  // sidebar v2 is an explicit opt-out of it.
+  legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Beta: working and monitoring threads fold into a Working shelf and return
+  // to the top of the inbox once they need the user. The inbox then orders by
+  // time, so manual placement there is ignored (and kept) while it is on.
+  sidebarWorkingShelfEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -452,6 +500,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
+  ),
+  threadCleanupInactiveDays: ThreadCleanupInactiveDays.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_THREAD_CLEANUP_INACTIVE_DAYS)),
   ),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
@@ -820,6 +871,13 @@ export const ObservabilitySettings = Schema.Struct({
   otlpLogsUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
+
+export const SafetySettings = Schema.Struct({
+  protectedFilesystemPathsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+});
+export type SafetySettings = typeof SafetySettings.Type;
 
 export const SourceControlWritingStyleMode = Schema.Literals([
   "repo_conventions",
@@ -1245,6 +1303,8 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  // Fork: Forma protected paths (Settings → Safety).
+  safety: SafetySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   sourceControlHosts: Schema.Record(Schema.String, SourceControlHostSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1552,6 +1612,12 @@ export const ServerSettingsPatch = Schema.Struct({
       otlpLogsUrl: Schema.optionalKey(TrimmedString),
     }),
   ),
+  // Fork: Forma protected paths (Settings → Safety).
+  safety: Schema.optionalKey(
+    Schema.Struct({
+      protectedFilesystemPathsEnabled: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   /** Merges per host, replacing patched fields whole; redaction markers retain secrets, empty or omitted secrets remove them. */
   sourceControlHosts: Schema.optionalKey(Schema.Record(Schema.String, SourceControlHostSettings)),
   // Replace whole maps to avoid half-merged driver configs.
@@ -1605,6 +1671,7 @@ export function requiredScopesForProjectMutation(
 }
 
 export const ClientSettingsPatch = Schema.Struct({
+  appIcon: Schema.optionalKey(AppIconId),
   notificationMode: Schema.optionalKey(NotificationMode),
   inAppNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
@@ -1668,6 +1735,7 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
+  threadCleanupInactiveDays: Schema.optionalKey(ThreadCleanupInactiveDays),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   snapShotEnabled: Schema.optionalKey(Schema.Boolean),
   snapShotIncludeAccessibility: Schema.optionalKey(Schema.Boolean),

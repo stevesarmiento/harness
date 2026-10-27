@@ -28,8 +28,6 @@ import {
   subscribeDraftThreadPromotion,
   useComposerDraftStore,
 } from "./composerDraftStore";
-import { startDefaultThemeAdoption } from "./hooks/useDefaultTheme";
-import { startEnvironmentThemeRepaint } from "./hooks/useEnvironmentTheme";
 import {
   getClientSettings,
   startModelPreferencesMigration,
@@ -166,9 +164,7 @@ export function startAppServices(): AppRouter {
 
   startClientAppearance();
   startDocumentTitle();
-  startEnvironmentThemeRepaint();
   startBrowserChromeThemeSync(router);
-  startDefaultThemeAdoption();
   startModelPreferencesMigration();
   startAgentOpenedPreviews();
   if (isElectron) startElectronBrowserHost();

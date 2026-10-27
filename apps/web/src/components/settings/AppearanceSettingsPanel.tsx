@@ -1,5 +1,6 @@
-import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useState, type ComponentType, type CSSProperties } from "react";
+import { ContrastIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { DEFAULT_APP_ICON_ID, type AppIconId } from "@t3tools/contracts";
 import {
   DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
@@ -16,12 +17,15 @@ import {
   resolveEnvironmentIdentificationPillLabel,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
-import { useCustomThemes } from "../../hooks/useCustomThemes";
+import { APP_ICON_OPTIONS } from "../../appIcon";
+import { updateClientSettings, useClientSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
+import { cn } from "../../lib/utils";
+import { DEFAULT_CUSTOM_THEME_SETTINGS, type ThemeMode } from "../../theme";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
-import { ThemeLibrary } from "./ThemeSettings";
+import { ThemePreferenceSelector } from "./ThemePreferenceSelector";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -45,19 +49,86 @@ const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
   full: "Full",
 };
 
+// Fork: Forma builds its theme from mode, hue, and saturation instead of a theme library.
+const THEME_MODE_OPTIONS: ReadonlyArray<{
+  readonly mode: ThemeMode;
+  readonly label: string;
+  readonly icon: ComponentType<{ className?: string }>;
+}> = [
+  { mode: "system", label: "System", icon: MonitorIcon },
+  { mode: "light", label: "Light", icon: SunIcon },
+  { mode: "dark", label: "Dark", icon: MoonIcon },
+  { mode: "highContrast", label: "High Contrast", icon: ContrastIcon },
+];
+
+function AppIconPreview({ id, src }: { id: AppIconId; src: string }) {
+  const [failed, setFailed] = useState(false);
+  const initials = id
+    .replace("forma-", "")
+    .split("-")
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 2);
+
+  return (
+    <span
+      className="relative flex size-16 items-center justify-center overflow-hidden"
+      // App icon squircle radius, matching the dock artwork.
+      style={{ borderRadius: "22%" }}
+    >
+      {!failed ? (
+        <img
+          alt=""
+          className="size-full object-cover"
+          draggable={false}
+          onError={() => setFailed(true)}
+          src={src}
+        />
+      ) : (
+        <span className="text-xs font-semibold text-muted-foreground">{initials}</span>
+      )}
+    </span>
+  );
+}
+
+/** Fork: Forma app icons for browser chrome and the desktop dock. */
+function AppIconPicker({
+  value,
+  onChange,
+}: {
+  value: AppIconId;
+  onChange: (value: AppIconId) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 pt-1 pb-3 sm:grid-cols-5">
+      {APP_ICON_OPTIONS.map((option) => {
+        const selected = option.id === value;
+        return (
+          <button
+            aria-pressed={selected}
+            className={cn(
+              "flex min-h-0 flex-col items-center justify-center gap-2 rounded-xl border px-2 py-3 text-center transition-colors",
+              selected
+                ? "border-foreground/55 bg-accent text-foreground"
+                : "border-border text-muted-foreground hover:border-foreground/25 hover:bg-accent hover:text-foreground",
+            )}
+            key={option.id}
+            onClick={() => onChange(option.id)}
+            type="button"
+          >
+            <AppIconPreview id={option.id} src={option.previewSrc} />
+            <span className="text-xs leading-tight font-medium">{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AppearanceSettingsPanel() {
-  const {
-    appearanceMode,
-    refreshTheme,
-    resolvedTheme,
-    setAppearanceMode,
-    setTheme,
-    setThemeHalf,
-    theme,
-    themeHalves,
-  } = useTheme();
-  const customThemes = useCustomThemes();
-  const [isImportThemeOpen, setIsImportThemeOpen] = useState(false);
+  const { themeSettings, setThemeHue, setThemeMode, setThemeSaturation, resolvedTheme } =
+    useTheme();
+  const appIcon = useClientSettings((clientSettings) => clientSettings.appIcon);
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const environmentStageLabel = useEnvironmentStageLabel();
@@ -86,22 +157,74 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="appearance" title="Colors & themes" variant="plain" hideTitle>
-        <div id={searchableSetting("theme").id}>
-          <ThemeLibrary
-            appearanceMode={appearanceMode}
-            customThemes={customThemes}
-            initialAppearance={resolvedTheme}
-            refreshTheme={refreshTheme}
-            isImportOpen={isImportThemeOpen}
-            setAppearanceMode={setAppearanceMode}
-            setTheme={setTheme}
-            setThemeHalf={setThemeHalf}
-            theme={theme}
-            themeHalves={themeHalves}
-            onImportOpenChange={setIsImportThemeOpen}
+      <SettingsSection id="appearance" title="Colors & themes">
+        <SettingsRow
+          {...searchableSetting("theme")}
+          description="Build a theme from mode, hue, and saturation."
+          resetAction={
+            themeSettings.mode !== DEFAULT_CUSTOM_THEME_SETTINGS.mode ||
+            themeSettings.hue !== DEFAULT_CUSTOM_THEME_SETTINGS.hue ||
+            themeSettings.saturation !== DEFAULT_CUSTOM_THEME_SETTINGS.saturation ? (
+              <SettingResetButton
+                label="theme"
+                onClick={() => {
+                  setThemeMode(DEFAULT_CUSTOM_THEME_SETTINGS.mode);
+                  setThemeHue(DEFAULT_CUSTOM_THEME_SETTINGS.hue);
+                  setThemeSaturation(DEFAULT_CUSTOM_THEME_SETTINGS.saturation);
+                }}
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={themeSettings.mode}
+              onValueChange={(value) => {
+                const option = THEME_MODE_OPTIONS.find((candidate) => candidate.mode === value);
+                if (option) setThemeMode(option.mode);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Theme mode">
+                <SelectValue>
+                  {THEME_MODE_OPTIONS.find((option) => option.mode === themeSettings.mode)?.label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_MODE_OPTIONS.map(({ mode, label, icon: Icon }) => (
+                  <SelectItem hideIndicator key={mode} value={mode}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="size-3.5 shrink-0 opacity-60" />
+                      <span className="truncate">{label}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        >
+          <ThemePreferenceSelector
+            onHueChange={setThemeHue}
+            onSaturationChange={setThemeSaturation}
+            resolvedTheme={resolvedTheme}
+            theme={themeSettings}
           />
-        </div>
+        </SettingsRow>
+        <SettingsRow
+          {...searchableSetting("app-icon")}
+          description="Choose the artwork used for browser chrome and the desktop dock or window icon."
+          resetAction={
+            appIcon !== DEFAULT_APP_ICON_ID ? (
+              <SettingResetButton
+                label="app icon"
+                onClick={() => updateClientSettings({ appIcon: DEFAULT_APP_ICON_ID })}
+              />
+            ) : null
+          }
+        >
+          <AppIconPicker
+            onChange={(nextAppIcon) => updateClientSettings({ appIcon: nextAppIcon })}
+            value={appIcon}
+          />
+        </SettingsRow>
       </SettingsSection>
 
       <SettingsSection id="appearance-interface" title="Interface">

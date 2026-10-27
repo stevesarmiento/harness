@@ -34,8 +34,8 @@ import { type Project, type SidebarThreadSummary, type Thread } from "../types";
 import { isSidebarSubagentThread } from "./Sidebar.logic";
 
 export const RECENT_THREAD_LIMIT = 12;
-export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const ADDON_ICON_CLASS = "size-4";
+export const ITEM_ICON_CLASS = "size-4 fill-muted-foreground/80";
+export const ADDON_ICON_CLASS = "size-4 fill-current";
 
 export function buildLinkedThreadActionItems(
   input: CommandPaletteLinkedThreads & {

@@ -7,6 +7,9 @@ import { buttonVariants } from "./button";
 import { Input, type InputProps } from "./input";
 import { Spinner } from "./spinner";
 
+const MenuCreateHandle = MenuPrimitive.createHandle;
+type MenuHandle<Payload> = MenuPrimitive.Handle<Payload>;
+
 const Menu = MenuPrimitive.Root;
 
 function MenuTrigger({ className, children, ...props }: MenuPrimitive.Trigger.Props) {
@@ -358,6 +361,9 @@ function MenuSubPopup({
 }
 
 export {
+  MenuCreateHandle,
+  type MenuHandle,
+  MenuCreateHandle as DropdownMenuCreateHandle,
   Menu,
   Menu as DropdownMenu,
   MenuTrigger,

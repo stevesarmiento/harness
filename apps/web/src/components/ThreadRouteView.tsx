@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 
 import ChatView from "./ChatView";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
-import { SidebarInset } from "./ui/sidebar";
+import { DesktopSidebarReopenButton } from "./sidebar/DesktopSidebarReopenButton";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "./ui/sidebar";
+import { isElectron } from "../env";
+import { cn } from "../lib/utils";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { useEnvironmentThreadRefs, useQuietThreadShell } from "../state/entities";
@@ -149,10 +152,28 @@ export function ThreadRouteView({
 
   return (
     <SidebarInset
-      className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh"
+      // Fork: md:h-auto lets the Forma inset margins apply on the window chrome.
+      className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-auto"
       inert={background}
     >
-      <BackgroundThreadContext value={background}>{view}</BackgroundThreadContext>
+      <BackgroundThreadContext value={background}>
+        {view ?? (
+          // Fork: while the thread loads, a header-height band plus an empty
+          // card hold the Forma chrome's geometry instead of flashing a void.
+          <>
+            <header
+              className={cn(
+                "workspace-topbar bg-background pl-(--workspace-gutter-start) md:bg-transparent md:pl-0 [--workspace-topbar-height:40px]",
+                isElectron && "drag-region [--workspace-topbar-height:39px]",
+              )}
+            >
+              <SidebarTrigger className="size-7 shrink-0 md:hidden" />
+              <DesktopSidebarReopenButton className="md:ml-0" />
+            </header>
+            <SidebarInsetCard />
+          </>
+        )}
+      </BackgroundThreadContext>
       {background ? null : redirect}
     </SidebarInset>
   );

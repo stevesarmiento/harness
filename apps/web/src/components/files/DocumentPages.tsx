@@ -76,7 +76,7 @@ export default function DocumentPages(props: {
   readonly output?: boolean;
   readonly details?: string;
 }) {
-  const { theme, resolvedTheme, themeHalves } = useTheme();
+  const { theme, resolvedTheme, themeSettings } = useTheme();
   const [colors, setColors] = useState(documentColors);
   // oxlint-disable-next-line t3code/react-effect-budget -- Read the host DOM's applied theme tokens so the sandboxed document receives the current palette.
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function DocumentPages(props: {
     // oxlint-disable-next-line react/set-state-in-effect -- Read tokens after useTheme applies the selected palette.
     setColors(documentColors());
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Theme values invalidate the palette read from the host DOM.
-  }, [theme, resolvedTheme, themeHalves]);
+  }, [theme, resolvedTheme, themeSettings]);
   const [zoom, setZoom] = useState(1);
   const [outputHeight, setOutputHeight] = useState(0);
   const stopObserving = useRef<(() => void) | null>(null);

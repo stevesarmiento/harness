@@ -27,6 +27,7 @@ import {
   ServerIcon,
   Settings2Icon,
   ShieldCheckIcon,
+  ShieldIcon,
   SmartphoneIcon,
   WrenchIcon,
   XIcon,
@@ -104,6 +105,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/labs": FlaskConicalIcon,
   "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
+  "/settings/safety": ShieldIcon,
 };
 
 // Detail pages without a nav entry highlight the page that links to them.

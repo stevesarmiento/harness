@@ -25,7 +25,6 @@ const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
 
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
-import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
   memo,
   use,
@@ -93,7 +92,7 @@ import {
   type WorkGroupViewState,
   type TimelineRow,
 } from "./timelineRowContext";
-import { TimelineRowTimestamp, ActivityShimmerOverlay } from "./TimelineRowParts";
+import { TimelineRowTimestamp } from "./TimelineRowParts";
 import {
   WorkGroupSection,
   WorkingTimelineRow,
@@ -1538,13 +1537,8 @@ function ContextCompactionTimelineRow({
       )}
     >
       <span className={cn("h-px flex-1", row.failed ? "bg-destructive/30" : "bg-border/70")} />
-      <span
-        ref={row.active ? observeVisibleAnimation : undefined}
-        className="relative min-w-0 overflow-hidden"
-      >
-        {content}
-        {row.active ? <ActivityShimmerOverlay>{content}</ActivityShimmerOverlay> : null}
-      </span>
+      {/* Fork: Forma labels stay still; the working row's loader shows activity. */}
+      <span className="min-w-0">{content}</span>
       <span className={cn("h-px flex-1", row.failed ? "bg-destructive/30" : "bg-border/70")} />
     </div>
   );

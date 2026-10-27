@@ -9,7 +9,11 @@ const repoEnv = loadRepoEnv();
 // Install only bundle externals; the server bundle already carries its dependency tree.
 const isMainProcessExternal = (id: string) =>
   id === "electron" || id.startsWith("electron/") || isDesktopRuntimeExternalDependency(id);
-const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
+// Fork: launch Electron only for the actual dev task (`vp pack --watch` with
+// the dev flag), so release builds cut from a terminal spawned by the dev app
+// don't boot the dev app when T3CODE_DESKTOP_DEV leaks into the environment.
+const shouldLaunchElectronAfterPack =
+  process.env.T3CODE_DESKTOP_DEV === "1" && process.argv.includes("--watch");
 const publicConfigDefine = {
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",

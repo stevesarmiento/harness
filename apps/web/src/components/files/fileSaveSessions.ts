@@ -1,6 +1,16 @@
-import { AuthFilesystemWriteScope, type EnvironmentId } from "@t3tools/contracts";
-import { type AtomCommandResult, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { useEffect } from "react";
+import {
+  AuthFilesystemWriteScope,
+  ProjectFileVersionConflictError,
+  type EnvironmentId,
+  type ProjectFileVersion,
+} from "@t3tools/contracts";
+import {
+  type AtomCommandResult,
+  runAtomCommand,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import * as Schema from "effect/Schema";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { projectEnvironment } from "~/state/projects";
@@ -20,27 +30,45 @@ export interface FileSaveTarget {
 
 export type FilePendingListener = (relativePath: string, pending: boolean) => void;
 
+/** Fork: a write result may carry the file's new version (older servers omit it). */
+type FileSaveResult = { readonly version?: ProjectFileVersion | undefined } | undefined;
+
+const isVersionConflict = Schema.is(ProjectFileVersionConflictError);
+
 export interface FileSaveSessionDeps {
   readonly debounceMs: number;
   readonly canPersist: (target: FileSaveTarget) => boolean;
   /** Calls `onWritable` each time the target environment regains write access. */
   readonly subscribeWritable: (target: FileSaveTarget, onWritable: () => void) => () => void;
+  /** Fork: `expectedVersion` is absent when unversioned or when the user chose to overwrite. */
   readonly persist: (
     target: FileSaveTarget,
     contents: string,
-  ) => Promise<AtomCommandResult<unknown, unknown>>;
-  readonly confirm: (target: FileSaveTarget, contents: string) => boolean;
+    expectedVersion: ProjectFileVersion | undefined,
+  ) => Promise<AtomCommandResult<FileSaveResult, unknown>>;
+  readonly confirm: (
+    target: FileSaveTarget,
+    contents: string,
+    version: ProjectFileVersion | undefined,
+  ) => boolean;
   readonly readUnsaved: (target: FileSaveTarget) => string | null;
 }
 
 interface FileSaveSession {
-  readonly coordinator: FileSaveCoordinator;
+  readonly coordinator: FileSaveCoordinator<FileSaveResult, unknown>;
   /** Lease count per listener; surfaces may share one listener. */
   readonly listeners: Map<FilePendingListener, number>;
   readonly unsubscribeWritable: () => void;
   leases: number;
   /** The last release flushed, and the session stays open until that settles. */
   flushingOnRelease: boolean;
+  /**
+   * Fork: versioned writes. Each write is checked against the last confirmed version, and a
+   * conflict pauses autosave until the user reloads or overwrites.
+   */
+  version: ProjectFileVersion | undefined;
+  forceNextWrite: boolean;
+  conflict: ProjectFileVersionConflictError | null;
 }
 
 /**
@@ -51,8 +79,20 @@ interface FileSaveSession {
  */
 export function createFileSaveSessions(deps: FileSaveSessionDeps) {
   const sessions = new Map<string, FileSaveSession>();
+  const conflictListeners = new Set<() => void>();
+  const setConflict = (
+    session: FileSaveSession,
+    conflict: ProjectFileVersionConflictError | null,
+  ) => {
+    if (session.conflict === conflict) return;
+    session.conflict = conflict;
+    for (const listener of conflictListeners) listener();
+  };
 
-  const recover = (target: FileSaveTarget, coordinator: FileSaveCoordinator) => {
+  const recover = (
+    target: FileSaveTarget,
+    coordinator: FileSaveCoordinator<FileSaveResult, unknown>,
+  ) => {
     if (!deps.canPersist(target)) return;
     const unsaved = deps.readUnsaved(target);
     if (unsaved !== null) coordinator.change(unsaved);
@@ -60,7 +100,7 @@ export function createFileSaveSessions(deps: FileSaveSessionDeps) {
 
   const create = (key: string, target: FileSaveTarget): FileSaveSession => {
     const listeners = new Map<FilePendingListener, number>();
-    const coordinator: FileSaveCoordinator = new FileSaveCoordinator({
+    const coordinator = new FileSaveCoordinator<FileSaveResult, unknown>({
       debounceMs: deps.debounceMs,
       canPersist: () => deps.canPersist(target),
       // The last surface's listeners outlive it: a flush that settles after
@@ -68,14 +108,28 @@ export function createFileSaveSessions(deps: FileSaveSessionDeps) {
       onPendingChange: (pending) => {
         for (const listener of listeners.keys()) listener(target.relativePath, pending);
       },
-      persist: (contents) => deps.persist(target, contents),
-      onConfirmed: (contents) => deps.confirm(target, contents),
+      persist: (contents) =>
+        deps.persist(target, contents, session.forceNextWrite ? undefined : session.version),
+      onConfirmed: (contents, result) => {
+        session.forceNextWrite = false;
+        session.version = result?.version;
+        setConflict(session, null);
+        return deps.confirm(target, contents, session.version);
+      },
+      onFailed: (result) => {
+        session.forceNextWrite = false;
+        const cause = squashAtomCommandFailure(result);
+        if (!isVersionConflict(cause)) return { pause: false };
+        setConflict(session, cause);
+        return { pause: true };
+      },
       onSettled: () => {
         if (!session.flushingOnRelease) return;
         session.flushingOnRelease = false;
         if (session.leases === 0) {
           if (sessions.get(key) === session) sessions.delete(key);
           session.unsubscribeWritable();
+          setConflict(session, null);
         } else if (coordinator.unconfirmedContents !== null) {
           // A surface rejoined while the release flush failed; retry it once.
           recover(target, coordinator);
@@ -89,6 +143,9 @@ export function createFileSaveSessions(deps: FileSaveSessionDeps) {
       unsubscribeWritable,
       leases: 0,
       flushingOnRelease: false,
+      version: undefined,
+      forceNextWrite: false,
+      conflict: null,
     };
     return session;
   };
@@ -129,6 +186,33 @@ export function createFileSaveSessions(deps: FileSaveSessionDeps) {
       const session = sessions.get(fileSaveKey(target));
       if (session && session.leases > 0) session.coordinator.change(contents);
     },
+    /** Fork: the version the editor loaded; ignored while a conflict holds the old baseline. */
+    setLoadedVersion(target: FileSaveTarget, version: ProjectFileVersion | undefined): void {
+      const session = sessions.get(fileSaveKey(target));
+      if (session && session.conflict === null) session.version = version;
+    },
+    conflictFor(target: FileSaveTarget): ProjectFileVersionConflictError | null {
+      return sessions.get(fileSaveKey(target))?.conflict ?? null;
+    },
+    subscribeConflicts(listener: () => void): () => void {
+      conflictListeners.add(listener);
+      return () => conflictListeners.delete(listener);
+    },
+    /** Fork: drops the draft so the caller can re-read the file from disk. */
+    reload(target: FileSaveTarget): void {
+      const session = sessions.get(fileSaveKey(target));
+      if (!session) return;
+      session.forceNextWrite = false;
+      session.coordinator.reset();
+      setConflict(session, null);
+    },
+    /** Fork: writes the paused draft without a version check. */
+    overwrite(target: FileSaveTarget): void {
+      const session = sessions.get(fileSaveKey(target));
+      if (!session?.conflict) return;
+      session.forceNextWrite = true;
+      session.coordinator.resume();
+    },
   };
 }
 
@@ -150,13 +234,18 @@ const fileSaveSessions = createFileSaveSessions({
       },
     );
   },
-  persist: ({ environmentId, cwd, relativePath }, contents) =>
+  persist: ({ environmentId, cwd, relativePath }, contents, expectedVersion) =>
     runAtomCommand(appAtomRegistry, projectEnvironment.writeFile, {
       environmentId,
-      input: { cwd, relativePath, contents },
+      input: {
+        cwd,
+        relativePath,
+        contents,
+        ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+      },
     }),
-  confirm: ({ environmentId, cwd, relativePath }, contents) =>
-    confirmProjectFileQueryData(environmentId, cwd, relativePath, contents),
+  confirm: ({ environmentId, cwd, relativePath }, contents, version) =>
+    confirmProjectFileQueryData(environmentId, cwd, relativePath, contents, version),
   readUnsaved: ({ environmentId, cwd, relativePath }) =>
     getUnsavedProjectFileQueryData(environmentId, cwd, relativePath)?.contents ?? null,
 });
@@ -165,12 +254,28 @@ const fileSaveSessions = createFileSaveSessions({
 export function useFileSaveSession(
   { environmentId, cwd, relativePath }: FileSaveTarget,
   onPendingChange: FilePendingListener,
-): void {
+  // Fork: the version the editor loaded. Absent when the environment server predates
+  // versioned project files; saves then degrade to unversioned writes.
+  version?: ProjectFileVersion,
+) {
   // oxlint-disable-next-line t3code/react-effect-budget -- the lease is a mount-scoped external resource; React runs every unmount cleanup before mount setups, so a surface switch flushes before the next surface recovers.
   useEffect(
     () => fileSaveSessions.acquire({ environmentId, cwd, relativePath }, onPendingChange),
     [environmentId, cwd, relativePath, onPendingChange],
   );
+  // Declared after the lease so a new session learns its baseline before its first debounced write.
+  // oxlint-disable-next-line t3code/react-effect-budget -- Fork: syncs the loaded file version into the external save session.
+  useEffect(() => {
+    fileSaveSessions.setLoadedVersion({ environmentId, cwd, relativePath }, version);
+  }, [environmentId, cwd, relativePath, version]);
+  const conflict = useSyncExternalStore(fileSaveSessions.subscribeConflicts, () =>
+    fileSaveSessions.conflictFor({ environmentId, cwd, relativePath }),
+  );
+  return {
+    conflict,
+    reloadFromDisk: () => fileSaveSessions.reload({ environmentId, cwd, relativePath }),
+    overwrite: () => fileSaveSessions.overwrite({ environmentId, cwd, relativePath }),
+  };
 }
 
 export function changeFileSaveSession(target: FileSaveTarget, contents: string): void {

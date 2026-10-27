@@ -9,6 +9,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { memo, use, useState, type ReactNode } from "react";
+import { APP_BASE_NAME } from "~/branding";
 import {
   createMessageAttachmentPreviewProjector,
   selectMessageImageResources,
@@ -30,7 +31,8 @@ import {
   Redo2Icon,
   Undo2Icon,
 } from "lucide-react";
-import { Link as LinkIconNode } from "lucide";
+// Fork: MessageCopyButton takes a component icon (Forma's SF Symbols set).
+import { IconLink as LinkIcon } from "symbols-react";
 import { Button, InlineButton } from "../ui/button";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
 import { AttachmentImage } from "../media/AttachmentImage";
@@ -215,7 +217,7 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 <MessageCopyButton
                   text={promptLink}
                   label="Copy prompt link"
-                  icon={LinkIconNode}
+                  icon={LinkIcon}
                   variant="ghost"
                 />
               )}
@@ -438,7 +440,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           className="me-1 text-2xs text-muted-foreground/70"
           data-user-message-attribution="t3code"
         >
-          Sent by T3 Code
+          Sent by {APP_BASE_NAME}
         </p>
       ) : null}
       {/* The row's heading already names the guest for screen readers. */}
@@ -665,7 +667,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                 <MessageCopyButton
                   text={promptLink}
                   label="Copy prompt link"
-                  icon={LinkIconNode}
+                  icon={LinkIcon}
                   variant="ghost"
                 />
               )}

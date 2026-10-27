@@ -45,7 +45,9 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
-  it.effect("refuses to start when a later id would skip V2 migrations", () =>
+  // Fork: a Forma ledger always records a 9xx id above upstream's, so a later
+  // id is the normal case; backfillSkippedMigrations applies what run skipped.
+  it.effect("backfills V2 migrations that a later id would skip", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: 54 });
@@ -53,16 +55,9 @@ describe("runMigrations", () => {
         INSERT INTO effect_sql_migrations (migration_id, name)
         VALUES (${newerMigrationId}, 'FutureMainMigration')
       `;
-      const before = yield* history;
 
-      const exit = yield* Effect.exit(runMigrations());
-
-      assert.isTrue(Exit.isFailure(exit));
-      for (const [id, name] of v2Migrations) {
-        assert.include(String(exit), `${id}_${name} (recorded: nothing)`);
-      }
-      assert.deepStrictEqual(yield* history, before);
-      assert.strictEqual(yield* v2TableCount, 0);
+      assert.deepStrictEqual(yield* runMigrations(), v2Migrations);
+      assert.isAbove(yield* v2TableCount, 0);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 

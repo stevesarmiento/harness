@@ -370,3 +370,34 @@ describe("server model preferences", () => {
     expect(decodeServerSettingsPatch(input)).toEqual(input);
   });
 });
+
+// Fork: Forma's own settings and the defaults it keeps over upstream's.
+describe("ClientSettings Forma defaults", () => {
+  it("keeps the Forma composer and sidebar defaults", () => {
+    const decoded = decodeClientSettings({});
+    expect(decoded.legacySidebarEnabled).toBe(true);
+    expect(decoded.sidebarWorkingShelfEnabled).toBe(false);
+    expect(decoded.contextWindowMeterEnabled).toBe(true);
+    expect(decoded.composerCollapseOnScroll).toBe(false);
+    expect(decoded.persistComposerContextStrip).toBe(true);
+  });
+
+  it.each(["forma-arc", "forma-fluted", "forma-foil", "forma-blueprint"] as const)(
+    "accepts the %s app icon",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe(appIcon);
+      expect(decodeClientSettingsPatch({ appIcon }).appIcon).toBe(appIcon);
+    },
+  );
+
+  it.each(["forma-prod", "forma-dev", "forma-nightly"] as const)(
+    "normalizes the legacy %s build icon to default",
+    (appIcon) => {
+      expect(decodeClientSettings({ appIcon }).appIcon).toBe("default");
+    },
+  );
+
+  it.each([0, 2, 31])("rejects an unsupported cleanup window: %s", (value) => {
+    expect(() => decodeClientSettings({ threadCleanupInactiveDays: value })).toThrow();
+  });
+});

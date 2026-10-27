@@ -27,6 +27,7 @@ import type {
   RuntimeMode,
   RuntimeRequestId,
   ScopedThreadRef,
+  ServerLocalAgentInventory,
   ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
@@ -233,6 +234,14 @@ const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidErro
 const COMPOSER_SCROLL_COLLAPSE_THRESHOLD_PX = 24;
 const COMPOSER_SCROLL_GESTURE_RESET_MS = 120;
 import { toastManager } from "../ui/toast";
+// Fork: Forma's add-actions menu and project-local agent skills and commands.
+import { ComposerAddActionsMenu } from "./ComposerAddActionsMenu";
+import { ComposerControlSeparator } from "./ComposerControl";
+import { MenuCreateHandle } from "../ui/menu";
+import { expandProjectLocalAgentsPrompt } from "../../localAgentPrompting";
+import { projectEnvironment } from "~/state/projects";
+import { useEnvironmentQuery } from "~/state/query";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { PlayIcon, ShieldIcon } from "lucide-react";
 import { proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
 import { hasProviderSetup } from "./ProviderStatusBanner";
@@ -290,6 +299,7 @@ function consumePasteAsTextShortcut(deadline: { current: number }): boolean {
 }
 
 const runtimeModeOptions = runtimeModes.map((mode) => ({ mode, ...runtimeModeConfig[mode] }));
+const EMPTY_LOCAL_AGENT_INVENTORY: ServerLocalAgentInventory = { skills: [], commands: [] };
 
 export interface ChatComposerHandle {
   focusAtEnd: () => void;
@@ -349,6 +359,11 @@ export interface ChatComposerHandle {
     shownPendingApprovalIds: ReadonlyArray<RuntimeRequestId>;
   };
   validateProviderInput: (providerInput: string) => boolean;
+  /**
+   * Fork: expand project-local agent skills (`$name`) and commands (`/name`)
+   * into the outgoing text. Resolves null after reporting a load failure.
+   */
+  expandLocalAgentPrompt: (text: string) => Promise<string | null>;
   setMultipleModelSelections: (selections: ReadonlyArray<ModelSelection>) => void;
 }
 
@@ -624,6 +639,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onRemoveEditingQueuedAttachment,
   } = props;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // Fork: project-local agent skills and commands join the composer menus.
+  const localAgentInventoryQuery = useEnvironmentQuery(
+    gitCwd === null
+      ? null
+      : projectEnvironment.localAgentInventory({ environmentId, input: { cwd: gitCwd } }),
+  );
+  const localAgentInventory = localAgentInventoryQuery.data ?? EMPTY_LOCAL_AGENT_INVENTORY;
+  const loadLocalAgentInventory = useAtomQueryRunner(projectEnvironment.localAgentInventory, {
+    label: "load project-local agents",
+    reportFailure: false,
+    reportDefect: true,
+  });
+  const readLocalAgentFile = useAtomQueryRunner(projectEnvironment.readFile, {
+    label: "read project-local agent file",
+    reportFailure: false,
+    reportDefect: true,
+  });
   const composerDraftTargetKey = composerTargetKey(composerDraftTarget);
   const {
     heldRequestIds,
@@ -1017,6 +1049,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const composerSuggestionId = useId();
+  const [composerAddActionsMenuHandle] = useState(() =>
+    MenuCreateHandle<ProviderInteractionMode>(),
+  );
+  const composerAddActionsTriggerId = useId();
+  const addActionsFileInputRef = useRef<HTMLInputElement>(null);
   const composerSuggestionListId = `${composerSuggestionId}-${encodeURIComponent(draftId ?? activeThreadId ?? "new")}-suggestions`;
   const promptHistoryPositionRef = useRef<{
     targetKey: string;
@@ -1153,6 +1190,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSkills,
     selectedProviderSlashCommands,
     showSkillsInSlashMenu: settings.showSkillsInSlashMenu,
+    localAgentInventory,
+    localAgentInventoryPending: localAgentInventoryQuery.isPending,
   });
 
   const composerMenuOpen = Boolean(composerTrigger);
@@ -1901,8 +1940,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       return;
     }
-    if (item.type === "provider-slash-command") {
-      if (item.command.name === USAGE_LIMITS_COMMAND.name && onUsageLimitsCommand) {
+    // Fork: project-local commands insert like provider commands.
+    if (item.type === "provider-slash-command" || item.type === "local-slash-command") {
+      if (
+        item.type === "provider-slash-command" &&
+        item.command.name === USAGE_LIMITS_COMMAND.name &&
+        onUsageLimitsCommand
+      ) {
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
           focusEditorAfterReplace: false,
@@ -1927,7 +1971,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       return;
     }
-    if (item.type === "skill") {
+    if (item.type === "skill" || item.type === "local-skill") {
       const replacement = `$${item.skill.name} `;
       const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
         snapshot.value,
@@ -2940,6 +2984,44 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const openModelPickerStable = useStableCallback(openModelPicker);
 
+  // Fork: project-local agent prompts expand at send time, reading the agent
+  // files through the projects.readFile RPC.
+  const expandLocalAgentPrompt = async (text: string): Promise<string | null> => {
+    if (gitCwd === null) return text;
+    let inventory = localAgentInventoryQuery.data;
+    if (inventory === null) {
+      const result = await loadLocalAgentInventory({ environmentId, input: { cwd: gitCwd } });
+      inventory = result._tag === "Success" ? result.value : EMPTY_LOCAL_AGENT_INVENTORY;
+    }
+    if (inventory.skills.length === 0 && inventory.commands.length === 0) return text;
+    try {
+      return await expandProjectLocalAgentsPrompt({
+        cwd: gitCwd,
+        prompt: text,
+        inventory,
+        readFileContents: async (relativePath) => {
+          const result = await readLocalAgentFile({
+            environmentId,
+            input: { cwd: gitCwd, relativePath },
+          });
+          if (result._tag !== "Success") {
+            throw new Error(`Could not read ${relativePath}.`);
+          }
+          return result.value.contents;
+        },
+      });
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Project command could not be loaded",
+        description:
+          cause instanceof Error ? cause.message : "The project-local agent file is invalid.",
+      });
+      return null;
+    }
+  };
+  const expandLocalAgentPromptStable = useStableCallback(expandLocalAgentPrompt);
+
   useImperativeHandle(
     composerRef,
     () => ({
@@ -3166,9 +3248,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         setProviderInputSubmissionError(validationMessage);
         return validationMessage === null;
       },
+      expandLocalAgentPrompt: expandLocalAgentPromptStable,
     }),
     [
       activeThread,
+      expandLocalAgentPromptStable,
       addComposerAttachments,
       addComposerFoldersStable,
       foldPastedText,
@@ -3270,6 +3354,47 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
+  // Fork: Forma's add-actions menu leads the expanded footer: mode, image,
+  // skills and stashed prompts in one place.
+  const openComposerSkillPicker = () => {
+    const snapshot = readComposerSnapshot();
+    const previousCharacter = snapshot.value[snapshot.expandedCursor - 1] ?? "";
+    const trigger = previousCharacter.length > 0 && !/\s/.test(previousCharacter) ? " $" : "$";
+    applyPromptReplacement(snapshot.expandedCursor, snapshot.expandedCursor, trigger);
+  };
+  const composerLeadingActions = showProviderUnavailable ? null : (
+    <>
+      <input
+        ref={addActionsFileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = "";
+          void addComposerAttachments(files).then((inserted) => {
+            if (!inserted) focusComposer();
+          });
+        }}
+      />
+      <ComposerAddActionsMenu
+        menuHandle={composerAddActionsMenuHandle}
+        triggerId={composerAddActionsTriggerId}
+        interactionMode={interactionMode}
+        showInteractionModeActions={planModeUiEnabled}
+        imageDisabled={!showComposerAttachAction}
+        skillDisabled={
+          selectedProviderSkills.length === 0 && localAgentInventory.skills.length === 0
+        }
+        stashCount={stashQueue.length}
+        onSelectMode={handleInteractionModeChange}
+        onSelectImage={() => addActionsFileInputRef.current?.click()}
+        onSelectSkill={openComposerSkillPicker}
+        onOpenStash={toggleStashMenuStable}
+      />
+      <ComposerControlSeparator size="sm" />
+    </>
+  );
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton
       addComposerAttachments={addComposerAttachments}
@@ -3560,6 +3685,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     resolvedTheme={resolvedTheme}
                     isLoading={isComposerMenuLoading}
                     triggerKind={composerTriggerKind}
+                    // Fork: an empty / or $ query groups project-local entries apart.
+                    groupSections={
+                      (composerTrigger?.kind === "slash-command" ||
+                        composerTrigger?.kind === "skill") &&
+                      composerTrigger.query.trim().length === 0
+                    }
                     emptyStateText={composerMenuEmptyState}
                     activeItemId={activeComposerMenuItem?.id ?? null}
                     onHighlightedItemChange={onComposerMenuItemHighlightedStable}
@@ -3718,16 +3849,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     (showInlineRestingControls ? "bottom-[calc(2rem+1px)]" : "bottom-px"),
                 )}
               >
+                {/* Fork: Forma's add-actions menu leads the footer controls. */}
                 <div
-                  ref={attachExpandedComposerControls}
-                  data-chat-composer-controls="left"
-                  data-chat-composer-footer-controls="true"
+                  data-chat-composer-footer-leading="true"
                   className={cn(
-                    "relative -m-1 -ms-3.5 flex min-w-0 flex-1 items-center gap-0 overflow-x-auto p-1 ps-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                    "flex min-w-0 flex-1 items-center gap-1",
                     isComposerResting && "hidden",
                   )}
                 >
-                  {composerControlsCollapsed ? null : composerControls}
+                  {composerControlsCollapsed ? null : composerLeadingActions}
+                  <div
+                    ref={attachExpandedComposerControls}
+                    data-chat-composer-controls="left"
+                    data-chat-composer-footer-controls="true"
+                    className={cn(
+                      "relative -m-1 flex min-w-0 flex-1 items-center gap-0 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                      composerLeadingActions === null && "-ms-3.5 ps-3.5",
+                    )}
+                  >
+                    {composerControlsCollapsed ? null : composerControls}
+                  </div>
                 </div>
 
                 <div

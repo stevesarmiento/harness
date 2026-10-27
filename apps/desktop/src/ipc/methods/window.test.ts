@@ -187,10 +187,18 @@ describe("getRelayTelemetryEnabled", () => {
           }),
         ),
       );
-      assert.isTrue(
+      // Fork: Forma relay tracing is opt-in.
+      assert.isFalse(
         yield* getRelayTelemetryEnabled
           .handler()
           .pipe(Effect.provideService(HostProcess.Environment, {})),
+      );
+      assert.isTrue(
+        yield* getRelayTelemetryEnabled.handler().pipe(
+          Effect.provideService(HostProcess.Environment, {
+            T3CODE_TELEMETRY_ENABLED: "true",
+          }),
+        ),
       );
     }),
   );

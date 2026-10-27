@@ -511,6 +511,39 @@ export function SettingsRow({
   );
 }
 
+/** Fork: nested rows inside a SettingsRow, used by Forma's hue and saturation controls. */
+export function SettingsSubRows({ children }: { children: ReactNode }) {
+  return <div className="mt-3 -mx-3 sm:-mx-4">{children}</div>;
+}
+
+export function SettingsSubRow({
+  title,
+  description,
+  control,
+}: {
+  title: ReactNode;
+  description: ReactNode;
+  control?: ReactNode;
+}) {
+  return (
+    <div className="@container/settings-row border-t border-border/50 px-3 py-3 sm:px-4">
+      <div className="flex flex-col gap-3 @min-[32rem]/settings-row:grid @min-[32rem]/settings-row:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] @min-[32rem]/settings-row:items-center @min-[32rem]/settings-row:gap-8">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h4 className="text-sm font-medium text-foreground">{title}</h4>
+          <p className="max-w-2xl text-balance text-xs leading-normal text-muted-foreground">
+            {description}
+          </p>
+        </div>
+        {control ? (
+          <div className="flex w-full min-w-0 shrink-0 items-center gap-2 @min-[32rem]/settings-row:w-auto @min-[32rem]/settings-row:justify-end">
+            {control}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function SettingResetButton({
   label,
   tooltip = "Reset to default",

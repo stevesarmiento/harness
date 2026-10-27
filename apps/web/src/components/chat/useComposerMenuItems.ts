@@ -5,6 +5,7 @@ import type {
   ProjectId,
   ProviderDriverKind,
   PullRequestListInput,
+  ServerLocalAgentInventory,
   ServerProvider,
   ThreadId,
   ThreadPullRequestLink,
@@ -60,6 +61,8 @@ export function useComposerMenuItems({
   selectedProviderSkills,
   selectedProviderSlashCommands,
   showSkillsInSlashMenu,
+  localAgentInventory,
+  localAgentInventoryPending,
 }: {
   readonly composerTrigger: ComposerTrigger | null;
   readonly environmentId: EnvironmentId;
@@ -74,6 +77,9 @@ export function useComposerMenuItems({
   readonly selectedProviderSkills: ServerProvider["skills"];
   readonly selectedProviderSlashCommands: ServerProvider["slashCommands"];
   readonly showSkillsInSlashMenu: boolean;
+  /** Fork: project-local agent skills and commands for this workspace. */
+  readonly localAgentInventory: ServerLocalAgentInventory;
+  readonly localAgentInventoryPending: boolean;
 }) {
   // Thread mentions rank by recency as of when the composer mounted.
   const [now] = useState(() => Date.now());
@@ -238,24 +244,56 @@ export function useComposerMenuItems({
       const visibleProviderSlashCommandItems = providerSlashCommandItems.filter(
         (item) => item.command.name !== "compact" || compactSlashCommandAvailable,
       );
+      // Fork: project-local commands expand only when they open the message.
+      const localSlashCommandItems =
+        composerTrigger.rangeStart === 0
+          ? localAgentInventory.commands.map((command) => ({
+              id: `local-slash-command:${command.path}`,
+              type: "local-slash-command" as const,
+              command,
+              label: `/${command.name}`,
+              description: command.description ?? command.inputHint ?? "Run project command",
+            }))
+          : [];
       const slashCommandItems = slashCommandItemsForPromptPosition(
-        [...builtInSlashCommandItems, ...visibleProviderSlashCommandItems, ...skillItems],
+        [
+          ...builtInSlashCommandItems,
+          ...localSlashCommandItems,
+          ...visibleProviderSlashCommandItems,
+          ...skillItems,
+        ],
         composerTrigger.rangeStart === 0,
       );
       return searchSlashCommandItems(slashCommandItems, query);
     }
     if (composerTrigger.kind === "skill") {
-      return searchProviderSkills(selectedProviderSkills, composerTrigger.query).map((skill) => ({
-        id: `skill:${selectedProvider}:${skill.name}`,
-        type: "skill" as const,
-        provider: selectedProvider,
-        skill,
-        label: formatProviderSkillDisplayName(skill),
-        description:
+      // Fork: project-local skills lead, and win a name clash with a provider skill.
+      return searchProviderSkills(
+        [...localAgentInventory.skills, ...selectedProviderSkills],
+        composerTrigger.query,
+      ).map((skill): ComposerCommandItem => {
+        const description =
           skill.shortDescription ??
           skill.description ??
-          (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-      }));
+          (skill.scope ? `${skill.scope} skill` : "Run provider skill");
+        if ("source" in skill && skill.source === "local-agents") {
+          return {
+            id: `local-skill:${skill.path}`,
+            type: "local-skill",
+            skill,
+            label: formatProviderSkillDisplayName(skill),
+            description,
+          };
+        }
+        return {
+          id: `skill:${selectedProvider}:${skill.name}`,
+          type: "skill",
+          provider: selectedProvider,
+          skill,
+          label: formatProviderSkillDisplayName(skill),
+          description,
+        };
+      });
     }
     if (
       composerTrigger.kind === "pull-request" &&
@@ -316,6 +354,9 @@ export function useComposerMenuItems({
   })();
   const isLoading =
     (composerTriggerKind === "path" && pathTriggerQuery.length > 0 && workspaceEntries.isPending) ||
+    // Fork: project-local skills and commands load per workspace.
+    ((composerTriggerKind === "skill" || composerTriggerKind === "slash-command") &&
+      localAgentInventoryPending) ||
     (composerTriggerKind === "pull-request" &&
       pullRequestProjectId !== null &&
       pullRequestRepository !== null &&

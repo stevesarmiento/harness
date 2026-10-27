@@ -1,5 +1,4 @@
 import { NotificationSettings } from "./NotificationSettings";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
@@ -19,11 +18,17 @@ import {
   type ResponseStreamingMode,
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
+  type ThreadCleanupInactiveDays,
 } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import {
+  APP_BASE_NAME,
+  APP_VERSION,
+  HOSTED_APP_CHANNEL,
+  HOSTED_APP_CHANNEL_LABEL,
+} from "../../branding";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
@@ -38,12 +43,9 @@ import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
 import { isElectron } from "../../env";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
-import {
-  readAppearanceModePreference,
-  readThemeHalves,
-  readThemePreference,
-  useTheme,
-} from "../../hooks/useTheme";
+import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
+import { formatThreadCleanupWindowLabel } from "../../lib/threadCleanup";
 import {
   useScopedSettings,
   useScopedSettingsMixed,
@@ -375,15 +377,7 @@ function AboutVersionSection() {
 }
 
 export function useSettingsRestore(onRestored?: () => void) {
-  const {
-    theme,
-    setTheme,
-    followSystem,
-    setFollowSystem,
-    setThemeHalf,
-    clearThemeHalves,
-    themeHalves,
-  } = useTheme();
+  const { theme, setTheme } = useTheme();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
 
@@ -395,8 +389,6 @@ export function useSettingsRestore(onRestored?: () => void) {
 
   const changedSettingLabels = [
     ...(theme !== "system" ? ["Theme"] : []),
-    ...(!followSystem ? ["Follow system"] : []),
-    ...(themeHalves !== null ? ["Theme mix"] : []),
     ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
       ? ["Contrast"]
       : []),
@@ -536,17 +528,8 @@ export function useSettingsRestore(onRestored?: () => void) {
     );
     if (!confirmed) return;
 
-    // Reset only dirty theme keys so storage failures cannot block other settings; re-read after confirmation
-    // for safe rollback.
-    let previousTheme = theme;
-    try {
-      previousTheme = readThemePreference();
-    } catch {}
-    const liveHalves = readThemeHalves();
-    const needsThemeReset = previousTheme !== "system";
-    const needsMixReset = liveHalves !== null;
-    const needsFollowSystemReset = readAppearanceModePreference(previousTheme) !== "system";
-    const notifyThemeRestoreFailure = () => {
+    // Fork: Forma's theme is one local preference; reset its mode alongside the settings.
+    if (theme !== "system" && !setTheme("system")) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -554,26 +537,6 @@ export function useSettingsRestore(onRestored?: () => void) {
           description: "Try again.",
         }),
       );
-    };
-    // Restore the base preference before the mix because restoring the base clears the mix.
-    const previousHalves = liveHalves;
-    const rollbackThemeState = () => {
-      if (needsThemeReset) setTheme(previousTheme);
-      if (previousHalves?.light) setThemeHalf("light", previousHalves.light);
-      if (previousHalves?.dark) setThemeHalf("dark", previousHalves.dark);
-    };
-    if (needsThemeReset && !setTheme("system")) {
-      notifyThemeRestoreFailure();
-      return;
-    }
-    if (needsMixReset && !clearThemeHalves()) {
-      rollbackThemeState();
-      notifyThemeRestoreFailure();
-      return;
-    }
-    if (needsFollowSystemReset && !setFollowSystem(true)) {
-      rollbackThemeState();
-      notifyThemeRestoreFailure();
       return;
     }
     updateSettings({
@@ -1485,6 +1448,55 @@ function ScopedCompactIdleThreadsRow() {
   );
 }
 
+const THREAD_CLEANUP_DAY_OPTIONS: readonly ThreadCleanupInactiveDays[] = [1, 3, 7, 14, 30];
+
+/** Fork: Forma's sidebar cleanup archives threads idle for this many days. */
+function ThreadCleanupWindowRow() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+  return (
+    <SettingsRow
+      {...searchableSetting("thread-cleanup-window")}
+      description="Sidebar cleanup archives threads with no user message in this many days."
+      resetAction={
+        settings.threadCleanupInactiveDays !==
+        DEFAULT_UNIFIED_SETTINGS.threadCleanupInactiveDays ? (
+          <SettingResetButton
+            label="thread cleanup window"
+            onClick={() =>
+              updateSettings({
+                threadCleanupInactiveDays: DEFAULT_UNIFIED_SETTINGS.threadCleanupInactiveDays,
+              })
+            }
+          />
+        ) : null
+      }
+      control={
+        <Select
+          value={String(settings.threadCleanupInactiveDays)}
+          onValueChange={(value) => {
+            const nextValue = THREAD_CLEANUP_DAY_OPTIONS.find((days) => String(days) === value);
+            if (nextValue !== undefined) updateSettings({ threadCleanupInactiveDays: nextValue });
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-40" aria-label="Thread cleanup window">
+            <SelectValue>
+              {formatThreadCleanupWindowLabel(settings.threadCleanupInactiveDays)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            {THREAD_CLEANUP_DAY_OPTIONS.map((days) => (
+              <SelectItem key={days} hideIndicator value={String(days)}>
+                {formatThreadCleanupWindowLabel(days)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      }
+    />
+  );
+}
+
 export function ThreadsSettingsPanel() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -1719,6 +1731,10 @@ export function ThreadsSettingsPanel() {
           ) : null}
         </SettingsSection>
       ) : null}
+
+      <SettingsSection id="thread-cleanup" title="Cleanup">
+        <ThreadCleanupWindowRow />
+      </SettingsSection>
 
       <SettingsSection id="text-generation" title="Text generation">
         <SettingsRow
@@ -2018,21 +2034,8 @@ export function AboutSettingsPanel() {
 
       <SettingsSection id="legal" title="Legal">
         <SettingsRow
-          {...searchableSetting("privacy-policy")}
-          description="How we handle your data, including the anonymous usage data T3 Code collects."
-          control={
-            <Button
-              render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
-              size="sm"
-              variant="outline"
-            >
-              View policy
-            </Button>
-          }
-        />
-        <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by T3 Code."
+          description={`Notices for dependencies, assets, and optional tools used by ${APP_BASE_NAME}.`}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

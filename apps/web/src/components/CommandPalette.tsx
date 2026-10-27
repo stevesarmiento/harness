@@ -63,7 +63,7 @@ import {
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
-  PaletteIcon,
+  MonitorIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -249,9 +249,10 @@ function openIntentView(intent: CommandPaletteOpenIntent | null): CommandPalette
         groups: [{ value: NEW_THREAD_IN_GROUP, label: "Projects", items: [] }],
       };
     case "change-theme":
+      // Fork: `theme.select` opens the appearance submenu; there is no theme library.
       return {
-        addonIcon: <PaletteIcon className={ADDON_ICON_CLASS} />,
-        groups: [{ value: "themes", label: "Change theme", items: [] }],
+        addonIcon: <MonitorIcon className={ADDON_ICON_CLASS} />,
+        groups: [{ value: "appearance", label: "Change appearance", items: [] }],
       };
     case "search":
     case undefined:
@@ -473,7 +474,7 @@ function OpenCommandPaletteDialog(props: {
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const providersByEnvironment = useEnvironmentProviders();
-  const { changeThemeItem, changeAppearanceItem, themeEditorItem } = useCommandPaletteThemeItems();
+  const { changeAppearanceItem } = useCommandPaletteThemeItems();
   const currentView = viewStack.at(-1)?.view ?? null;
   const threadSearchQuery = currentView === null && !isActionsOnly ? deferredQuery : "";
   const [browseGeneration, setBrowseGeneration] = useState(0);
@@ -1444,10 +1445,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  actionItems.push(changeThemeItem);
   actionItems.push(changeAppearanceItem);
-
-  actionItems.push(themeEditorItem);
 
   if (
     environments.some(
@@ -1577,11 +1575,9 @@ function OpenCommandPaletteDialog(props: {
         ? addProjectEntryGroups()
         : currentView?.groups[0]?.value === NEW_THREAD_IN_GROUP
           ? [{ value: NEW_THREAD_IN_GROUP, label: "Projects", items: projectThreadItems }]
-          : currentView?.groups[0]?.value === "themes"
-            ? changeThemeItem.groups
-            : currentView?.groups[0]?.value === "appearance"
-              ? changeAppearanceItem.groups
-              : (currentView?.groups ?? rootGroups);
+          : currentView?.groups[0]?.value === "appearance"
+            ? changeAppearanceItem.groups
+            : (currentView?.groups ?? rootGroups);
 
   const isLinkedThreadSearch =
     linkedThreadSearch?.linkedThreads !== undefined && deferredQuery === linkedThreadSearch.query;

@@ -82,6 +82,8 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
 
+// Fork: Forma UI type tokens (text-ui-*) replace the fixed text sizes in this file.
+
 const THREAD_LINEAGE_INITIAL_COUNT = 6;
 const THREAD_LINEAGE_PAGE_COUNT = 12;
 
@@ -111,7 +113,7 @@ function ThreadLineageRowList(props: {
         <button
           type="button"
           onClick={props.onShowMore}
-          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
+          className={`flex h-8 w-full cursor-pointer items-center rounded-lg ${THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS} text-ui-sm font-medium text-muted-foreground/70 hover:bg-black/[0.055] hover:text-foreground/80 dark:hover:bg-white/[0.075]`}
         >
           <PlusIcon aria-hidden className="size-4 shrink-0" />
           Show {Math.min(props.hiddenCount, THREAD_LINEAGE_PAGE_COUNT)} more
@@ -537,7 +539,7 @@ export function ThreadRelationshipsPanel(props: {
                     status={rowStatus}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
+                    <span className="block truncate text-left text-ui-sm font-medium leading-4 text-foreground/85">
                       {threadTitle}
                     </span>
                   </span>
@@ -548,7 +550,7 @@ export function ThreadRelationshipsPanel(props: {
                   !failed &&
                   (deriveSubagentElapsedMs(agent, 0) !== null || canStopWorkflow) ? (
                     <span
-                      className={`shrink-0 text-2xs font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}`}
+                      className={`shrink-0 text-ui-2xs font-normal tabular-nums text-muted-foreground ${canStopWorkflow ? "min-w-6 text-end" : ""} ${trailingVisibilityClass}`}
                     >
                       <AgentElapsed agent={agent} compact />
                     </span>
@@ -557,7 +559,7 @@ export function ThreadRelationshipsPanel(props: {
                       className={
                         workflowGroup
                           ? "sr-only"
-                          : `shrink-0 text-2xs ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}`
+                          : `shrink-0 text-ui-2xs ${failed ? "text-destructive" : "text-muted-foreground"} ${trailingVisibilityClass}`
                       }
                     >
                       {threadRelationshipStatusLabel(rowStatus)}
@@ -661,7 +663,7 @@ export function ThreadRelationshipsPanel(props: {
                               : "Merge this conversation back into its source"}
                         </TooltipPopup>
                       </Tooltip>
-                      <span className="shrink-0 border border-transparent ps-1 pe-2.5 text-2xs font-medium text-muted-foreground">
+                      <span className="shrink-0 border border-transparent ps-1 pe-2.5 text-ui-2xs font-medium text-muted-foreground">
                         {threadRelationshipStatusLabel(rowStatus)}
                       </span>
                     </div>
