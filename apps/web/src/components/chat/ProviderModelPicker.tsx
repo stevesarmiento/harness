@@ -15,7 +15,11 @@ import { ChatGptSharingControl } from "./ChatGptSharingControl";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { ModelEsque, getDisplayModelName, getTriggerDisplayModelName } from "./providerIconUtils";
 import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
-import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
+import {
+  ComposerControl,
+  ComposerControlChevron,
+  type ComposerControlSize,
+} from "./ComposerControl";
 import { takeOpenTarget, useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
 
@@ -326,7 +330,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               openTarget(target);
             }}
             className={cn(
-              "min-w-0 shrink justify-between whitespace-nowrap",
+              // Fork: Forma's model trigger is a pill.
+              "min-w-0 shrink justify-between whitespace-nowrap rounded-full before:rounded-[inherit]",
               props.compact
                 ? "max-w-42 shrink-0"
                 : !props.isComposerOwned && "max-w-48 sm:max-w-56",
@@ -401,6 +406,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               Unavailable
             </Badge>
           ) : null}
+        </span>
+        <span aria-hidden="true" className="flex items-center">
+          <ComposerControlChevron size={size} />
         </span>
       </PopoverTrigger>
       <PopoverPopup

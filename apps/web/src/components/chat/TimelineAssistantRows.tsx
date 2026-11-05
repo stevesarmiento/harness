@@ -19,11 +19,15 @@ import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
+import { MICRO_FADE_MOTION_CLASS_NAME } from "~/lib/motion";
 import { useUiStateStore } from "~/uiStateStore";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
+
+// Fork: Forma's settings-driven UI type scale (`text-ui-*`) for timeline metadata.
+const ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/30 tabular-nums";
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
@@ -110,8 +114,8 @@ function AssistantForkButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -166,32 +170,12 @@ function AssistantMessageMeta({
 }) {
   const ctx = use(TimelineRowCtx);
 
+  // Fork: Forma keeps a faint timestamp visible and fades the actions in on hover.
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
-        alwaysVisible
-          ? "opacity-100"
-          : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
-        className,
-      )}
-    >
-      {projectedItem && projectedItem.item.status !== "completed" ? (
-        <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
-          {projectedItem.item.status}
-        </span>
-      ) : null}
-      <AssistantCopyButton
-        message={message}
-        showCopyButton={showCopyButton}
-        streaming={copyStreaming}
-      />
-      {projectedItem?.item.type === "assistant_message" ? (
-        <AssistantForkButton projectedItem={projectedItem} />
-      ) : null}
+    <div className={cn("flex items-center gap-2 tabular-nums", className)}>
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+          <TooltipTrigger render={<p className={ASSISTANT_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
             {formatDayAwareTimestamp(message.updatedAt, ctx.timestampFormat)}
           </TooltipTrigger>
           <TooltipPopup>
@@ -199,6 +183,29 @@ function AssistantMessageMeta({
           </TooltipPopup>
         </Tooltip>
       )}
+      <div
+        className={cn(
+          "flex items-center gap-1.5",
+          alwaysVisible
+            ? "opacity-100"
+            : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
+          MICRO_FADE_MOTION_CLASS_NAME,
+        )}
+      >
+        {projectedItem && projectedItem.item.status !== "completed" ? (
+          <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
+            {projectedItem.item.status}
+          </span>
+        ) : null}
+        <AssistantCopyButton
+          message={message}
+          showCopyButton={showCopyButton}
+          streaming={copyStreaming}
+        />
+        {projectedItem?.item.type === "assistant_message" ? (
+          <AssistantForkButton projectedItem={projectedItem} />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -222,7 +229,7 @@ function AssistantCopyButton({
     return null;
   }
 
-  return <MessageCopyButton text={assistantCopyState.text ?? ""} variant="ghost" />;
+  return <MessageCopyButton text={assistantCopyState.text ?? ""} size="icon-xs" variant="subtle" />;
 }
 
 export function ProposedPlanTimelineRow({

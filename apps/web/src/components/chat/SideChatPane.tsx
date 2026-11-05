@@ -25,6 +25,7 @@ import { useEnvironmentShellHasSnapshot } from "../../state/shell";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import ChatView from "../ChatView";
+import { HeaderIconActionButton } from "../HeaderIconActionButton";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -124,8 +125,9 @@ export default function SideChatPane(props: {
 
   return (
     <div data-side-chat-pane className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border pr-1 pl-3">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+      {/* Fork: Forma's in-card panel head: hairline rule, UI type token, header icon controls. */}
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border/65 ps-3 pe-1">
+        <span className="text-ui-xs min-w-0 flex-1 truncate font-medium text-foreground/85">
           {shell?.title ?? "Side chat"}
         </span>
         <Tooltip>
@@ -145,22 +147,20 @@ export default function SideChatPane(props: {
             {bringBackBlockedReason ?? "Adds this side chat to the main thread's next message."}
           </TooltipPopup>
         </Tooltip>
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        <HeaderIconActionButton
           aria-label="Delete side chat"
           disabled={!canOperate || shell === null || deleting}
           onClick={() => void deleteSideChat()}
         >
           <Trash2Icon />
-        </Button>
-        <Button variant="ghost" size="icon-xs" aria-label="Close side chat" onClick={props.onClose}>
+        </HeaderIconActionButton>
+        <HeaderIconActionButton aria-label="Close side chat" onClick={props.onClose}>
           <XIcon />
-        </Button>
+        </HeaderIconActionButton>
       </div>
       {shell === null ? (
         snapshotLoaded ? (
-          <p className="p-3 text-xs text-muted-foreground">This side chat was deleted.</p>
+          <p className="text-ui-xs p-3 text-muted-foreground">This side chat was deleted.</p>
         ) : null
       ) : (
         <BackgroundThreadContext value>

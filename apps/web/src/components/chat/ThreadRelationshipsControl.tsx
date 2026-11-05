@@ -3,7 +3,7 @@ import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
-import { SectionHeaderStatus } from "../ui/collapsible-section-header";
+import { CollapsibleSectionHeader, SectionHeaderStatus } from "../ui/collapsible-section-header";
 import { SubagentTooltipContent } from "./SubagentTooltipContent";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -47,7 +47,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRightIcon,
   BotIcon,
-  ChevronDownIcon,
   CornerLeftUpIcon,
   GitForkIcon,
   MessagesSquareIcon,
@@ -87,11 +86,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { Spinner } from "../ui/spinner";
-import { cn } from "~/lib/utils";
 import {
-  THREAD_DETAILS_PANEL_CHEVRON_CLASS,
-  THREAD_DETAILS_PANEL_ICON_CLASS,
-  THREAD_DETAILS_PANEL_LABEL_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
@@ -154,26 +149,18 @@ function ThreadLineageGroup(props: {
   return (
     <div>
       {props.label ? (
-        <ThreadDetailsControl aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-          <BotIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
-          <span className={cn(THREAD_DETAILS_PANEL_LABEL_CLASS, "min-w-0 flex-1 truncate")}>
-            {props.label}
-          </span>
-          {failedCount > 0 ? <SectionHeaderStatus>{failedCount} failed</SectionHeaderStatus> : null}
-          {expanded ? null : (
-            <span className="shrink-0 text-xs font-normal tabular-nums text-muted-foreground">
-              {props.rows.length}
-            </span>
-          )}
-          <ChevronDownIcon
-            aria-hidden
-            className={cn(
-              THREAD_DETAILS_PANEL_CHEVRON_CLASS,
-              "transition-transform",
-              !expanded && "-rotate-90",
-            )}
-          />
-        </ThreadDetailsControl>
+        // Fork: Forma's panel shelf header for lineage groups.
+        <CollapsibleSectionHeader
+          variant="panel"
+          expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+          accessory={
+            failedCount > 0 ? <SectionHeaderStatus>{failedCount} failed</SectionHeaderStatus> : null
+          }
+        >
+          {props.label}
+          {!expanded && ` ()`}
+        </CollapsibleSectionHeader>
       ) : null}
       {expanded ? (
         <ThreadLineageRowList

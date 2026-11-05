@@ -75,7 +75,18 @@ import { PullRequestListEmptyState } from "./PullRequestListEmptyState";
 import { PullRequestListGhost } from "./PullRequestGhosts";
 import { type PullRequestRowTarget } from "./PullRequestRow";
 import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
-import { RightPanelTabs } from "../RightPanelTabs";
+import {
+  RightPanelTabs,
+  RightPanelTabStrip,
+  type RightPanelTabStripProps,
+} from "../RightPanelTabs";
+import { THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME } from "../ThreadBreadcrumb";
+import { WorkspaceHeaderTitle } from "../WorkspaceHeaderTitle";
+import { DesktopSidebarReopenButton } from "../sidebar/DesktopSidebarReopenButton";
+import {
+  IconArrowTriangleheadPull as PullRequestsTitleIcon,
+  IconChevronRight as BreadcrumbChevronIcon,
+} from "symbols-react";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
 import { isElectron } from "~/env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "~/keybindings";
@@ -83,7 +94,7 @@ import { registerCommands } from "~/shortcuts/dispatcher";
 import { isTerminalFocused } from "~/lib/terminalFocus";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "../chat/PanelLayoutControls";
 import { Button } from "../ui/button";
-import { SidebarInset } from "../ui/sidebar";
+import { SidebarInset, SidebarInsetCard, SidebarTrigger } from "../ui/sidebar";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useOpenPanelPullRequestUrl } from "~/hooks/useOpenPanelPullRequestUrl";
@@ -97,6 +108,7 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
   type PullRequestSurface,
+  type RightPanelSurface,
 } from "~/rightPanelStore";
 import { useSidebarProjectGroups } from "~/hooks/useSidebarProjectGroups";
 import {
@@ -1120,20 +1132,6 @@ export function PullRequestsPage() {
       onToggleRightPanel={toggleRightPanel}
     />
   );
-  const openPanelControls = (
-    <div
-      className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]"
-      data-workspace-titlebar-controls
-    >
-      {rightPanelState.isOpen ? (
-        <RightPanelMaximizeControl
-          maximized={rightPanelMaximized}
-          onToggle={toggleRightPanelMaximized}
-        />
-      ) : null}
-      {panelToggleControls}
-    </div>
-  );
   const carriedToNothing =
     shownCount === 0 &&
     typedQuery.length === 0 &&
@@ -1305,6 +1303,8 @@ export function PullRequestsPage() {
       }
     />
   );
+  // Fork: the column portals its live header controls into the single Forma header row.
+  const [headerActionsElement, setHeaderActionsElement] = useState<HTMLDivElement | null>(null);
   const columnProps = {
     refreshing,
     onRefresh: () => void refreshFromHost(),
@@ -1319,36 +1319,22 @@ export function PullRequestsPage() {
     searchInput,
     sortMenu,
     filtersMenu,
-    rightPanelControl: !pullRequestsSupported ? null : (
-      <span
-        aria-hidden
-        className={cn(
-          "shrink-0",
-          rightPanelState.isOpen ? "-ml-3 w-0" : "w-7 sm:w-5",
-          panelAnimationsActive && "transition-[width,margin] ease-out",
-        )}
-        style={
-          panelAnimationsActive
-            ? { transitionDuration: `${panelAnimationDurationMs}ms` }
-            : undefined
-        }
-      />
-    ),
-    titlebarControls:
-      // While the panel is closed the strip lives inside the header: a no-drag
-      // descendant beats the header's desktop drag-region, where a floating
-      // sibling loses (app-region hit-testing ignores z-index).
-      pullRequestsSupported ? (
-        rightPanelPresent ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-full w-7 [-webkit-app-region:no-drag]"
-          />
-        ) : (
-          openPanelControls
-        )
+    // Fork: the toggle sits at the end of the Forma header row, and only while there is a pull
+    // request to show: on this route the panel hosts nothing else, so a disabled toggle would
+    // only point at an empty panel. An open panel adds upstream's maximize control beside it.
+    rightPanelControl:
+      pullRequestsSupported && rightPanelAvailable ? (
+        <>
+          {rightPanelState.isOpen ? (
+            <RightPanelMaximizeControl
+              maximized={rightPanelMaximized}
+              onToggle={toggleRightPanelMaximized}
+            />
+          ) : null}
+          {panelToggleControls}
+        </>
       ) : null,
-    rightPanelOpen: rightPanelState.isOpen,
+    headerActionsElement,
     maximizedAway: rightPanelMaximized,
     listBody,
     scrollRef,
@@ -1449,62 +1435,113 @@ export function PullRequestsPage() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [keybindings]);
 
+  // Fork: one prop set for the header strip and the panel mount, so they cannot drift.
+  const pullRequestTabProps = {
+    keybindings,
+    getShortcutContext,
+    surfaces: renderedRightPanelSurfaces,
+    environmentId: panelEnvironmentId,
+    activeSurfaceId: renderedPullRequestSurface?.id ?? null,
+    pendingSurfaceIds: EMPTY_PENDING_SURFACES,
+    previewSessions: EMPTY_PREVIEW_SESSIONS,
+    desktopByTabId: EMPTY_PREVIEW_DESKTOP_STATE,
+    terminalLabelsById: EMPTY_TERMINAL_LABELS,
+    onActivate: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") activateSurface(surface);
+    },
+    onCloseSurface: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurface(surface);
+    },
+    onCloseOtherSurfaces: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeOtherSurfaces(surface);
+    },
+    onCloseSurfacesToRight: (surface: RightPanelSurface) => {
+      if (surface.kind === "pull-request") closeSurfacesToRight(surface);
+    },
+    onCloseAllSurfaces: closeAllSurfaces,
+    onMoveSurface: (surfaceId: string, toIndex: number) => {
+      if (rightPanelRef !== null)
+        useRightPanelStore.getState().moveSurface(rightPanelRef, surfaceId, toIndex);
+    },
+    onCopyFilePath: () => undefined,
+    onAddBrowser: () => undefined,
+    onAddBrowserInProfile: () => undefined,
+    onAddTerminal: () => undefined,
+    onAddDiff: () => undefined,
+    onAddFiles: () => undefined,
+    onAddPullRequest: () => undefined,
+    onAddPullRequests: () => undefined,
+    onAddDevice: () => undefined,
+    browserAvailable: false,
+    terminalAvailable: false,
+    diffAvailable: false,
+    filesAvailable: false,
+    pullRequestAvailable: false,
+    pullRequestsAvailable: false,
+    deviceAvailable: false,
+    pullRequestStatusSeeds: listedPullRequestTabStatuses,
+  } satisfies Omit<RightPanelTabStripProps, "className" | "layoutControls">;
+
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      <div className="relative flex min-h-0 flex-1">
-        {pullRequestsSupported && rightPanelPresent ? openPanelControls : null}
+    // Fork: Forma page shell — one header band on the window chrome above an inset card that
+    // holds the list and the panel, the same frame Settings and the thread view use.
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none md:h-auto">
+      <header
+        className={cn(
+          "workspace-topbar border-b border-border/70 bg-background md:border-b-0 md:bg-transparent",
+          "px-2.5 md:pl-0",
+          isElectron
+            ? "drag-region relative [--workspace-topbar-height:39px] wco:pr-(--workspace-native-controls-inset)"
+            : "[--workspace-topbar-height:40px]",
+        )}
+      >
+        <div className="flex min-w-0 w-full items-center gap-2">
+          {isElectron ? null : <SidebarTrigger className="size-7 shrink-0 md:hidden" />}
+          <DesktopSidebarReopenButton className="md:ml-0" />
+          <WorkspaceHeaderTitle
+            icon={
+              <PullRequestsTitleIcon
+                className="size-3.5 shrink-0 fill-current opacity-50"
+                aria-hidden
+              />
+            }
+          >
+            Pull Requests
+          </WorkspaceHeaderTitle>
+          {/* Fork: open pull request surfaces continue the header as pills, the
+              same treatment the thread header gives its right-panel tabs. */}
+          {rightPanelState.isOpen && renderedRightPanelSurfaces.length > 0 ? (
+            <>
+              <BreadcrumbChevronIcon
+                className={THREAD_BREADCRUMB_SEPARATOR_ICON_CLASS_NAME}
+                aria-hidden
+              />
+              <RightPanelTabStrip
+                {...pullRequestTabProps}
+                className="h-full min-h-0 min-w-0 shrink border-b-0 bg-transparent p-0 [-webkit-app-region:no-drag]"
+              />
+            </>
+          ) : null}
+          <div
+            ref={setHeaderActionsElement}
+            className="ms-auto flex min-w-0 items-center justify-end gap-1.5 [-webkit-app-region:no-drag]"
+          />
+        </div>
+      </header>
+      <SidebarInsetCard className="flex-row">
         <PullRequestsColumn {...columnProps} />
 
         {rightPanelPresent && renderedPullRequestSurface && panelEnvironmentId !== null ? (
           <RightPanelTabs
             mode="inline"
             open={rightPanelState.isOpen}
+            // Fork: the tabs render as pills in the Forma header row above the card.
+            hideTabBar
+            titleBarInCard
             maximized={rightPanelMaximized}
-            keybindings={keybindings}
-            getShortcutContext={getShortcutContext}
             widthStorageKey="t3code:pull-request-panel-width"
             defaultWidth={typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2)}
-            surfaces={renderedRightPanelSurfaces}
-            environmentId={panelEnvironmentId}
-            activeSurfaceId={renderedPullRequestSurface.id}
-            pendingSurfaceIds={EMPTY_PENDING_SURFACES}
-            previewSessions={EMPTY_PREVIEW_SESSIONS}
-            desktopByTabId={EMPTY_PREVIEW_DESKTOP_STATE}
-            terminalLabelsById={EMPTY_TERMINAL_LABELS}
-            onActivate={(surface) => {
-              if (surface.kind === "pull-request") activateSurface(surface);
-            }}
-            onCloseSurface={(surface) => {
-              if (surface.kind === "pull-request") closeSurface(surface);
-            }}
-            onCloseOtherSurfaces={(surface) => {
-              if (surface.kind === "pull-request") closeOtherSurfaces(surface);
-            }}
-            onCloseSurfacesToRight={(surface) => {
-              if (surface.kind === "pull-request") closeSurfacesToRight(surface);
-            }}
-            onCloseAllSurfaces={closeAllSurfaces}
-            onMoveSurface={(surfaceId, toIndex) => {
-              if (rightPanelRef !== null)
-                useRightPanelStore.getState().moveSurface(rightPanelRef, surfaceId, toIndex);
-            }}
-            onCopyFilePath={() => undefined}
-            onAddBrowser={() => undefined}
-            onAddBrowserInProfile={() => undefined}
-            onAddTerminal={() => undefined}
-            onAddDiff={() => undefined}
-            onAddFiles={() => undefined}
-            onAddPullRequest={() => undefined}
-            onAddPullRequests={() => undefined}
-            onAddDevice={() => undefined}
-            browserAvailable={false}
-            terminalAvailable={false}
-            diffAvailable={false}
-            filesAvailable={false}
-            pullRequestAvailable={false}
-            pullRequestsAvailable={false}
-            deviceAvailable={false}
-            pullRequestStatusSeeds={listedPullRequestTabStatuses}
+            {...pullRequestTabProps}
           >
             <PullRequestDetailPanel
               getShortcutContext={getShortcutContext}
@@ -1574,7 +1611,7 @@ export function PullRequestsPage() {
             />
           </RightPanelTabs>
         ) : null}
-      </div>
+      </SidebarInsetCard>
     </SidebarInset>
   );
 }

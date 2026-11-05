@@ -152,9 +152,8 @@ function timelineListStateFor(identity: string): {
 }
 
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
-const TIMELINE_LIST_FADE_HEADER = (
-  <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
-);
+// Fork: Forma's taller top fade band (matches `.chat-timeline-scroll-fade`).
+const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 function TimelineListFooter({
   composerInset,
   onGrow,
@@ -1344,7 +1343,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               onItemSizeChanged={handleItemSizeChanged}
               className={cn(
                 "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-                topFadeEnabled && "topbar-scroll-fade",
+                topFadeEnabled && "chat-timeline-scroll-fade",
               )}
               ListHeaderComponent={listHeader}
               ListFooterComponent={timelineListFooter}

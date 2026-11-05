@@ -52,23 +52,26 @@ in step. `legacySidebarEnabled` follows upstream again (decoding default
 `AppSidebarLayout.tsx` renders when either flag is set). "Export as Markdown"
 and "Fork thread" live in `Sidebar.tsx`'s thread menu.
 
-## Upstream design overhaul (#24865, #25778) — adopted except the sidebar
+## Upstream design overhaul (#24865, #25778) — behaviour only, Forma styling everywhere
 
-Since the 2026-10-27 sync, upstream's redesign is the only design and the fork
-takes it for the composer, chat view, header, panels, timeline, Settings and
-Usage. Settings and Usage are upstream's modals (#24847); Forma-only pages
-(Safety, app icons, Interface appearance, Legacy features) live inside them.
+Since 2026-11-05 Forma's styling is authoritative on every surface, the chat
+box included: upstream's redesign and its later composer rework contribute
+behaviour and structure, never looks. Re-apply Forma's visual language on top
+of upstream rewrites (composer surface, footer led by the add-actions menu and
+mode pill, meta row with runtime mode and context meter, user-message card,
+Forma panel controls and pill pickers, Forma status glyphs). The sidebar
+(`Sidebar.tsx`, `sidebar/*`, `ui/sidebar.tsx`) keeps Forma's look and
+behaviour. The one exception, chosen on 2026-10-27, is Settings and Usage:
+they are upstream's modals (#24847) with Forma-only pages (Safety, app icons,
+appearance, thread cleanup) inside.
 
-The **sidebar** is the exception: `Sidebar.tsx`, `sidebar/*` and
-`ui/sidebar.tsx` keep Forma's look and behaviour (grouped
-projects with drag-reorder, shelves, compact rows, Forma status icons). Take
-upstream's behaviour and performance fixes there, never its styling.
+The reference for the Forma look is the tree at `0fb8d4dbd0`, the last tip
+before the 2026-10-27 merge.
 
-Forma features that survive the redesign and must be re-applied on top of
-upstream rewrites: right-panel tabs in the header breadcrumb
-(`RightPanelTabStrip`), the `PixelGridLoader` working row with no pulse,
-project-local agents, file entry mutations and versioned saves, Markdown
-export and fork actions.
+Forma features that survive upstream rewrites and must be re-applied: right-panel
+tabs in the header breadcrumb (`RightPanelTabStrip`), the `PixelGridLoader`
+working row with no pulse, project-local agents, file entry mutations and
+versioned saves, Markdown export and fork actions.
 
 ## Theme-library follow-ups (v0.0.33) — same policy as #5226
 

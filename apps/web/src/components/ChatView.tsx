@@ -3323,6 +3323,11 @@ export default function ChatView(props: ChatViewProps) {
     rightPanelAvailable: activeProject !== null,
     rightPanelOpen,
     rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
+    // Fork: running and waiting subagents badge the right panel toggle.
+    liveAgentCount:
+      serverProjection?.subagents.filter((agent) =>
+        ["pending", "running", "waiting"].includes(agent.status),
+      ).length ?? 0,
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,

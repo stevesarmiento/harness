@@ -35,7 +35,7 @@ import {
   type LucideIcon,
   MessagesSquareIcon,
   Redo2Icon,
-  PencilIcon,
+  Undo2Icon,
 } from "lucide-react";
 // Fork: MessageCopyButton takes a component icon (Forma's SF Symbols set).
 import { IconLink as LinkIcon } from "symbols-react";
@@ -53,7 +53,7 @@ import {
   SNAP_SHOT_ATTACHMENT_FRAME_CLASS,
   SnapShotAttachmentDetails,
 } from "./SnapShotAttachmentDetails";
-import { GuestMessageName, guestBubbleClassName } from "./guestMessageStyle";
+import { GuestMessageName } from "./guestMessageStyle";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { promptLinkFor } from "../promptLinks/copyPromptLink";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -77,28 +77,23 @@ import {
 import { chatMarkdownClipboardPayload } from "../../markdown-clipboard";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
 import { cn } from "~/lib/utils";
+import { MICRO_FADE_MOTION_CLASS_NAME } from "~/lib/motion";
 import { markdownProseDirection } from "~/textDirection";
-import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { WorkflowOpeningBlock } from "./WorkflowOpeningBlock";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
-import {
-  MESSAGE_HEADING_LEVEL,
-  MessageAuthorHeading,
-  TimelineRowTimestamp,
-} from "./TimelineRowParts";
+import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
 import { UserMessageContextReferenceChip } from "./UserMessageContextChips";
 import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
 
-// Drawn inside the media so dark screenshots keep an edge on the dark background.
-const MEDIA_EDGE_CLASS_NAME =
-  "relative after:pointer-events-none after:absolute after:inset-0 after:z-10 after:rounded-[inherit] after:ring-1 after:ring-inset after:ring-black/9 dark:after:ring-white/12";
-
-const BUBBLE_CHIP_CLASS_NAME =
-  "[&_[data-slot=context-chip]]:[--context-chip-ink:var(--context-chip-message,var(--context-chip-accent))]";
+// Fork: Forma's full-width user message card and the frame its media and file cards share.
+const USER_MESSAGE_CARD_CLASS_NAME = "relative w-full rounded-xl border border-border/80 shadow-sm";
+const MEDIA_FRAME_CLASS_NAME = "border border-border/80";
+// Forma's settings-driven UI type scale (`text-ui-*`) for timeline metadata.
+const USER_MESSAGE_TIMESTAMP_CLASS_NAME = "text-ui-2xs text-muted-foreground/70 tabular-nums";
 
 function UserFileCard({
   file,
@@ -113,7 +108,7 @@ function UserFileCard({
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]?.toUpperCase() ?? "File";
   const identity = (
     <>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background/60">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
         <PierreEntryIcon pathValue={file.name} kind="file" theme={ctx.resolvedTheme} />
       </span>
       <span className="min-w-0 flex-1">
@@ -136,7 +131,10 @@ function UserFileCard({
   return (
     <div
       data-markdown-copy={copyMarkdown}
-      className="flex w-64 max-w-full items-center gap-1 rounded-2xl bg-message py-2 ps-2 pe-1 text-message-foreground"
+      className={cn(
+        MEDIA_FRAME_CLASS_NAME,
+        "flex w-64 max-w-full items-center gap-1 rounded-lg bg-background/60 py-2 ps-2 pe-1",
+      )}
     >
       {file.downloadable === false ? (
         <>
@@ -151,7 +149,7 @@ function UserFileCard({
             type="button"
             aria-label={`Preview ${label}`}
             onClick={() => ctx.onFileOpen(file)}
-            className="group/file focus-visible:ring-ring/70 flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
+            className="group/file focus-visible:ring-ring/70 flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
           >
             {identity}
           </button>
@@ -176,15 +174,7 @@ function UserFileCard({
   );
 }
 
-function UserVideoAttachment({
-  file,
-  standalone = false,
-  cornerClassName,
-}: {
-  readonly file: ChatFileAttachment;
-  readonly standalone?: boolean;
-  readonly cornerClassName?: string | undefined;
-}) {
+function UserVideoAttachment({ file }: { readonly file: ChatFileAttachment }) {
   const ctx = use(TimelineRowCtx);
   // Row updates rebuild attachment objects, so the asset follows only the
   // fields it reads.
@@ -203,10 +193,8 @@ function UserVideoAttachment({
     return (
       <div
         className={cn(
-          "flex aspect-[4/3] w-full items-center justify-center bg-black px-2 py-3 text-center text-2xs text-white/70",
-          standalone
-            ? cn(MEDIA_EDGE_CLASS_NAME, "rounded-2xl", cornerClassName)
-            : "rounded-lg border border-border/80",
+          MEDIA_FRAME_CLASS_NAME,
+          "flex aspect-[4/3] w-full items-center justify-center rounded-lg bg-black px-2 py-3 text-center text-2xs text-white/70",
         )}
       >
         {file.name}
@@ -214,7 +202,7 @@ function UserVideoAttachment({
     );
   }
 
-  const player = (
+  return (
     <MediaVideoPlayer
       src={src}
       sourceFailed={
@@ -227,24 +215,14 @@ function UserVideoAttachment({
         if (preview) ctx.onImageExpand(preview);
       }}
       className="block aspect-[4/3] w-full"
-      videoClassName={cn(
-        "aspect-auto size-full",
-        !standalone && "rounded-lg border border-border/80",
-      )}
+      videoClassName={cn(MEDIA_FRAME_CLASS_NAME, "aspect-auto size-full rounded-lg")}
       stateClassName={cn(
-        "aspect-auto min-h-full bg-black text-white",
-        !standalone && "rounded-lg border border-border/80",
+        MEDIA_FRAME_CLASS_NAME,
+        "aspect-auto min-h-full rounded-lg bg-black text-white",
       )}
       onRetry={asset ? refreshAssetUrl : undefined}
       actionsSource={asset ? { kind: "video", name: file.name, src, asset } : undefined}
     />
-  );
-  return standalone ? (
-    <div className={cn(MEDIA_EDGE_CLASS_NAME, "overflow-hidden rounded-2xl", cornerClassName)}>
-      {player}
-    </div>
-  ) : (
-    player
   );
 }
 
@@ -294,17 +272,18 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   const bodyMounted = expanded || ctx.findActive;
 
   return (
-    <div className="group flex flex-col items-end gap-1" data-user-message-attribution="automation">
+    <div
+      className="group flex flex-col items-end gap-1 px-0.5"
+      data-user-message-attribution="automation"
+    >
       {row.message.inputIntent === "steer" ||
       row.message.inputIntent === "promoted_queued_to_steer" ? (
         <UserMessageIntentMarker intent={row.message.inputIntent} />
       ) : null}
+      {/* Fork: Forma's card holds the folded automation prompt. */}
       <div
-        className={cn(
-          "min-w-0 max-w-[80%] rounded-2xl bg-message text-message-foreground",
-          BUBBLE_CHIP_CLASS_NAME,
-          expanded && "w-full",
-        )}
+        className={cn(USER_MESSAGE_CARD_CLASS_NAME, "bg-secondary/95")}
+        data-user-message-card="true"
       >
         <MessageAuthorHeading>Automation</MessageAuthorHeading>
         <FoldedMessageHeader
@@ -319,7 +298,7 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           <div
             ref={revealRef}
             hidden={!expanded}
-            className={cn("px-3 pb-3", !ctx.findActive && "max-h-96 overflow-auto")}
+            className={cn("px-4 pb-3", !ctx.findActive && "max-h-96 overflow-auto")}
             data-thread-find-text="true"
           >
             <UserMessageBody text={text} skills={ctx.skills} markdownCwd={ctx.markdownCwd} />
@@ -328,7 +307,7 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
       </div>
       <UserMessageProjectedStatus row={row} />
       {expanded ? (
-        <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
+        <div className={cn("flex w-full items-center justify-end pe-1", ACTIONS_REVEAL_CLASS_NAME)}>
           <div className="flex shrink-0 items-center gap-2">
             {scheduledTaskId ? (
               <Link
@@ -339,22 +318,26 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 Open automation
               </Link>
             ) : null}
-            <TimelineRowTimestamp
-              createdAt={row.message.createdAt}
-              timestampFormat={ctx.timestampFormat}
-              alwaysVisible
-            />
-            <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger render={<p className={USER_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
+                {formatDayAwareTimestamp(row.message.createdAt, ctx.timestampFormat)}
+              </TooltipTrigger>
+              <TooltipPopup>
+                {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
+              </TooltipPopup>
+            </Tooltip>
+            <div className="flex items-center gap-1.5">
               {typeof revertTurnCount === "number" && (
                 <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
               )}
-              <MessageCopyButton text={text} variant="ghost" />
+              <MessageCopyButton text={text} size="icon-xs" variant="subtle" />
               {promptLink !== null && (
                 <MessageCopyButton
                   text={promptLink}
                   label="Copy prompt link"
                   icon={LinkIcon}
-                  variant="ghost"
+                  size="icon-xs"
+                  variant="subtle"
                 />
               )}
             </div>
@@ -389,7 +372,7 @@ export function FoldedMessageHeader(props: {
       aria-expanded={props.expanded}
       data-scroll-anchor-ignore
       onClick={props.onToggle}
-      className="flex w-full min-w-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring"
+      className="flex w-full min-w-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring"
     >
       <Icon className="size-4 shrink-0 stroke-2 text-muted-foreground" />
       <span className="max-w-1/2 shrink-0 truncate text-muted-foreground">{props.label}</span>
@@ -425,7 +408,6 @@ function UserMessageProjectedStatus({ row }: { row: Extract<TimelineRow, { kind:
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const { onImageExpand, onFileOpen } = ctx;
-  const coarsePointer = useMediaQuery({ pointer: "coarse" });
   const senderThreadId = row.message.senderThreadId;
   const resources = selectMessageImageResources(row.message.attachments);
   const previewUrls = useAssetUrls(ctx.activeThreadEnvironmentId, resources);
@@ -484,7 +466,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
   const unchippedFiles = otherUserFiles.filter((file) => !chippedAttachmentIds.has(file.id));
-  // Images or videos sent without words show as media, not as a bubble around them.
+  // Images or videos sent without words fill the card on their own, with no text below.
   const mediaOnly =
     !folded &&
     userMessage.attribution !== "guest" &&
@@ -493,27 +475,15 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     unchippedFiles.length === 0 &&
     unknownAttachments.length === 0 &&
     regularImages.length + userVideos.length > 0;
-  // Media sent with words sits above the bubble as its own shape, like a chat app.
-  const mediaAboveText =
-    !folded &&
-    userMessage.attribution !== "guest" &&
-    !mediaOnly &&
-    regularImages.length + userVideos.length > 0;
-  const standaloneMedia = mediaOnly || mediaAboveText;
   // A lone image keeps its own shape; a 4:3 crop hides most of a wide screenshot.
-  const loneImage = standaloneMedia && userVideos.length === 0 && regularImages.length === 1;
-  // Several images share one rounded shape, split by hairlines.
+  const loneImage = !folded && userVideos.length === 0 && regularImages.length === 1;
+  // Several images share one rounded frame, split by hairlines.
   const collage =
-    standaloneMedia &&
+    !folded &&
     userVideos.length === 0 &&
     regularImages.length > 1 &&
     regularImages.every((image) => image.source?.kind !== "snap-shot");
-  // Corners that touch the bubble or a neighbouring message tighten, like the bubble's.
-  const mediaCornerClassName = cn(
-    row.groupedWithPrevious && "rounded-tr-md",
-    (mediaAboveText || row.groupedWithNext) && "rounded-br-md",
-  );
-  // Files sent without words show as cards, not as a bubble around a name chip.
+  // Files sent without words show as cards, not as a name chip in prose.
   const fileCardsOnly =
     !folded &&
     userMessage.attribution !== "guest" &&
@@ -658,29 +628,29 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     );
   };
 
+  // Fork: media sits at the top of Forma's card in the card's own frame language
+  // (hairline border, lg radius); upstream's lone, collage and snapshot shapes stay.
   const mediaBlock =
     regularImages.length > 0 || userVideos.length > 0 ? (
       <div
         className={cn(
           "grid",
-          !standaloneMedia
-            ? "mb-2 max-w-[210px] grid-cols-2 gap-2"
-            : loneImage
-              ? "max-w-full"
-              : collage
-                ? cn(
-                    MEDIA_EDGE_CLASS_NAME,
-                    "w-80 max-w-full gap-px overflow-hidden rounded-2xl bg-black/9 dark:bg-white/12",
-                    mediaCornerClassName,
-                    regularImages.length === 2
-                      ? "auto-rows-[12rem] grid-cols-2"
-                      : regularImages.length === 3
-                        ? "auto-rows-[calc(6rem-0.5px)] grid-cols-[3fr_2fr]"
-                        : "auto-rows-[6rem] grid-cols-2",
-                  )
-                : regularImages.length + userVideos.length === 1
-                  ? "w-80 max-w-full"
-                  : "w-80 max-w-full grid-cols-2 gap-2",
+          !mediaOnly && "mb-2",
+          loneImage
+            ? "max-w-full"
+            : collage
+              ? cn(
+                  MEDIA_FRAME_CLASS_NAME,
+                  "w-80 max-w-full gap-px overflow-hidden rounded-lg bg-border/80",
+                  regularImages.length === 2
+                    ? "auto-rows-[12rem] grid-cols-2"
+                    : regularImages.length === 3
+                      ? "auto-rows-[calc(6rem-0.5px)] grid-cols-[3fr_2fr]"
+                      : "auto-rows-[6rem] grid-cols-2",
+                )
+              : regularImages.length + userVideos.length === 1
+                ? "w-80 max-w-full"
+                : "w-80 max-w-full grid-cols-2 gap-2",
         )}
       >
         {regularImages.map((image, index) => (
@@ -689,18 +659,9 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             className={cn(
               "bg-background/70",
               image.source?.kind === "snap-shot" && image.previewUrl
-                ? cn(
-                    "col-span-2",
-                    standaloneMedia
-                      ? cn(
-                          MEDIA_EDGE_CLASS_NAME,
-                          "min-h-16 justify-self-end overflow-hidden rounded-2xl",
-                          loneImage && mediaCornerClassName,
-                        )
-                      : SNAP_SHOT_ATTACHMENT_FRAME_CLASS,
-                  )
+                ? cn("col-span-2", SNAP_SHOT_ATTACHMENT_FRAME_CLASS)
                 : loneImage
-                  ? cn(MEDIA_EDGE_CLASS_NAME, "overflow-hidden rounded-2xl", mediaCornerClassName)
+                  ? cn(MEDIA_FRAME_CLASS_NAME, "w-fit max-w-full overflow-hidden rounded-lg")
                   : collage
                     ? cn(
                         "overflow-hidden bg-background",
@@ -710,9 +671,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                           index === regularImages.length - 1 &&
                           "col-span-2",
                       )
-                    : standaloneMedia
-                      ? cn(MEDIA_EDGE_CLASS_NAME, "aspect-[4/3] overflow-hidden rounded-2xl")
-                      : "aspect-[4/3] overflow-hidden rounded-lg border border-border/80",
+                    : cn(MEDIA_FRAME_CLASS_NAME, "aspect-[4/3] overflow-hidden rounded-lg"),
             )}
           >
             {image.previewUrl ? (
@@ -736,7 +695,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                   loading="lazy"
                   className={cn(
                     "block transform-gpu",
-                    standaloneMedia && image.source?.kind === "snap-shot"
+                    image.source?.kind === "snap-shot"
                       ? "h-auto max-h-48 w-auto min-w-24 max-w-full object-contain"
                       : loneImage
                         ? "h-48 w-auto min-w-24 max-w-full object-cover"
@@ -761,42 +720,28 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </div>
         ))}
         {userVideos.map((file) => (
-          <UserVideoAttachment
-            key={file.id}
-            file={file}
-            standalone={standaloneMedia}
-            cornerClassName={
-              regularImages.length + userVideos.length === 1 ? mediaCornerClassName : undefined
-            }
-          />
+          <UserVideoAttachment key={file.id} file={file} />
         ))}
       </div>
     ) : null;
 
-  // Touch shows actions all the time, and narrow lanes have no room beside the
-  // bubble, so both keep the actions on their own line.
-  const floatActions = row.groupedWithNext === true && !coarsePointer;
+  // Fork: Forma puts the timestamp and actions under the card, fading in on hover.
   const messageActions = (
-    <div
-      className={cn(
-        "flex items-center justify-end gap-x-2 gap-y-0.5",
-        floatActions ? "flex-wrap" : "shrink-0",
-      )}
-    >
+    <div className="flex shrink-0 items-center gap-2">
       {folded && senderThreadId ? (
         <InlineButton onClick={() => ctx.onOpenThread(senderThreadId)} tone="muted">
           Open thread
         </InlineButton>
       ) : null}
       <Tooltip>
-        <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+        <TooltipTrigger render={<p className={USER_MESSAGE_TIMESTAMP_CLASS_NAME} />}>
           {formatDayAwareTimestamp(row.message.createdAt, ctx.timestampFormat)}
         </TooltipTrigger>
         <TooltipPopup>
           {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
         </TooltipPopup>
       </Tooltip>
-      <div className={cn("flex items-center gap-0.5", floatActions && "flex-wrap justify-end")}>
+      <div className="flex items-center gap-1.5">
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
@@ -810,7 +755,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                   },
                 }
               : {})}
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle"
           />
         )}
         {promptLink !== null && (
@@ -818,7 +764,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             text={promptLink}
             label="Copy prompt link"
             icon={LinkIcon}
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle"
           />
         )}
       </div>
@@ -826,7 +773,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
   return (
     <div
-      className="group @container flex flex-col items-end gap-1"
+      className="group flex flex-col items-end gap-1 px-0.5"
       data-user-message-attribution={folded ? "agent" : undefined}
     >
       {userMessage.attribution === "t3code" ? (
@@ -848,36 +795,23 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       !row.continuesSteer ? (
         <UserMessageIntentMarker intent={row.message.inputIntent} />
       ) : null}
-      {mediaAboveText ? (
-        <div className="flex max-w-[80%] justify-end">
-          {/* The heading leads the media so screen readers reach it before the images. */}
-          <MessageAuthorHeading>You</MessageAuthorHeading>
-          {mediaBlock}
-        </div>
-      ) : null}
+      {/* Fork: Forma's full-width user message card. */}
       <div
         className={cn(
-          "relative min-w-0 max-w-[80%] rounded-2xl text-message-foreground",
-          (mediaAboveText || row.groupedWithPrevious) && "rounded-tr-md",
-          row.groupedWithNext && "rounded-br-md",
-          BUBBLE_CHIP_CLASS_NAME,
-          userMessage.attribution === "guest"
-            ? guestBubbleClassName(false)
-            : !mediaOnly && !fileCardsOnly && !audioOnly && "bg-message",
-          !folded && !mediaOnly && !fileCardsOnly && !audioOnly && "p-3",
-          folded && expanded && "w-full",
+          USER_MESSAGE_CARD_CLASS_NAME,
+          userMessage.attribution === "guest" ? "bg-guest-surface" : "bg-secondary/95",
+          !folded && "px-4 py-3",
         )}
+        data-user-message-card="true"
       >
         {/* Outside the fold so a collapsed message still has a heading to navigate to. */}
-        {mediaAboveText ? null : (
-          <MessageAuthorHeading>
-            {folded
-              ? senderLabel
-              : userMessage.guestName === undefined
-                ? "You"
-                : `${userMessage.guestName} (guest)`}
-          </MessageAuthorHeading>
-        )}
+        <MessageAuthorHeading>
+          {folded
+            ? senderLabel
+            : userMessage.guestName === undefined
+              ? "You"
+              : `${userMessage.guestName} (guest)`}
+        </MessageAuthorHeading>
         {folded ? (
           <FoldedMessageHeader
             icon={MessagesSquareIcon}
@@ -894,11 +828,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             hidden={folded && !expanded}
             dir={markdownProseDirection(resolvedContext.text)}
             className={cn(
-              folded && "px-3 pb-3",
+              folded && "px-4 pb-3",
               folded && !ctx.findActive && "max-h-96 overflow-auto",
             )}
           >
-            {!mediaAboveText && mediaBlock}
+            {mediaBlock}
             {userAudio.length > 0 ? (
               <div className={cn("flex max-w-full flex-col gap-1", !audioOnly && "mb-2")}>
                 {userAudio.map((file) => (
@@ -920,7 +854,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               </div>
             ) : null}
             {fileCardsOnly ? (
-              <div className="flex flex-col items-end gap-1" onCopyCapture={onBodyCopyCapture}>
+              <div className="flex flex-col gap-1" onCopyCapture={onBodyCopyCapture}>
                 {otherUserFiles.map((file) => (
                   <UserFileCard
                     key={file.id}
@@ -1004,7 +938,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                 ))}
               </div>
             ) : null}
-            {fileCardsOnly || audioOnly ? null : (
+            {fileCardsOnly || audioOnly || mediaOnly ? null : (
               <div onCopyCapture={onBodyCopyCapture}>
                 <CollapsibleUserMessageBody
                   text={resolvedContext.text}
@@ -1017,26 +951,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             )}
           </div>
         ) : null}
-        {floatActions ? (
-          <div
-            className={cn(
-              "absolute end-full top-1/2 me-2 hidden w-max max-w-[calc(20cqw-0.5rem)] -translate-y-1/2 @min-[37rem]:flex",
-              ACTIONS_REVEAL_CLASS_NAME,
-            )}
-          >
-            {messageActions}
-          </div>
-        ) : null}
       </div>
       <UserMessageProjectedStatus row={row} />
       {!folded || expanded ? (
-        <div
-          className={cn(
-            "flex w-full max-w-[80%] justify-end pe-1",
-            floatActions && "@min-[37rem]:hidden",
-            ACTIONS_REVEAL_CLASS_NAME,
-          )}
-        >
+        <div className={cn("flex w-full items-center justify-end pe-1", ACTIONS_REVEAL_CLASS_NAME)}>
           {messageActions}
         </div>
       ) : null}
@@ -1044,8 +962,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
 }
 
-const ACTIONS_REVEAL_CLASS_NAME =
-  "items-center text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100";
+// Fork: Forma's hover reveal for message actions (micro fade, always on for touch).
+const ACTIONS_REVEAL_CLASS_NAME = cn(
+  "tabular-nums opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100",
+  MICRO_FADE_MOTION_CLASS_NAME,
+);
 
 function UserMessageIntentMarker({
   intent,
@@ -1090,15 +1011,15 @@ function RevertUserMessageButton({
         render={
           <Button
             type="button"
-            size="xs"
-            variant="ghost"
+            size="icon-xs"
+            variant="subtle-outline"
             disabled={activity.isRevertingCheckpoint || activity.isWorking}
             onClick={() => ctx.onRevertToTurnCount(turnCount, messageId)}
             aria-label="Edit from here"
           />
         }
       >
-        <PencilIcon className="size-3" />
+        <Undo2Icon className="size-3" />
       </TooltipTrigger>
       <TooltipPopup side="top">Edit from here</TooltipPopup>
     </Tooltip>

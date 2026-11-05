@@ -294,8 +294,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   // Fork: Forma's working row leads with the pixel-grid loader; labels never
   // shimmer, compaction included.
   return (
-    <div className="border-b border-border/60 pb-2 pt-1">
-      <div className="flex h-6 min-w-0 items-center gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+    <div className="py-0.5 pl-1.5">
+      <div className="text-ui-xs flex h-6 min-w-0 items-center gap-2 text-muted-foreground/70 tabular-nums">
         <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
           <PixelGridLoader variant="chat" />
         </span>

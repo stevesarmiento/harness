@@ -157,7 +157,7 @@ export function ThreadAutomationsPanel(props: {
         </Tooltip>
       }
     >
-      <ul className="m-0 max-h-[13.5rem] list-none overflow-y-auto p-0">
+      <ul className="m-0 list-none p-0">
         {boundTasks.map((task) => (
           <li
             key={task.id}
@@ -244,7 +244,7 @@ export function ThreadAutomationsPanel(props: {
       </ul>
       {/* Kept last: the details card treats a section whose last child is empty as empty. */}
       {tasksQuery.error !== null ? (
-        <p className="px-2.5 py-1.5 text-2xs text-destructive">
+        <p className="px-2.5 py-1.5 text-ui-2xs text-destructive">
           Could not load automations: {tasksQuery.error}
         </p>
       ) : null}
