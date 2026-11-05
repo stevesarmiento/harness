@@ -39,7 +39,6 @@ import { useEffect, useRef, useState } from "react";
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { completeOnboarding } from "../../onboarding/firstRun";
 import {
@@ -61,11 +60,7 @@ import { newProjectId, randomUUID } from "../../lib/utils";
 import { agentSessionImport } from "../../state/agentSessions";
 import { readProjects, waitForProject } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironment } from "../../state/environments";
-import {
-  managedInstanceLocks,
-  managedTelemetryOffMessage,
-  usePrimaryManagedPolicy,
-} from "../../state/managedPolicy";
+import { managedInstanceLocks } from "../../state/managedPolicy";
 import {
   isOnboardingRelayEnvironment,
   resolveOnboardingSetup,
@@ -91,7 +86,7 @@ import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { presentSavedCloudEnvironmentConnection } from "../cloud/cloudEnvironmentConnectionPresentation";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { T3Wordmark } from "../T3Wordmark";
+import { LogomarkForma } from "../LogomarkForma";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { CommandBlock } from "../CommandBlock";
@@ -239,13 +234,12 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up T3 Code"
+          title="Set up Forma"
+          // Fork: Forma identity instead of the T3 wordmark.
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
-              <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Code
-              </span>
+            <div className="flex items-center gap-2" role="img" aria-label="Forma">
+              <LogomarkForma className="h-5 w-auto shrink-0" aria-hidden />
+              <span className="text-2xl font-medium tracking-tight">Forma</span>
             </div>
           }
         >
@@ -319,7 +313,6 @@ function ConnectionStep({
   readonly onPaired: (environmentId: EnvironmentId) => void;
 }) {
   const { environments } = useEnvironments();
-  const telemetryOff = managedTelemetryOffMessage(usePrimaryManagedPolicy());
   const cloudEnabled = hasCloudPublicConfig();
   const directEnvironments = environments.filter(
     (environment) => !cloudEnabled || !isOnboardingRelayEnvironment(environment),
@@ -443,20 +436,7 @@ function ConnectionStep({
         </p>
       ) : null}
       <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-          {telemetryOff ?? "T3 Code collects anonymous usage data to help us improve it."} To read
-          more about how your data is used{telemetryOff === undefined ? " and how to opt out" : ""},
-          see our{" "}
-          <a
-            className="underline underline-offset-2 hover:text-foreground"
-            href={PRIVACY_POLICY_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            privacy policy
-          </a>
-          .
-        </p>
+        {/* Fork: Forma sends no usage telemetry, so there is no data notice here. */}
         <Button
           className="shrink-0 self-end"
           ref={continueRef}
@@ -543,7 +523,7 @@ function ConnectAccountOption({
             </p>
             <CommandBlock command="npx t3 connect" className="mt-3" />
             <p className="mt-3 text-xs text-muted-foreground">
-              Keep T3 Code running. Select the computers you want to set up above.
+              Keep Forma running. Select the computers you want to set up above.
             </p>
           </div>
         </CollapsiblePanel>
@@ -649,7 +629,8 @@ function PairingForm({
           </div>
           <CollapsiblePanel>
             <p className="pt-3 text-sm text-muted-foreground">
-              On the computer with your code, start T3 Code or run{" "}
+              {/* Fork: Forma branding. */}
+              On the computer with your code, start Forma or run{" "}
               <code className="font-mono">npx t3 serve</code>, then run:
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />

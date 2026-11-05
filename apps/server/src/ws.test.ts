@@ -110,6 +110,7 @@ import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
+import { ProjectAgentInventory } from "./project/Services/ProjectAgentInventory.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as TriageService from "./triage/TriageService.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
@@ -662,6 +663,8 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(TraceDiagnostics.TraceDiagnostics)({}),
   Layer.mock(TriageService.TriageService)({}),
   Layer.mock(ProjectFaviconResolver.ProjectFaviconResolver)({}),
+  // Fork: Forma project-local agent inventory.
+  Layer.mock(ProjectAgentInventory)({}),
   Layer.mock(ProjectEnrichment.ProjectEnrichmentService)({}),
   Layer.mock(AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator)({}),
   Layer.mock(AcpRegistrySupport.AcpRegistryCatalog)({}),

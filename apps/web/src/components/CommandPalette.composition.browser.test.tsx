@@ -14,10 +14,9 @@ vi.mock("@effect/atom-react", async (original) => ({
 }));
 vi.mock("../hooks/useTheme", () => ({
   useRenderedAppearance: () => "light",
-  useTheme: () => ({ theme: "t3-chat", resolvedTheme: "light", appearanceMode: "light" }),
+  // Fork: Forma's useTheme exposes the mode as `theme`.
+  useTheme: () => ({ theme: "light", resolvedTheme: "light", setTheme: () => true }),
 }));
-vi.mock("../hooks/useCustomThemes", () => ({ useCustomThemes: () => [] }));
-vi.mock("../hooks/useEnvironmentTheme", () => ({ useEnvironmentThemeDefinitions: () => [] }));
 vi.mock("../hooks/useSettings", async (original) => ({
   ...(await original<typeof import("../hooks/useSettings")>()),
   useClientSettings: () => DEFAULT_CLIENT_SETTINGS,

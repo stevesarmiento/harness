@@ -212,7 +212,6 @@ const VcsStatusChangeRequest = Schema.Struct({
   isDraft: Schema.optional(Schema.Boolean),
   updatedAt: Schema.optional(Schema.NullOr(Schema.String)),
 });
-
 const VcsStatusLocalShape = {
   isRepo: Schema.Boolean,
   sourceControlProvider: Schema.optional(SourceControlProviderInfo),

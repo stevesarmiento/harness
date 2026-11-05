@@ -32,7 +32,6 @@ const EMPTY_RESPONDING_REQUEST_IDS: TimelineRowSharedState["respondingRequestIds
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
 
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
-import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import {
   memo,
   use,
@@ -108,7 +107,7 @@ import {
   type WorkGroupViewState,
   type TimelineRow,
 } from "./timelineRowContext";
-import { TimelineRowTimestamp, ActivityShimmerOverlay } from "./TimelineRowParts";
+import { TimelineRowTimestamp } from "./TimelineRowParts";
 import {
   WorkGroupSection,
   WorkingTimelineRow,
@@ -153,9 +152,8 @@ function timelineListStateFor(identity: string): {
 }
 
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
-const TIMELINE_LIST_FADE_HEADER = (
-  <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
-);
+// Fork: Forma's taller top fade band (matches `.chat-timeline-scroll-fade`).
+const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 function TimelineListFooter({
   composerInset,
   onGrow,
@@ -1345,7 +1343,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               onItemSizeChanged={handleItemSizeChanged}
               className={cn(
                 "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-                topFadeEnabled && "topbar-scroll-fade",
+                topFadeEnabled && "chat-timeline-scroll-fade",
               )}
               ListHeaderComponent={listHeader}
               ListFooterComponent={timelineListFooter}
@@ -1567,13 +1565,8 @@ function ContextCompactionTimelineRow({
       )}
     >
       <span className={cn("h-px flex-1", row.failed ? "bg-destructive/30" : "bg-border/70")} />
-      <span
-        ref={row.active ? observeVisibleAnimation : undefined}
-        className="relative min-w-0 overflow-hidden"
-      >
-        {content}
-        {row.active ? <ActivityShimmerOverlay>{content}</ActivityShimmerOverlay> : null}
-      </span>
+      {/* Fork: Forma labels stay still; the working row's loader shows activity. */}
+      <span className="min-w-0">{content}</span>
       <span className={cn("h-px flex-1", row.failed ? "bg-destructive/30" : "bg-border/70")} />
     </div>
   );

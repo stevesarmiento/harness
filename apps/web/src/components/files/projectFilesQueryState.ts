@@ -86,6 +86,7 @@ export function setProjectFileQueryData(
   cwd: string,
   relativePath: string,
   contents: string,
+  version: ProjectReadFileResult["version"],
 ): void {
   const atom = optimisticFileAtom(environmentId, cwd, relativePath);
   if (!unsavedFileMounts.has(atom)) {
@@ -98,6 +99,7 @@ export function setProjectFileQueryData(
       contents,
       byteLength: new TextEncoder().encode(contents).byteLength,
       truncated: false,
+      version,
     },
   });
 }
@@ -136,6 +138,7 @@ export function confirmProjectFileQueryData(
   cwd: string,
   relativePath: string,
   contents: string,
+  version: ProjectReadFileResult["version"],
 ): boolean {
   const atom = optimisticFileAtom(environmentId, cwd, relativePath);
   const optimisticFile = appAtomRegistry.get(atom);
@@ -144,6 +147,10 @@ export function confirmProjectFileQueryData(
   const queryAtom = getProjectFileQueryAtom(environmentId, cwd, relativePath);
   const confirmed = {
     ...optimisticFile,
+    data: {
+      ...optimisticFile.data,
+      version,
+    },
     confirmedAgainst: appAtomRegistry.get(queryAtom),
   };
   appAtomRegistry.set(atom, confirmed);

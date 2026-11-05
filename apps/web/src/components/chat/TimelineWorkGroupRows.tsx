@@ -6,7 +6,6 @@ import { liveThoughtLine } from "@t3tools/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import { observeResize } from "~/lib/observeResize";
 import { tickTextContent } from "~/lib/tickTextContent";
-import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import { memo, use, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
@@ -33,7 +32,9 @@ import {
   type TimelineWorkEntry,
   type TimelineRow,
 } from "./timelineRowContext";
-import { TimelineRowTimestamp, ActivityShimmerOverlay } from "./TimelineRowParts";
+import { TimelineRowTimestamp } from "./TimelineRowParts";
+// Fork: the working row leads with Forma's pixel-grid loader.
+import { PixelGridLoader } from "../ui/pixel-grid-loader";
 import {
   failedToolIconClassName,
   toolIconAcceptsTint,
@@ -279,7 +280,6 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup } =
     use(TimelineRowActivityCtx);
   const compacting = row.compacting === true || isCompacting;
-  const shimmer = isPreparingWorktree || compacting;
   const label = isPreparingWorktree ? (
     "Setting up worktree…"
   ) : compacting ? (
@@ -291,16 +291,15 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   ) : (
     "Working..."
   );
+  // Fork: Forma's working row leads with the pixel-grid loader; labels never
+  // shimmer, compaction included.
   return (
-    <div className="border-b border-border/60 pb-2 pt-1">
-      <div className="flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-        <span
-          ref={shimmer ? observeVisibleAnimation : undefined}
-          className="relative shrink-0 overflow-hidden whitespace-nowrap"
-        >
-          {label}
-          {shimmer ? <ActivityShimmerOverlay>{label}</ActivityShimmerOverlay> : null}
+    <div className="py-0.5 pl-1.5">
+      <div className="text-ui-xs flex h-6 min-w-0 items-center gap-2 text-muted-foreground/70 tabular-nums">
+        <span className="inline-flex items-center text-foreground/72 dark:text-foreground/78">
+          <PixelGridLoader variant="chat" />
         </span>
+        <span className="relative shrink-0 overflow-hidden whitespace-nowrap">{label}</span>
         {backgroundWorktreeSetup ? (
           <BackgroundWorktreeSetupChip snapshot={backgroundWorktreeSetup} />
         ) : null}
@@ -362,11 +361,7 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
   const ctx = use(TimelineRowCtx);
   const { isCompacting, isPreparingWorktree } = use(TimelineRowActivityCtx);
   if (isPreparingWorktree || isCompacting) return <WorkLogRow label="" />;
-  // A failed group keeps this disclosure while an approval waits, but nothing is thinking then.
-  const live = ctx.pendingApprovals.size === 0;
-  const activity = (
-    <LiveActivityRow label="Thinking" iconName="brain" active={live} shimmer={live} />
-  );
+  const activity = <LiveActivityRow label="Thinking" iconName="brain" />;
   const { groupId } = row;
   if (groupId === undefined) return activity;
   return (
@@ -386,36 +381,23 @@ function LiveActivityRow({
   iconName,
   toolIcon,
   failed = false,
-  active = false,
-  shimmer = false,
 }: {
   label: ReactNode;
   iconName?: WorkEntryIconName;
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
-  active?: boolean;
-  shimmer?: boolean;
 }) {
-  const animated = active && !failed;
-  const showShimmer = animated && shimmer;
+  // Fork: live labels stay still (no shimmer or shine); the working row's
+  // loader already shows activity.
   return (
-    <div
-      ref={animated ? observeVisibleAnimation : undefined}
-      className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed"
-    >
+    <div className="relative min-h-6 w-fit max-w-full min-w-0 overflow-hidden rounded-md text-sm leading-relaxed">
       <LiveActivityContent
         label={label}
         iconName={iconName}
         toolIcon={toolIcon}
         failed={failed}
         announceFailure={failed}
-        active={animated && !shimmer}
       />
-      {showShimmer ? (
-        <ActivityShimmerOverlay>
-          <LiveActivityContent label={label} iconName={iconName} toolIcon={toolIcon} highlighted />
-        </ActivityShimmerOverlay>
-      ) : null}
     </div>
   );
 }
@@ -426,7 +408,6 @@ function LiveActivityContent({
   toolIcon,
   failed = false,
   announceFailure = false,
-  active = false,
   highlighted = false,
 }: {
   label: ReactNode;
@@ -434,7 +415,6 @@ function LiveActivityContent({
   toolIcon?: ToolActivityIcon | undefined;
   failed?: boolean;
   announceFailure?: boolean;
-  active?: boolean;
   highlighted?: boolean;
 }) {
   const showTrailingFailureMark =
@@ -466,15 +446,7 @@ function LiveActivityContent({
         ) : null
       }
       label={
-        <span
-          className={cn(
-            "block truncate",
-            highlighted && "text-foreground",
-            active && "live-tool-shine",
-          )}
-        >
-          {label}
-        </span>
+        <span className={cn("block truncate", highlighted && "text-foreground")}>{label}</span>
       }
       trailing={
         showTrailingFailureMark ? (
@@ -574,7 +546,6 @@ export function LiveWorkEntryTimelineRow({
         iconName={workEntryIconName(row.entry)}
         toolIcon={row.entry.toolIcon ?? row.entry.toolSource?.icon}
         failed={failed}
-        active={row.active}
       />
     </button>
   );
@@ -623,6 +594,7 @@ function WorkGroupHeader(props: {
           muted
         />
       }
+      // Fork: active group labels stay still (no shine).
       label={<span className="block truncate">{props.label}</span>}
       trailing={
         <TimelineRowTimestamp createdAt={props.createdAt} timestampFormat={props.timestampFormat} />

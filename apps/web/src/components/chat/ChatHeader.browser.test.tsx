@@ -34,7 +34,6 @@ function header(title: string) {
         activeProject={null}
         parentThreadLink={null}
         onOpenThread={() => {}}
-        rightPanelOpen={false}
         onNewThreadInProject={() => {}}
       />
       <div tabIndex={0}>Outside rename</div>
@@ -47,7 +46,7 @@ it.each(["blur", "Enter"] as const)(
   async (finish) => {
     persisted.title = "New thread";
     await using screen = await render(header(persisted.title));
-    await screen.getByRole("button", { name: "Thread actions for New thread" }).dblClick();
+    await screen.getByRole("heading", { name: "New thread" }).dblClick();
     const input = screen.getByRole("textbox", { name: "Thread title" });
     await expect.element(input).toHaveValue("New thread");
 
@@ -60,7 +59,7 @@ it.each(["blur", "Enter"] as const)(
     expect(persisted.title).toBe("Fix login redirect");
 
     await screen.rerender(header(persisted.title));
-    await screen.getByRole("button", { name: "Thread actions for Fix login redirect" }).dblClick();
+    await screen.getByRole("heading", { name: "Fix login redirect" }).dblClick();
     await screen.getByRole("textbox", { name: "Thread title" }).fill("My edited title");
     persisted.title = "Another concurrent title";
     await screen.rerender(header(persisted.title));

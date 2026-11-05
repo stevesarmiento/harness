@@ -52,6 +52,7 @@ import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as BrowserImport from "../preview/BrowserImport/BrowserImport.ts";
 import * as DesktopBackendConfiguration from "../backend/DesktopBackendConfiguration.ts";
 import * as DesktopCliCommand from "./DesktopCliCommand.ts";
+import * as DesktopAppIcon from "./DesktopAppIcon.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
 import * as DesktopIpc from "../ipc/DesktopIpc.ts";
@@ -189,6 +190,8 @@ it.effect(
         Effect.provide(
           Layer.mergeAll(
             Layer.mock(BrowserImport.BrowserImport, {}),
+            // Fork: Forma app icons.
+            Layer.mock(DesktopAppIcon.DesktopAppIcon, { applyStored: Effect.void }),
             Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
             Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
             Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),

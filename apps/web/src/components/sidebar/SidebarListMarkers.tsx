@@ -59,9 +59,11 @@ export function SidebarSectionPlaceholder(props: {
       revealOverflow={props.marker === "settled-placeholder" && props.showHint}
     >
       {props.showHint ? (
+        // Fork: h-7 to match Forma's compact slim rows, whose height the
+        // sorting strategy opens for this hint.
         <div
           className={cn(
-            "absolute inset-x-0 top-0 flex h-9 items-center justify-center rounded-md border border-dashed border-sidebar-foreground/25 text-xs text-sidebar-foreground/80",
+            "absolute inset-x-0 top-0 flex h-7 items-center justify-center rounded-md border border-dashed border-sidebar-foreground/25 text-xs text-sidebar-foreground/80",
             props.isDropTarget && "border-primary/40 bg-primary/5 text-primary",
           )}
         >
@@ -110,7 +112,7 @@ export function SidebarDragBoundary(props: {
 export function SidebarSectionHeader(props: {
   marker: "working-header" | "snoozed-header" | "settled-header";
   label: string;
-  /** A muted trailing count. */
+  /** Fork: Forma shows the count as "Label (n)" only while the shelf is collapsed. */
   count: number;
   className?: string;
   dragging?: boolean;
@@ -123,6 +125,8 @@ export function SidebarSectionHeader(props: {
       : props.marker === "snoozed-header"
         ? "snoozed"
         : "settled";
+  // Fork: Forma keeps the snoozed shelf's info tone.
+  const snoozed = shelf === "snoozed";
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -133,11 +137,14 @@ export function SidebarSectionHeader(props: {
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
-        tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
+        variant="sidebar"
+        tone={
+          props.isDropTarget ? "accent" : props.dragging ? "emphasized" : snoozed ? "info" : "muted"
+        }
         data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="font-normal tabular-nums">{props.count}</span>}
       >
         {props.label}
+        {props.toggle.expanded ? null : ` (${props.count})`}
       </CollapsibleSectionHeader>
     </SortableSidebarMarker>
   );

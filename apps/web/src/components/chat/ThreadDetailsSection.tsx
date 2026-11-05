@@ -31,13 +31,14 @@ export function ThreadDetailsSection({
     >
       <div
         className={cn(
-          "mb-1 flex min-h-8 min-w-0 items-center justify-between gap-2 px-2.5",
+          "mb-1 flex min-h-8 min-w-0 items-center justify-between gap-2 px-1.5",
           !showHeading && "hidden",
         )}
       >
+        {/* Fork: Forma UI type token. */}
         <h3
           id={headingId}
-          className="min-w-0 truncate text-2xs font-medium text-muted-foreground select-none"
+          className="text-ui-2xs min-w-0 truncate font-medium text-muted-foreground select-none"
         >
           {title}
         </h3>

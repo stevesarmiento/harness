@@ -1,18 +1,12 @@
 import type { PullRequestInvolvement, PullRequestListState } from "@t3tools/contracts";
 import { Plug2Icon, SearchIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
-import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { RefreshIcon } from "../ui/refresh-icon";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
-import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { PullRequestCompactFilterMenu } from "./PullRequestCompactFilterMenu";
 import type { PullRequestFilterOption } from "./PullRequestListFilters";
@@ -83,8 +77,7 @@ export function PullRequestsColumn({
   sortMenu,
   filtersMenu,
   rightPanelControl,
-  titlebarControls,
-  rightPanelOpen,
+  headerActionsElement,
   maximizedAway,
   listBody,
   scrollRef,
@@ -103,8 +96,8 @@ export function PullRequestsColumn({
   sortMenu: ReactNode;
   filtersMenu: ReactNode;
   rightPanelControl: ReactNode;
-  titlebarControls: ReactNode;
-  rightPanelOpen: boolean;
+  /** Fork: the Forma header row's actions slot, which this column portals its controls into. */
+  headerActionsElement: HTMLDivElement | null;
   maximizedAway: boolean;
   listBody: ReactNode;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -129,7 +122,6 @@ export function PullRequestsColumn({
   const inFlowSearchRef = useRef<HTMLDivElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const topbarSearchRef = useRef<HTMLDivElement | null>(null);
-  const searchExpanded = searchOpen || searchValue.length > 0;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- window keydown listener focuses the visible search input on Cmd/Ctrl+F
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -167,70 +159,64 @@ export function PullRequestsColumn({
         maximizedAway ? "w-0 flex-none" : "flex-1",
       )}
     >
-      <WorkspacePageHeader
-        electron={isElectron}
-        reserveNativeControls={!rightPanelOpen}
-        className="relative bg-background"
-      >
-        {titlebarControls}
-        {condensed ? (
-          <WorkspaceBreadcrumb ariaLabel="Pull request scope" className="overflow-hidden">
-            <WorkspaceBreadcrumbItem current className={cn(searchExpanded && "sr-only")}>
-              <h1 className="truncate">Pull requests</h1>
-            </WorkspaceBreadcrumbItem>
-            {searchExpanded ? null : <WorkspaceBreadcrumbSeparator />}
-            <WorkspaceBreadcrumbItem className="shrink gap-1.5">
-              <PullRequestCompactFilterMenu
-                label="Filter by state"
-                value={state}
-                options={STATE_TABS}
-                onChange={onState}
-                className="shrink-0"
-              />
-              <PullRequestCompactFilterMenu
-                label="Filter by involvement"
-                value={involvement}
-                options={INVOLVEMENT_TABS}
-                onChange={onInvolvement}
-              />
-              {hostMenuOptions.length > 2 ? (
-                <PullRequestCompactFilterMenu
-                  label="Filter by host"
-                  value={host ?? ""}
-                  options={hostMenuOptions}
-                  onChange={(next) => onHost(next === "" ? undefined : next)}
-                />
+      {/* Fork: one Forma header row for the whole page. Condensed, the scope menus and the
+          folded search join refresh and the panel toggle in its actions slot. */}
+      {headerActionsElement
+        ? createPortal(
+            <>
+              {condensed ? (
+                <div className="flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
+                  <PullRequestCompactFilterMenu
+                    label="Filter by state"
+                    value={state}
+                    options={STATE_TABS}
+                    onChange={onState}
+                    className="shrink-0"
+                  />
+                  <PullRequestCompactFilterMenu
+                    label="Filter by involvement"
+                    value={involvement}
+                    options={INVOLVEMENT_TABS}
+                    onChange={onInvolvement}
+                  />
+                  {hostMenuOptions.length > 2 ? (
+                    <PullRequestCompactFilterMenu
+                      label="Filter by host"
+                      value={host ?? ""}
+                      options={hostMenuOptions}
+                      onChange={(next) => onHost(next === "" ? undefined : next)}
+                    />
+                  ) : null}
+                </div>
               ) : null}
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        ) : (
-          <WorkspaceBreadcrumb ariaLabel="Pull requests breadcrumb">
-            <WorkspaceBreadcrumbItem current>
-              <h1 className="truncate">Pull requests</h1>
-            </WorkspaceBreadcrumbItem>
-          </WorkspaceBreadcrumb>
-        )}
-        <div className="min-w-0 flex-1" />
-        {condensed ? (
-          <div ref={topbarSearchRef} className="flex shrink items-center gap-1.5">
-            <ExpandableSearch
-              searchInput={searchInput}
-              searchValue={searchValue}
-              open={searchOpen}
-              onOpenChange={setSearchOpen}
-              onFocusWithin={(focused) => {
-                topbarSearchFocusedRef.current = focused;
-              }}
-            />
-            <PullRequestRefreshControl compact refreshing={refreshing} onRefresh={onRefresh} />
-          </div>
-        ) : null}
-        {rightPanelControl}
-      </WorkspacePageHeader>
+              {condensed ? (
+                <div ref={topbarSearchRef} className="flex shrink items-center gap-1.5">
+                  <ExpandableSearch
+                    searchInput={searchInput}
+                    searchValue={searchValue}
+                    open={searchOpen}
+                    onOpenChange={setSearchOpen}
+                    onFocusWithin={(focused) => {
+                      topbarSearchFocusedRef.current = focused;
+                    }}
+                  />
+                  <PullRequestRefreshControl
+                    compact
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                </div>
+              ) : null}
+              {rightPanelControl}
+            </>,
+            headerActionsElement,
+          )
+        : null}
 
       <div
         ref={scrollRef}
-        className="topbar-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
+        // Fork: Forma's shorter fade band for a list that starts right under its header.
+        className="pull-requests-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto"
       >
         <WorkspacePageContainer width="expanded" className="min-h-full gap-4">
           <div className="flex flex-col gap-3">
