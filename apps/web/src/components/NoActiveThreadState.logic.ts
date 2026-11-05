@@ -1,7 +1,7 @@
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { orderItemsByPreferredIds, sortProjectsForSidebar } from "./Sidebar.logic";
-import { getProjectOrderKey } from "../logicalProject";
-import { sortThreads } from "../lib/threadSort";
+import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
+import { sortThreads } from "@t3tools/client-runtime/state/thread-sort";
 import type { Project, SidebarThreadSummary } from "../types";
 
 export const NO_ACTIVE_THREAD_LIST_LIMIT = 6;

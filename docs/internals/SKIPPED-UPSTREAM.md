@@ -42,22 +42,15 @@ Depends on the theme library (`getThemeDefinition` /
 `apps/web/src/hooks/useSettings.ts` is simplified to skip the palette-theme
 suppression logic.
 
-## Sidebar v2 as default (#5672, v0.0.32) — partially adopted
+## Sidebar v2 as default (#5672) and legacy sidebar removal (#21039)
 
-The file rename was **adopted** (Forma sidebar now lives in
-`LegacySidebar.tsx`; upstream's v2 owns `Sidebar.tsx`) so future merges
-three-way cleanly. What is skipped is the default flip: the fork pins
-`legacySidebarEnabled` to a decoding default of `true` in
-`packages/contracts/src/settings.ts` and holds legacy during settings
-hydration in `useLegacySidebarEnabled`, so the Forma sidebar remains the
-default UI. Sidebar v2 stays available as an explicit opt-out in Settings →
-Advanced → Legacy features. While collapsed, upstream's floating sidebar
-trigger is shown except on pages whose Forma header mounts its own reopen
-button (`AppSidebarLayout.tsx`).
-
-Not yet ported onto v2 (opt-in surface only; the default Forma sidebar has
-them): "Export as Markdown" and "Fork thread" context-menu items
-(`buildThreadActionMenuItems`), and the fork's `NewThreadIcon`.
+Resolved on 2026-11-05: upstream deleted `LegacySidebar.tsx` and the fork
+accepted the deletion. Forma's sidebar is `Sidebar.tsx` (upstream's v2 with
+the Forma look re-applied); there is no second sidebar implementation to keep
+in step. `legacySidebarEnabled` follows upstream again (decoding default
+`false`, read only as an opt-in alias for upstream's "boring sidebar", which
+`AppSidebarLayout.tsx` renders when either flag is set). "Export as Markdown"
+and "Fork thread" live in `Sidebar.tsx`'s thread menu.
 
 ## Upstream design overhaul (#24865, #25778) — adopted except the sidebar
 
@@ -66,8 +59,8 @@ takes it for the composer, chat view, header, panels, timeline, Settings and
 Usage. Settings and Usage are upstream's modals (#24847); Forma-only pages
 (Safety, app icons, Interface appearance, Legacy features) live inside them.
 
-The **sidebar** is the exception: `Sidebar.tsx`, `LegacySidebar.tsx`,
-`sidebar/*` and `ui/sidebar.tsx` keep Forma's look and behaviour (grouped
+The **sidebar** is the exception: `Sidebar.tsx`, `sidebar/*` and
+`ui/sidebar.tsx` keep Forma's look and behaviour (grouped
 projects with drag-reorder, shelves, compact rows, Forma status icons). Take
 upstream's behaviour and performance fixes there, never its styling.
 
@@ -132,7 +125,8 @@ with `apps/server/src/orchestration-v2/`. The fork adopted V2 wholesale.
   `forma-dev`; V1 import from `Forma (Alpha)`/`forma`) so it never shares the
   `t3code-v2` profile with an installed T3 Code. App name, bundle id and data
   dir stay Forma's; other internal identifiers follow upstream.
-- **Defaults**: `legacySidebarEnabled` true, `composerCollapseOnScroll` false.
+- **Defaults**: `sidebarWorkingShelfEnabled` false, `contextWindowMeterEnabled` true,
+  `composerCollapseOnScroll` false.
 
 ## Anonymous usage telemetry (#16564, synced 2026-10-07)
 

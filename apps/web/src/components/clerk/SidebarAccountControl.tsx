@@ -5,7 +5,7 @@ import { useRef, type ComponentType } from "react";
 
 import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
-import { usePrimaryEnvironment } from "../../state/environments";
+import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
 import { cn } from "../../lib/utils";
 import {
   IconArrowTriangleheadPull as PullRequestIcon,
@@ -114,8 +114,9 @@ function ConfiguredSidebarAccountControl({ variant }: { readonly variant: Sideba
   const availability = useT3ConnectClerkAvailability();
   const { user } = useUser();
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { linkState, managedTunnelActive, publishAgentActivity, operationError } =
-    useCloudLinkController();
+    useCloudLinkController(primaryEnvironmentId);
 
   const error = operationError ?? linkState.error;
   const presentation = resolveT3ConnectSidebarPresentation({

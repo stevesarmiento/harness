@@ -367,7 +367,7 @@ export function useTheme() {
   const resolvedTheme = resolveThemeMode(themeSettings, snapshot.systemDark);
   const isDark = resolvedTheme === "dark";
 
-  // Keep DOM in sync on mount/change
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Fork: keeps the <html> theme attributes and palette variables in step with the stored theme.
   useEffect(() => {
     applyTheme(themeSettings);
   }, [themeSettings]);

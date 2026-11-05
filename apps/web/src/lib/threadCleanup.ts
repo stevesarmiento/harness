@@ -24,7 +24,7 @@ export function resolveThreadCleanupActivityAt(thread: ThreadCleanupThread): str
   return thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt;
 }
 
-export function resolveThreadCleanupActivityTimestamp(thread: ThreadCleanupThread): number {
+function resolveThreadCleanupActivityTimestamp(thread: ThreadCleanupThread): number {
   const timestamp = Date.parse(resolveThreadCleanupActivityAt(thread));
   return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 }

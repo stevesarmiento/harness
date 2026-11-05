@@ -1,6 +1,6 @@
 import type { GitKeybindingCommand, KeybindingCommand } from "@t3tools/contracts";
 
-export const GIT_ACTION_KEYBINDING_COMMANDS = [
+const GIT_ACTION_KEYBINDING_COMMANDS = [
   "git.init",
   "git.commit",
   "git.push",

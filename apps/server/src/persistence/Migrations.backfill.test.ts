@@ -66,7 +66,7 @@ backfillLayer("Migrations backfill", (it) => {
 
 v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
   it.effect(
-    "applies upstream 041-069, including OrchestrationV2, on a Forma 040 + 9xx ledger",
+    "applies upstream 041-079, including OrchestrationV2, on a Forma 040 + 9xx ledger",
     () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
@@ -79,7 +79,7 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
         const executed = yield* runMigrations();
         assert.deepStrictEqual(
           executed.map(([id]) => id),
-          Array.from({ length: 29 }, (_, index) => index + 41),
+          Array.from({ length: 39 }, (_, index) => index + 41),
         );
 
         const tables = yield* sql<{ readonly name: string }>`
@@ -93,17 +93,17 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
 });
 
 postV2UpgradeLayer("Migrations backfill after V2", (it) => {
-  it.effect("applies upstream 060-069 on a Forma ledger already through 059", () =>
+  it.effect("applies upstream 060-079 on a Forma ledger already through 059", () =>
     Effect.gen(function* () {
       // The live Forma ledger after the first V2 sync: upstream 1-59 plus the
-      // fork block. The V2 id check must not treat 060-066 as skipped.
+      // fork block. The V2 id check must not treat 060-079 as skipped.
       yield* runMigrations({ toMigrationInclusive: 59 });
       yield* recordForkBlock;
 
       const executed = yield* runMigrations();
       assert.deepStrictEqual(
         executed.map(([id]) => id),
-        [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
+        Array.from({ length: 20 }, (_, index) => index + 60),
       );
       assert.deepStrictEqual(yield* runMigrations(), []);
     }),

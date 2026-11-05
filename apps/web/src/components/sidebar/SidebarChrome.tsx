@@ -1,26 +1,28 @@
-import { ArrowLeftIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
 import { memo } from "react";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { IconArrowTriangleheadPull as PullRequestIcon } from "symbols-react";
+import { Link } from "@tanstack/react-router";
 
 import { APP_BASE_NAME, APP_VERSION } from "../../branding";
+import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { shortcutLabelForCommand } from "../../keybindings";
 import { cn } from "../../lib/utils";
-import { usePullRequestsSupported } from "../../state/environments";
+import {
+  navigateHistory,
+  useCanNavigateHistory,
+  type HistoryDirection,
+} from "../../navigationHistory";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { LogomarkForma } from "../LogomarkForma";
-import { SettingsHexIcon, UsageChartIcon } from "../icons/custom";
+import {
+  resolveEnvironmentIdentificationPillLabel,
+  useEnvironmentStageLabel,
+} from "../SidebarStageBackdrop";
+import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarAccountControl } from "../clerk/SidebarAccountControl";
-import {
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarTrigger,
-  useSidebar,
-} from "../ui/sidebar";
-import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
-import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
+import { SidebarHeaderIconButton } from "./SidebarThreadHeader";
+import { SidebarFooter, SidebarMenu, SidebarTrigger } from "../ui/sidebar";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
@@ -31,6 +33,14 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }: {
   isElectron: boolean;
 }) {
+  const stageLabel = useEnvironmentStageLabel();
+  const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  // Fork: Forma's header honors the pill mode only; the stage artwork stays out.
+  const pillLabel =
+    environmentIdentificationMode === "pill"
+      ? resolveEnvironmentIdentificationPillLabel(stageLabel)
+      : null;
+
   return (
     // Fork: Forma's titlebar row is a plain element (like upstream's), not a
     // padded SidebarHeader: it aligns to the window controls.
@@ -53,6 +63,17 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
             Version {APP_VERSION}
           </TooltipPopup>
         </Tooltip>
+        {isElectron ? (
+          <div className="hidden shrink-0 items-center gap-0.5 md:flex">
+            <HistoryNavigationButton direction="back" />
+            <HistoryNavigationButton direction="forward" />
+          </div>
+        ) : null}
+        {pillLabel ? (
+          <Badge data-environment-identification="pill" size="sm" variant="secondary">
+            {pillLabel}
+          </Badge>
+        ) : null}
       </div>
       <Tooltip>
         <TooltipTrigger
@@ -72,8 +93,10 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 // Measures the brand plus the header's padding and collapse trigger, so the
 // sidebar minimum follows font size and zoom and the wordmark never clips.
 export function SidebarBrandWidthProbe({
+  isElectron,
   onWidthChange,
 }: {
+  isElectron: boolean;
   onWidthChange: (width: number) => void;
 }) {
   const observeWidth = (probe: HTMLDivElement) => {
@@ -89,9 +112,40 @@ export function SidebarBrandWidthProbe({
       ref={observeWidth}
     >
       <FormaWordmark />
+      {isElectron ? (
+        // The history buttons' footprint.
+        <span className="flex shrink-0 gap-0.5">
+          <span className="size-5" />
+          <span className="size-5" />
+        </span>
+      ) : null}
       {/* The collapse trigger's footprint. */}
       <span className="size-7 shrink-0" />
     </div>
+  );
+}
+
+// Fork: Forma's compact header buttons; the desktop app also forwards these
+// as menu actions and swipes, so the buttons are the visible affordance only.
+function HistoryNavigationButton({ direction }: { direction: HistoryDirection }) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const enabled = useCanNavigateHistory(direction);
+  const label = direction === "back" ? "Go back" : "Go forward";
+  const shortcutLabel = shortcutLabelForCommand(
+    keybindings,
+    direction === "back" ? "navigation.back" : "navigation.forward",
+  );
+  const Icon = direction === "back" ? ArrowLeftIcon : ArrowRightIcon;
+  return (
+    <SidebarHeaderIconButton
+      label={label}
+      tooltip={shortcutLabel ? `${label} (${shortcutLabel})` : label}
+      className="[-webkit-app-region:no-drag]"
+      disabled={!enabled}
+      onClick={() => navigateHistory(direction)}
+    >
+      <Icon className="size-3.5" />
+    </SidebarHeaderIconButton>
   );
 }
 
@@ -119,118 +173,17 @@ function FormaWordmark() {
   );
 }
 
-function SidebarUtilityItem({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
+// Fork: Forma's footer carries the account control; the utility row lives in
+// its menu. The undo notice sits here so it never covers a thread.
+export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
-    <SidebarMenuItem className="shrink-0">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
-              {icon}
-            </SidebarMenuButton>
-          }
-        />
-        <TooltipPopup side="top">{label}</TooltipPopup>
-      </Tooltip>
-    </SidebarMenuItem>
-  );
-}
-
-// Settings / Pull Requests / Usage row, swapped for a Back button on utility pages.
-// The thread sidebars carry these in the account menu instead (Forma); the settings
-// nav mounts this row directly.
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
-  const navigate = useNavigate();
-  const navigateToMainApp = useNavigateToMainApp();
-  const { isMobile, setOpenMobile } = useSidebar();
-  const isOnUtilityPage = useLocation({
-    select: (location) => isSidebarUtilityPage(location.pathname),
-  });
-  const pullRequestsSupported = usePullRequestsSupported();
-  const closeMobileSidebar = () => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-  const handlePullRequestsClick = () => {
-    closeMobileSidebar();
-    void navigate({
-      to: "/pull-requests",
-      search: readPullRequestListPreferences(),
-    });
-  };
-  const handleSettingsClick = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/settings" });
-  };
-  const handleUsageClick = () => {
-    closeMobileSidebar();
-    void navigate({ to: "/usage" });
-  };
-  const handleBackClick = () => {
-    closeMobileSidebar();
-    void navigateToMainApp();
-  };
-
-  return (
-    <SidebarMenu className="flex-row items-center">
-      {isOnUtilityPage ? (
-        <SidebarMenuItem className="min-w-0 flex-1">
-          <SidebarMenuButton onClick={handleBackClick}>
-            <ArrowLeftIcon />
-            <span>Back</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      ) : (
-        <>
-          <SidebarUtilityItem
-            icon={<SettingsHexIcon />}
-            label="Settings"
-            onClick={handleSettingsClick}
-          />
-          {pullRequestsSupported ? (
-            <SidebarUtilityItem
-              icon={<PullRequestIcon className="fill-current" />}
-              label="Pull requests"
-              onClick={handlePullRequestsClick}
-            />
-          ) : null}
-          <SidebarUtilityItem
-            icon={<UsageChartIcon className="fill-current" />}
-            label="Usage"
-            onClick={handleUsageClick}
-          />
-        </>
-      )}
-      <SidebarUpdatePill />
-    </SidebarMenu>
-  );
-});
-
-export const SidebarChromeFooter = memo(function SidebarChromeFooter({
-  variant,
-  showUndoNotice = false,
-}: {
-  variant: "v1" | "v2";
-  showUndoNotice?: boolean;
-}) {
-  return (
-    // Fork: Forma's evenly inset footer.
     <SidebarFooter size="inset">
-      {showUndoNotice ? <SidebarThreadUndoNotice /> : null}
+      <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
-          <SidebarAccountControl variant={variant} />
+          <SidebarAccountControl variant="v2" />
         </div>
         <SidebarMenu className="w-auto shrink-0 flex-row">
           <SidebarUpdatePill />

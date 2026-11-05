@@ -6,7 +6,7 @@ function readInjectedDesktopAppBranding(): DesktopAppBranding | null {
     return null;
   }
 
-  return window.desktopBridge?.getAppBranding?.() ?? null;
+  return window.desktopBridge?.getAppBranding() ?? null;
 }
 
 const injectedDesktopAppBranding = readInjectedDesktopAppBranding();
@@ -28,7 +28,7 @@ export const APP_VERSION = import.meta.env.APP_VERSION || "0.0.0";
 
 export type BuildDefaultAppIconId = "forma-prod" | "forma-nightly" | "forma-dev";
 
-export function resolveDefaultBuildAppIconId(
+function resolveDefaultBuildAppIconId(
   stageLabel: string = APP_STAGE_LABEL,
 ): BuildDefaultAppIconId {
   if (stageLabel === "Dev") return "forma-dev";

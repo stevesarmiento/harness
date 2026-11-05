@@ -258,13 +258,13 @@ export function useFileSaveSession(
   // versioned project files; saves then degrade to unversioned writes.
   version?: ProjectFileVersion,
 ) {
-  // oxlint-disable-next-line t3code/react-effect-budget -- the lease is a mount-scoped external resource; React runs every unmount cleanup before mount setups, so a surface switch flushes before the next surface recovers.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the lease is a mount-scoped external resource; React runs every unmount cleanup before mount setups, so a surface switch flushes before the next surface recovers.
   useEffect(
     () => fileSaveSessions.acquire({ environmentId, cwd, relativePath }, onPendingChange),
     [environmentId, cwd, relativePath, onPendingChange],
   );
   // Declared after the lease so a new session learns its baseline before its first debounced write.
-  // oxlint-disable-next-line t3code/react-effect-budget -- Fork: syncs the loaded file version into the external save session.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Fork: syncs the loaded file version into the external save session.
   useEffect(() => {
     fileSaveSessions.setLoadedVersion({ environmentId, cwd, relativePath }, version);
   }, [environmentId, cwd, relativePath, version]);

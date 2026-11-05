@@ -72,6 +72,17 @@ import Migration0066 from "./Migrations/066_RepairClientSettlementTimestamps.ts"
 import Migration0067 from "./Migrations/067_WebhookDedupe.ts";
 import Migration0068 from "./Migrations/068_ShellStopRequestIndex.ts";
 import Migration0069 from "./Migrations/069_ThreadMessageSearch.ts";
+import Migration0070 from "./Migrations/070_PeerLinks.ts";
+import Migration0071 from "./Migrations/071_PeerLinkFence.ts";
+import Migration0072 from "./Migrations/072_WaitingLinkRequestIndex.ts";
+import Migration0073 from "./Migrations/073_ActiveTurnItemIndexes.ts";
+import Migration0074 from "./Migrations/074_ExcludeAttachmentPlaceholdersFromSearch.ts";
+import Migration0075 from "./Migrations/075_SubagentDeliveryState.ts";
+import Migration0076 from "./Migrations/076_ProjectionProjectsPinArchive.ts";
+import Migration0077 from "./Migrations/077_RepairBooleanSettledOverride.ts";
+import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
+
+import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
 // Fork: fork-only migrations live in the reserved 9xx id block (935+) so
 // upstream can keep shipping 057, 058, ... without ever colliding with us.
 import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
@@ -153,14 +164,20 @@ const migrationEntries = [
   [67, "WebhookDedupe", Migration0067],
   [68, "ShellStopRequestIndex", Migration0068],
   [69, "ThreadMessageSearch", Migration0069],
-  // Fork: ids 935-941 are the reserved fork block; lower ids belong to
-  // upstream. 935-937 and 939-940 back V1-era fork features that V2 dropped;
-  // they stay registered because existing Forma databases recorded them. These migrations briefly shipped locally as ids 35-40, but no
-  // real database ever recorded those ids (the only live fork database was
-  // still on the legacy 26-31 history), so no renumbering compat is needed.
-  // Exception: if ~/.t3 (the official t3 app's data dir) was ever run against
-  // this fork it may carry recorded rows 35-40 with these names — that
-  // database must be cleaned up manually, never migrated by this fork.
+  [70, "PeerLinks", Migration0070],
+  [71, "PeerLinkFence", Migration0071],
+  [72, "WaitingLinkRequestIndex", Migration0072],
+  [73, "ActiveTurnItemIndexes", Migration0073],
+  [74, "ExcludeAttachmentPlaceholdersFromSearch", Migration0074],
+  [75, "SubagentDeliveryState", Migration0075],
+  [76, "ProjectionProjectsPinArchive", Migration0076],
+  [77, "RepairBooleanSettledOverride", Migration0077],
+  [78, "DropOrchestrationEventCorrelationIndex", Migration0078],
+  [79, "DelegatedRecoveryIndexes", Migration0079],
+  // Fork: 935-941 is the reserved fork block; lower ids belong to upstream.
+  // 935-937 and 939-940 back V1-era features V2 dropped but stay registered
+  // because existing Forma databases recorded them. Never migrate ~/.t3 with
+  // this fork: it may carry these names under ids 35-40.
   [935, "ProjectionProjectComponentPreviewConfig", Migration0935],
   [936, "ProjectionProjectComponentPreviewWorkspaceRecords", Migration0936],
   [937, "ResetProjectComponentPreviewState", Migration0937],
@@ -225,17 +242,10 @@ export interface RunMigrationsOptions {
   readonly toMigrationInclusive?: number | undefined;
 }
 
-/**
- * Fork: the standard Migrator only applies ids greater than the highest
- * recorded id. Because fork migrations live in the reserved 9xx block, a fork
- * database's latest id is always >= 935, which would silently skip every new
- * upstream migration (035, 036, ...) that arrives via merges. After the
- * standard run, this pass applies any registered migration whose id is absent
- * from the tracking table, in ascending id order. Consequence: fork 9xx
- * migrations may run before pending upstream ones on an existing database, so
- * fork migrations must never depend on upstream migrations newer than the
- * merge they shipped with.
- */
+// Fork: the Migrator only applies ids above the highest recorded one, and a
+// fork ledger tops out in the 9xx block, so upstream ids arriving via merges
+// would be skipped. This pass applies registered ids absent from the ledger in
+// ascending order; 9xx migrations may therefore run before newer upstream ones.
 const backfillSkippedMigrations = Effect.fn("backfillSkippedMigrations")(function* (
   throughId?: number,
 ) {
@@ -270,18 +280,8 @@ const backfillSkippedMigrations = Effect.fn("backfillSkippedMigrations")(functio
   return executed;
 });
 
-/**
- * Run all pending migrations.
- *
- * Creates the migrations tracking table (effect_sql_migrations) if it doesn't exist,
- * then runs any migrations with ID greater than the latest recorded migration,
- * followed by a fork-aware backfill pass for upstream migrations whose ids sort
- * below the fork's reserved 9xx block (see backfillSkippedMigrations).
- *
- * Returns array of [id, name] tuples for migrations that were run.
- *
- * @returns Effect containing array of executed migrations
- */
+// Runs pending migrations above the latest recorded id, then the fork-aware
+// backfill for upstream ids below the 9xx block (see backfillSkippedMigrations).
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {

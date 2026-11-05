@@ -13,7 +13,7 @@ type SlashSearchItem = Extract<
   { type: "slash-command" | "local-slash-command" | "provider-slash-command" | "skill" }
 >;
 
-/** Providers expand slash commands only at the message start. */
+/** Provider commands, `/side` and `/btw` work only at the message start. */
 export function slashCommandItemsForPromptPosition(
   items: ReadonlyArray<SlashSearchItem>,
   isAtPromptStart: boolean,
@@ -21,7 +21,11 @@ export function slashCommandItemsForPromptPosition(
   if (isAtPromptStart) {
     return [...items];
   }
-  return items.filter((item) => item.type !== "provider-slash-command");
+  return items.filter(
+    (item) =>
+      item.type === "skill" ||
+      (item.type === "slash-command" && item.command !== "side" && item.command !== "btw"),
+  );
 }
 
 function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | null {

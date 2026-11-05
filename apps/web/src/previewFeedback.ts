@@ -61,7 +61,7 @@ export interface PreviewFeedbackAnnotation {
   target: PreviewFeedbackTarget;
 }
 
-export function stableStringify(value: unknown): string {
+function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }

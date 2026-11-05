@@ -61,18 +61,18 @@ type DocumentLike = Pick<Document, "querySelector" | "createElement" | "head" | 
   documentElement: HTMLElement;
 };
 
-export const DEFAULT_THEME_HUE = 222;
-export const DEFAULT_THEME_SATURATION = 68;
+const DEFAULT_THEME_HUE = 222;
+const DEFAULT_THEME_SATURATION = 68;
 export const DEFAULT_CUSTOM_THEME_SETTINGS: CustomThemeSettings = {
   mode: "system",
   hue: DEFAULT_THEME_HUE,
   saturation: DEFAULT_THEME_SATURATION,
 };
 
-export const MIN_THEME_HUE = 0;
-export const MAX_THEME_HUE = 359;
-export const MIN_THEME_SATURATION = 0;
-export const MAX_THEME_SATURATION = 100;
+const MIN_THEME_HUE = 0;
+const MAX_THEME_HUE = 359;
+const MIN_THEME_SATURATION = 0;
+const MAX_THEME_SATURATION = 100;
 
 const LEGACY_THEME_PREFERENCES = new Set([
   "light",
@@ -118,7 +118,7 @@ function normalizeThemeMode(value: unknown): ThemeMode {
     : "system";
 }
 
-export function normalizeThemeSettings(
+function normalizeThemeSettings(
   value: Partial<CustomThemeSettings> | null | undefined,
 ): CustomThemeSettings {
   return {
@@ -542,14 +542,7 @@ export function resolveDesktopTheme(theme: CustomThemeSettings, systemDark = fal
   return resolveThemeMode(theme, systemDark);
 }
 
-export function resolveTerminalThemePalette(
-  theme: CustomThemeSettings,
-  systemDark = false,
-): ThemeTerminalPalette {
-  return generateTheme(theme, { systemDark }).terminalPalette;
-}
-
-export function ensureThemeColorMetaTag(
+function ensureThemeColorMetaTag(
   targetDocument?: DocumentLike | null,
 ): HTMLMetaElement | null {
   const safeDocument =
@@ -575,39 +568,6 @@ export function ensureThemeColorMetaTag(
 export function setDynamicThemeColor(color: string, targetDocument?: DocumentLike | null): void {
   const themeColorMeta = ensureThemeColorMetaTag(targetDocument);
   themeColorMeta?.setAttribute("content", color);
-}
-
-export function readResolvedThemeModeFromDocument(
-  targetDocument?: Pick<Document, "documentElement"> | null,
-): ResolvedThemeMode {
-  const safeDocument = targetDocument ?? (typeof document !== "undefined" ? document : null);
-  const datasetMode = safeDocument?.documentElement.dataset.themeMode;
-  if (datasetMode === "light" || datasetMode === "dark") {
-    return datasetMode;
-  }
-  const legacyTheme = safeDocument?.documentElement.dataset.theme;
-  if (legacyTheme === "light" || legacyTheme === "dark") {
-    return legacyTheme;
-  }
-  return safeDocument?.documentElement.classList.contains("dark") ? "dark" : "light";
-}
-
-export function readThemeSettingsFromDocument(
-  targetDocument?: Pick<Document, "documentElement"> | null,
-): CustomThemeSettings {
-  const safeDocument = targetDocument ?? (typeof document !== "undefined" ? document : null);
-  const dataset = safeDocument?.documentElement.dataset;
-  const partialTheme: Partial<CustomThemeSettings> = {};
-  if (dataset?.themePreferenceMode) {
-    partialTheme.mode = normalizeThemeMode(dataset.themePreferenceMode);
-  }
-  if (dataset?.themeHue) {
-    partialTheme.hue = Number(dataset.themeHue);
-  }
-  if (dataset?.themeSaturation) {
-    partialTheme.saturation = Number(dataset.themeSaturation);
-  }
-  return normalizeThemeSettings(partialTheme);
 }
 
 export function applyThemePreferenceToDocument(

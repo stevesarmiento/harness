@@ -5,27 +5,13 @@ export type MacOsFontSmoothing = "auto" | "grayscale";
 export type UiFontSizePx = number;
 export type CodeFontSizePx = number;
 
-export const MIN_INTERFACE_FONT_SIZE_PX = 8;
-export const MAX_INTERFACE_FONT_SIZE_PX = 32;
-export const DEFAULT_UI_FONT_SIZE_PX: UiFontSizePx = 16;
-export const DEFAULT_CODE_FONT_SIZE_PX: CodeFontSizePx = 14;
-export const DEFAULT_MAC_OS_FONT_SMOOTHING: MacOsFontSmoothing = "auto";
+const MIN_INTERFACE_FONT_SIZE_PX = 8;
+const MAX_INTERFACE_FONT_SIZE_PX = 32;
+const DEFAULT_UI_FONT_SIZE_PX: UiFontSizePx = 16;
+const DEFAULT_CODE_FONT_SIZE_PX: CodeFontSizePx = 14;
+const DEFAULT_MAC_OS_FONT_SMOOTHING: MacOsFontSmoothing = "auto";
 
 export const INTERFACE_APPEARANCE_STORAGE_KEY = "forma:interface-appearance";
-export const INTERFACE_APPEARANCE_CHANGED_EVENT = "forma:interface-appearance-changed";
-
-/**
- * Subscribe to appearance changes applied via
- * `applyInterfaceSettingsToDocument`. Used by consumers that need a JS value
- * (e.g. the terminal's xterm font size) rather than a CSS variable.
- */
-export function subscribeToInterfaceAppearanceChanges(listener: () => void): () => void {
-  if (typeof document === "undefined") {
-    return () => {};
-  }
-  document.addEventListener(INTERFACE_APPEARANCE_CHANGED_EVENT, listener);
-  return () => document.removeEventListener(INTERFACE_APPEARANCE_CHANGED_EVENT, listener);
-}
 
 export interface InterfaceAppearanceSettings {
   uiFontScale?: UiFontSizePx | null | undefined;
@@ -47,24 +33,20 @@ function formatPx(value: number): string {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}px`;
 }
 
-export function resolveUiFontSizePx(value?: UiFontSizePx | null): UiFontSizePx {
+function resolveUiFontSizePx(value?: UiFontSizePx | null): UiFontSizePx {
   return clampInterfaceFontSize(value ?? DEFAULT_UI_FONT_SIZE_PX) as UiFontSizePx;
 }
 
-export function resolveCodeFontSizePx(value?: CodeFontSizePx | null): CodeFontSizePx {
+function resolveCodeFontSizePx(value?: CodeFontSizePx | null): CodeFontSizePx {
   return clampInterfaceFontSize(value ?? DEFAULT_CODE_FONT_SIZE_PX) as CodeFontSizePx;
 }
 
-export function resolveMacOsFontSmoothing(value?: MacOsFontSmoothing | null): MacOsFontSmoothing {
+function resolveMacOsFontSmoothing(value?: MacOsFontSmoothing | null): MacOsFontSmoothing {
   return value ?? DEFAULT_MAC_OS_FONT_SMOOTHING;
 }
 
 export function getCodeEditorFontSize(value?: CodeFontSizePx | null): number {
   return resolveCodeFontSizePx(value);
-}
-
-export function getCodeTerminalFontSize(value?: CodeFontSizePx | null): number {
-  return Math.max(MIN_INTERFACE_FONT_SIZE_PX, resolveCodeFontSizePx(value) - 2);
 }
 
 function parseStoredFontSize(value: unknown): number | null {
@@ -188,9 +170,5 @@ export function applyInterfaceSettingsToDocument(
       root.style.removeProperty("-webkit-font-smoothing");
       root.style.removeProperty("-moz-osx-font-smoothing");
       break;
-  }
-
-  if (typeof CustomEvent !== "undefined" && typeof safeDocument.dispatchEvent === "function") {
-    safeDocument.dispatchEvent(new CustomEvent(INTERFACE_APPEARANCE_CHANGED_EVENT));
   }
 }
