@@ -47,9 +47,9 @@ suppression logic.
 Resolved on 2026-11-05: upstream deleted `LegacySidebar.tsx` and the fork
 accepted the deletion. Forma's sidebar is `Sidebar.tsx` (upstream's v2 with
 the Forma look re-applied); there is no second sidebar implementation to keep
-in step. `legacySidebarEnabled` follows upstream again (decoding default
-`false`, read only as an opt-in alias for upstream's "boring sidebar", which
-`AppSidebarLayout.tsx` renders when either flag is set). "Export as Markdown"
+in step. Upstream removed the `legacySidebarEnabled` setting in #33131 and so
+did the fork; the "boring sidebar" is gated by `boringSidebarEnabled` alone and
+renders inside Forma's list from `AppSidebarLayout.tsx`. "Export as Markdown"
 and "Fork thread" live in `Sidebar.tsx`'s thread menu.
 
 ## Upstream design overhaul (#24865, #25778) — behaviour only, Forma styling everywhere
@@ -128,8 +128,33 @@ with `apps/server/src/orchestration-v2/`. The fork adopted V2 wholesale.
   `forma-dev`; V1 import from `Forma (Alpha)`/`forma`) so it never shares the
   `t3code-v2` profile with an installed T3 Code. App name, bundle id and data
   dir stay Forma's; other internal identifiers follow upstream.
-- **Defaults**: `sidebarWorkingShelfEnabled` false, `contextWindowMeterEnabled` true,
-  `composerCollapseOnScroll` false.
+- **Defaults**: `sidebarWorkingShelfEnabled` false, `persistComposerContextStrip`
+  true. The context meter has no setting any more: Forma's composer meta row
+  always shows it (see the Labs cleanup section).
+
+## Labs cleanup (#33131, synced 2026-11-15)
+
+Upstream deleted the `planModeEnabled`, `contextWindowMeterEnabled`,
+`legacySidebarEnabled` and `composerCollapseOnScroll` settings, the proposed-plan
+follow-up flow, the `/plan` and `/default` slash commands and the composer
+`ContextWindowMeter`. Plan mode itself survives as `ProviderInteractionMode`
+(`"default" | "plan"`): the server still honours `thread.interactionMode`, so
+Forma's Build/Plan pill (`ComposerInteractionModePill.tsx`) keeps driving the
+draft's `interactionMode`. The fork also passes that mode into
+`useComposerSend`/`useComposerResume` (upstream hardcodes the default there), so
+the first turn of a new thread and a resume start in the mode the pill shows.
+The context meter is kept as a Forma component (`chat/ContextWindowMeter.tsx`,
+fed by `compaction.logic.ts` and the client-runtime context-window state) and
+is always on in the meta row.
+
+## Theme CSS and agent restyling (#35247, #36656, excised 2026-11-15)
+
+Same policy as #5226: `themeCss.ts`, `ThemeCssEditor.tsx`, the environment
+theme repaint in `appInit.tsx` and the `ThemeEditorHost` mount stay out of
+`apps/web`. `CommandPaletteThemeItems.tsx` keeps only the light/dark/system
+entries, and `ModelMentionChip.tsx` uses the fixed Forma context-chip accent
+instead of upstream's theme-hue remap. The server/MCP side of the feature is
+untouched; an agent's theme write simply has no web consumer in Forma.
 
 ## Anonymous usage telemetry (#16564, synced 2026-10-07)
 
@@ -137,7 +162,8 @@ Upstream defaults `T3CODE_TELEMETRY_ENABLED` to on and reports to T3's
 ingest endpoint; #16564 added an onboarding note and a Settings privacy-policy
 row about it. Forma defaults telemetry **off** (`AnalyticsService.ts`, `// Fork:`)
 and drops the onboarding note, the privacy row, its settings-search entry and
-`legalLinks.ts`. Relay (T3 Connect) client tracing follows the same opt-in
+`legalLinks.ts`; the single-page first run that replaced the wizard (#33209)
+drops its `TelemetryNotice` the same way (`onboarding/WelcomePage.tsx`). Relay (T3 Connect) client tracing follows the same opt-in
 (`isRelayTracingEnabled` in `packages/shared/src/otelEnvironment.ts`). Setting
 `T3CODE_TELEMETRY_ENABLED=true` opts in to both.
 
@@ -149,6 +175,7 @@ GitHub's API).
 
 Upstream renamed its product stage to Beta. Forma keeps "Forma (Alpha)"
 (`apps/desktop/package.json` productName, the launcher display name, the
-`DesktopEnvironment` stage label, `branding.ts`, `index.html`): renaming the
-app renames the installed bundle. The contracts stage union includes Beta;
-that is harmless.
+`DesktopEnvironment` stage label, `branding.logic.ts`'s
+`resolveWebAppStageLabel`, which `vite.config.ts` stamps into `index.html`):
+renaming the app renames the installed bundle. The contracts stage union
+includes Beta; that is harmless.

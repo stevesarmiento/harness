@@ -3,6 +3,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 const persisted = vi.hoisted(() => ({ title: "" }));
+const openMenu = vi.hoisted(() => vi.fn());
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -17,7 +18,7 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
     }) as never,
 }));
 vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
-  useThreadActionMenu: () => ({ openMenu: () => {}, closeMenu: () => {} }),
+  useThreadActionMenu: () => ({ openMenu, closeMenu: () => {} }),
 }));
 
 import { render } from "../../../test/render";
@@ -70,3 +71,26 @@ it.each(["blur", "Enter"] as const)(
     expect(persisted.title).toBe("My edited title");
   },
 );
+
+it("keeps the Escape that cancels a rename from also reaching window shortcuts", async () => {
+  persisted.title = "New thread";
+  await using screen = await render(header(persisted.title));
+  await screen.getByRole("heading", { name: "New thread" }).dblClick();
+  const input = screen.getByRole("textbox", { name: "Thread title" });
+  await input.fill("Unsaved title");
+
+  // The thread find bar closes from a window keydown listener that skips handled events.
+  const windowEscapes: boolean[] = [];
+  const recordEscape = (event: KeyboardEvent) => {
+    if (event.key === "Escape") windowEscapes.push(event.defaultPrevented);
+  };
+  window.addEventListener("keydown", recordEscape);
+  using _listener = {
+    [Symbol.dispose]: () => window.removeEventListener("keydown", recordEscape),
+  };
+  await userEvent.keyboard("{Escape}");
+
+  await expect.element(input).not.toBeInTheDocument();
+  expect(persisted.title).toBe("New thread");
+  expect(windowEscapes).toEqual([true]);
+});

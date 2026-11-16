@@ -2,13 +2,18 @@ import { Button } from "../ui/button";
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { formatContextWindowTokens } from "~/lib/contextWindow";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import {
-  formatContextWindowCompactionMessage,
-  formatContextWindowCost,
-} from "./ContextWindowMeter.logic";
+import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { Minimize2Icon } from "lucide-react";
 import { composerFloatingLayerProps } from "./composerEventScope";
 import { cn } from "~/lib/utils";
+
+export function formatContextWindowCost(cost: {
+  readonly amount: number;
+  readonly currency: string;
+}): string {
+  const fractionDigits = Math.abs(cost.amount) > 0 && Math.abs(cost.amount) < 0.01 ? 4 : 2;
+  return `${cost.currency} ${cost.amount.toFixed(fractionDigits)}`;
+}
 
 function formatPercentage(value: number | null): string | null {
   if (value === null || !Number.isFinite(value)) {
@@ -23,15 +28,11 @@ function formatPercentage(value: number | null): string | null {
 export function ContextWindowMeter(props: {
   usage: ContextWindowSnapshot;
   variant?: "icon" | "labeled";
-  /** Fallback subject for the compaction note when no model name is known. */
-  providerDisplayName?: string | null;
-  modelDisplayName?: string | null;
   onCompact?: (() => void) | undefined;
   compactDisabled?: boolean | undefined;
   compactDisabledReason?: string | null | undefined;
 }) {
   const { usage, onCompact, compactDisabled, compactDisabledReason } = props;
-  const modelDisplayName = props.modelDisplayName ?? props.providerDisplayName ?? null;
   const variant = props.variant ?? "icon";
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
@@ -176,7 +177,7 @@ export function ContextWindowMeter(props: {
           ) : null}
           {usage.compactsAutomatically ? (
             <div className="mt-1 text-pretty text-2xs font-medium text-muted-foreground/70">
-              {formatContextWindowCompactionMessage(modelDisplayName, usage.autoCompactThreshold)}
+              {formatContextWindowCompactionMessage(usage.autoCompactThreshold)}
             </div>
           ) : null}
           {onCompact ? (
@@ -202,8 +203,4 @@ export function ContextWindowMeter(props: {
       </PopoverPopup>
     </Popover>
   );
-}
-
-export function ContextWindowMeterPlaceholder() {
-  return <span aria-hidden="true" className="size-7 shrink-0" />;
 }

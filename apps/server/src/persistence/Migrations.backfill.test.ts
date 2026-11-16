@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { runMigrations } from "./Migrations.ts";
+import { hasPendingMigrations, runMigrations } from "./Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 const backfillLayer = it.layer(NodeSqliteClient.layer({ filename: ":memory:" }));
@@ -66,7 +66,7 @@ backfillLayer("Migrations backfill", (it) => {
 
 v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
   it.effect(
-    "applies upstream 041-079, including OrchestrationV2, on a Forma 040 + 9xx ledger",
+    "applies upstream 041-096, including OrchestrationV2, on a Forma 040 + 9xx ledger",
     () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
@@ -76,11 +76,14 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
         yield* runMigrations({ toMigrationInclusive: 40 });
         yield* recordForkBlock;
 
+        // The 9xx high-water mark must not hide the pending upstream ids.
+        assert.isTrue(yield* hasPendingMigrations());
         const executed = yield* runMigrations();
         assert.deepStrictEqual(
           executed.map(([id]) => id),
-          Array.from({ length: 39 }, (_, index) => index + 41),
+          Array.from({ length: 56 }, (_, index) => index + 41),
         );
+        assert.isFalse(yield* hasPendingMigrations());
 
         const tables = yield* sql<{ readonly name: string }>`
           SELECT name FROM sqlite_master
@@ -93,17 +96,17 @@ v2UpgradeLayer("Migrations backfill V2 upgrade", (it) => {
 });
 
 postV2UpgradeLayer("Migrations backfill after V2", (it) => {
-  it.effect("applies upstream 060-079 on a Forma ledger already through 059", () =>
+  it.effect("applies upstream 060-096 on a Forma ledger already through 059", () =>
     Effect.gen(function* () {
       // The live Forma ledger after the first V2 sync: upstream 1-59 plus the
-      // fork block. The V2 id check must not treat 060-079 as skipped.
+      // fork block. The V2 id check must not treat 060-096 as skipped.
       yield* runMigrations({ toMigrationInclusive: 59 });
       yield* recordForkBlock;
 
       const executed = yield* runMigrations();
       assert.deepStrictEqual(
         executed.map(([id]) => id),
-        Array.from({ length: 20 }, (_, index) => index + 60),
+        Array.from({ length: 37 }, (_, index) => index + 60),
       );
       assert.deepStrictEqual(yield* runMigrations(), []);
     }),

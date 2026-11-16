@@ -34,9 +34,7 @@ describe("ContextWindowMeter", () => {
   });
 
   it("renders a labeled variant for the metadata row", () => {
-    const markup = renderToStaticMarkup(
-      <ContextWindowMeter usage={usage} variant="labeled" providerDisplayName="Codex" />,
-    );
+    const markup = renderToStaticMarkup(<ContextWindowMeter usage={usage} variant="labeled" />);
     expect(markup).toContain(">50%<");
     expect(markup).toContain("Context window 50% used");
   });

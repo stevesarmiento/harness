@@ -2,7 +2,7 @@
 
 Forma is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
 
-## Installation
+It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, T3 Code can control it.
 
 > [!WARNING]
 > Forma currently supports Codex and Claude.
@@ -13,6 +13,8 @@ Forma is a minimal web GUI for coding agents (currently Codex and Claude, more c
 
 ### Run without installing
 
+This installs the `t3` command. Run `t3` to start the server and open the web app.
+
 ```bash
 npx forma
 ```
@@ -21,17 +23,15 @@ npx forma
 
 Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/forma/releases), or from your favorite package registry:
 
-#### Windows (`winget`)
+T3 Code needs one agent that is installed and signed in. For example, install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`, or install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`.
 
 ```bash
 winget install Forma.Forma
 ```
 
-#### Windows (`scoop`)
+## "Wait, what are you selling me?"
 
-```bash
-scoop install extras/t3code
-```
+Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
 
 #### macOS (Homebrew)
 
@@ -55,9 +55,6 @@ Observability guide: [docs/observability.md](./docs/observability.md)
 
 ## Documentation
 
-Full docs live in [docs/](./docs). There's no docs site yet.
-
-- [FAQ](./docs/user/faq.md)
 - [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
@@ -69,9 +66,9 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
 - Linux: [run T3 Code as a background service](./docs/user/background-service.md)
 
-Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).
+[All docs](./docs/README.md) has the full list.
 
-## If you REALLY want to contribute still.... read this first
+## Contributing
 
 Before local development, prepare the environment and install dependencies:
 
