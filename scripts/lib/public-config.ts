@@ -17,6 +17,17 @@ export interface T3CodePublicConfig {
   readonly relayClientOtlpTracesToken: string | undefined;
 }
 
+export type T3ConnectPublicConfigKey =
+  | "T3CODE_CLERK_PUBLISHABLE_KEY"
+  | "T3CODE_CLERK_JWT_TEMPLATE"
+  | "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID"
+  | "T3CODE_RELAY_URL";
+
+export interface T3ConnectPublicConfigState {
+  readonly configured: boolean;
+  readonly missingKeys: readonly T3ConnectPublicConfigKey[];
+}
+
 type Environment = Readonly<Record<string, string | undefined>>;
 
 const REPO_ROOT = NodePath.resolve(NodeURL.fileURLToPath(import.meta.url), "../../..");
@@ -101,7 +112,8 @@ export function loadRepoEnv({
   };
 }
 
-function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
+// Fork: the desktop build asserts the T3 Connect config is complete before packaging.
+export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
   return {
     clerkPublishableKey: firstNonEmpty(
       sources,
@@ -152,6 +164,37 @@ function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicCo
       "VITE_RELAY_OTLP_TRACES_TOKEN",
     ),
   };
+}
+
+export function resolveT3ConnectPublicConfigState(
+  config: T3CodePublicConfig,
+): T3ConnectPublicConfigState {
+  const missingKeys: T3ConnectPublicConfigKey[] = [];
+  if (!config.clerkPublishableKey) {
+    missingKeys.push("T3CODE_CLERK_PUBLISHABLE_KEY");
+  }
+  if (!config.clerkJwtTemplate) {
+    missingKeys.push("T3CODE_CLERK_JWT_TEMPLATE");
+  }
+  if (!config.clerkCliOAuthClientId) {
+    missingKeys.push("T3CODE_CLERK_CLI_OAUTH_CLIENT_ID");
+  }
+  if (!config.relayUrl) {
+    missingKeys.push("T3CODE_RELAY_URL");
+  }
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
+export function assertCompleteT3ConnectPublicConfig(config: T3CodePublicConfig): void {
+  const state = resolveT3ConnectPublicConfigState(config);
+  if (!state.configured) {
+    throw new Error(
+      `Packaged Forma builds require complete T3 Connect public configuration. Missing: ${state.missingKeys.join(", ")}`,
+    );
+  }
 }
 
 function firstNonEmpty(sources: readonly Environment[], ...names: readonly string[]) {

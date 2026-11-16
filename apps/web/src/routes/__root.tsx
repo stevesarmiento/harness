@@ -14,6 +14,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "../branding";
+import { applyAppIconPreferenceToDocument } from "../appIcon";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
@@ -34,13 +35,12 @@ import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { ConnectDeviceApprovalCoordinator } from "../components/ConnectDeviceApprovalCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
-import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
 import { StandalonePage, StandalonePageHeader } from "../components/ui/standalone-page";
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
 import { isElectron } from "../env";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdatePrimarySettings } from "../hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
@@ -135,6 +135,7 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
+        <AppIconSync />
         <RootRouteBranch />
       </AnchoredToastProvider>
     </ToastProvider>
@@ -210,6 +211,7 @@ function RootRouteBranch() {
 
   return (
     <>
+      <LegacyInterfaceAppearanceMigration />
       <ChatGptWelcomeCoordinator />
       {isWelcome ? (
         <>
@@ -228,10 +230,65 @@ function RootRouteBranch() {
           {appShell}
         </FirstRunGate>
       )}
-      {/* Above both shells and the router, so drafts survive navigation, including to /welcome. */}
-      <ThemeEditorHost />
     </>
   );
+}
+
+// Fork: Forma app icons follow the client setting on every route.
+function AppIconSync() {
+  const appIcon = useClientSettings((settings) => settings.appIcon);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the document favicon/app icon in step with the setting.
+  useEffect(() => {
+    applyAppIconPreferenceToDocument({ appIcon });
+  }, [appIcon]);
+
+  return null;
+}
+
+/**
+ * Fork: one-time migration of the pre-unification Forma font prefs
+ * (localStorage `forma:interface-appearance`) into the settings-backed font
+ * engine. Only runs while the settings are still at their defaults so a value
+ * already chosen on another device is never clobbered.
+ */
+function LegacyInterfaceAppearanceMigration() {
+  const fontSizeInterface = useClientSettings((settings) => settings.fontSizeInterface);
+  const fontSizeCode = useClientSettings((settings) => settings.fontSizeCode);
+  const updateSettings = useUpdatePrimarySettings();
+
+  const migrate = useEffectEvent(() => {
+    try {
+      if (localStorage.getItem("forma:interface-appearance:migrated") === "1") return;
+      const raw = localStorage.getItem("forma:interface-appearance");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { uiFontScale?: number; codeFontScale?: number };
+      const clamp = (value: number) => Math.min(20, Math.max(12, Math.round(value)));
+      const patch: Record<string, number> = {};
+      if (
+        typeof parsed.uiFontScale === "number" &&
+        fontSizeInterface === 16 &&
+        clamp(parsed.uiFontScale) !== 16
+      ) {
+        patch.fontSizeInterface = clamp(parsed.uiFontScale);
+      }
+      if (
+        typeof parsed.codeFontScale === "number" &&
+        fontSizeCode === 13 &&
+        clamp(parsed.codeFontScale) !== 13
+      ) {
+        patch.fontSizeCode = clamp(parsed.codeFontScale);
+      }
+      if (Object.keys(patch).length > 0) updateSettings(patch);
+      localStorage.setItem("forma:interface-appearance:migrated", "1");
+    } catch {
+      // Never block boot on migration issues.
+    }
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- one-shot read of the legacy localStorage prefs on mount.
+  useEffect(() => migrate(), []);
+
+  return null;
 }
 
 function RootRouteErrorView({ error }: ErrorComponentProps) {

@@ -35,6 +35,11 @@ interface DiffCommentAnnotationProps {
   onCancel: () => void;
   onComment: (text: string) => void;
   onDelete?: () => void;
+  /**
+   * Attach the selected lines to the chat composer as a code context chip
+   * (no comment text required). Omitted when no composer is available.
+   */
+  onAddToChat?: (() => void) | undefined;
   placeholder?: string;
   submitLabel?: string;
   pending?: boolean;
@@ -55,6 +60,7 @@ export function DiffCommentAnnotation({
   onCancel,
   onComment,
   onDelete,
+  onAddToChat,
   placeholder = "Add a comment…",
   submitLabel = "Comment",
   pending = false,
@@ -156,6 +162,11 @@ export function DiffCommentAnnotation({
       />
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <span className="mr-auto text-3xs text-muted-foreground/70">⌘/Ctrl Enter to send</span>
+        {onAddToChat ? (
+          <Button variant="ghost-muted" size="xs" onClick={onAddToChat}>
+            Add to chat
+          </Button>
+        ) : null}
         {speech ? <TextFieldSpeechControls speech={speech} disabled={pending} /> : null}
         <Button variant="ghost-muted" size="xs" onClick={onCancel}>
           Cancel

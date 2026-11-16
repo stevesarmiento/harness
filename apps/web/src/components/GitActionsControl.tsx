@@ -3,6 +3,8 @@ import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
+  type GitKeybindingCommand,
+  type ResolvedKeybindingsConfig,
   SourceControlProviderKind,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -21,7 +23,15 @@ import type {
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Option from "effect/Option";
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import {
+  type Ref,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { useDeadlinePassed } from "../hooks/useDeadline";
 import { useNowSecond } from "../hooks/useNowSecond";
 import { flushSync } from "react-dom";
@@ -78,7 +88,14 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Menu, MenuItem, MenuItemLabel, MenuPopup, MenuTrigger } from "~/components/ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuItemLabel,
+  MenuPopup,
+  MenuShortcut,
+  MenuTrigger,
+} from "~/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Textarea } from "~/components/ui/textarea";
@@ -129,6 +146,9 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useOpenLink } from "~/browser/useOpenLink";
+// Fork: git keybindings route through the control's imperative handle.
+import { isGitActionKeybindingCommand } from "~/gitActionCommands";
+import { shortcutLabelForCommand } from "~/keybindings";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
@@ -138,7 +158,19 @@ interface GitActionsControlProps {
   showActions?: boolean;
   showChanges?: boolean;
   onOpenChanges?: () => void;
+  // Fork: Forma's compact header actions menu hosts the git items inline ("menu-items"),
+  // shows their shortcuts, and drives git keybindings through the imperative handle.
+  renderMode?: "split-button" | "menu-items";
+  keybindings?: ResolvedKeybindingsConfig;
+  ref?: Ref<GitActionsControlHandle> | undefined;
   workspaceMutationId?: string | null;
+}
+
+// Fork: imperative surface for the host (chat view keybindings, header menu open).
+export interface GitActionsControlHandle {
+  readonly runKeybindingCommand: (command: GitKeybindingCommand) => boolean;
+  /** Request a fresh working-tree status (e.g. when a host menu opens). */
+  readonly refreshStatus: () => void;
 }
 
 interface PendingDefaultBranchAction {
@@ -921,6 +953,9 @@ export default function GitActionsControl({
   showActions = true,
   showChanges = true,
   onOpenChanges,
+  renderMode = "split-button",
+  keybindings,
+  ref,
   workspaceMutationId = null,
 }: GitActionsControlProps) {
   const progressLabelId = useId();
@@ -1484,6 +1519,40 @@ export default function GitActionsControl({
       );
     })();
   };
+
+  // Fork: git keybindings (commit/push/PR/publish/init) run through the same paths as the menu.
+  const runKeybindingCommand = (command: GitKeybindingCommand): boolean => {
+    if (!gitCwd || !canWriteSourceControl || !isGitActionKeybindingCommand(command)) return false;
+    if (command === "git.init") {
+      if (isRepo || initAction.isPending) return false;
+      initializeGit();
+      return true;
+    }
+    if (!isRepo) return false;
+    if (command === "git.publish") {
+      if (!canPublishRepository || isGitActionRunning) return false;
+      setIsPublishDialogOpen(true);
+      return true;
+    }
+    const targetId = command === "git.commit" ? "commit" : command === "git.push" ? "push" : "pr";
+    const targetMenuItem = gitActionMenuItems.find((item) => item.id === targetId);
+    if (!targetMenuItem || targetMenuItem.disabled) return false;
+    openDialogForMenuItem(targetMenuItem);
+    return true;
+  };
+
+  useImperativeHandle(ref, () => ({
+    runKeybindingCommand,
+    refreshStatus: () => {
+      requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+    },
+  }));
+
+  const shortcutLabel = (command: GitKeybindingCommand) => {
+    const label = keybindings ? shortcutLabelForCommand(keybindings, command) : null;
+    return label ? <MenuShortcut>{label}</MenuShortcut> : null;
+  };
+
   const gitItems = (
     <>
       {gitActionMenuItems.map((item) => {
@@ -1493,6 +1562,10 @@ export default function GitActionsControl({
           isBusy: isGitActionRunning,
           hasPrimaryRemote,
         });
+        // Fork: shortcut hints on the git items.
+        const itemShortcut = shortcutLabel(
+          item.id === "commit" ? "git.commit" : item.id === "push" ? "git.push" : "git.pr",
+        );
         if (item.disabled && disabledReason) {
           return (
             <Popover key={`${item.id}-${item.label}`}>
@@ -1504,6 +1577,7 @@ export default function GitActionsControl({
                 <MenuItem className="w-full" disabled>
                   <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
                   <MenuItemLabel>{item.label}</MenuItemLabel>
+                  {itemShortcut}
                 </MenuItem>
               </PopoverTrigger>
               <PopoverPopup tooltipStyle side="left" align="center">
@@ -1523,6 +1597,7 @@ export default function GitActionsControl({
           >
             <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
             <MenuItemLabel>{item.label}</MenuItemLabel>
+            {itemShortcut}
           </MenuItem>
         );
       })}
@@ -1535,6 +1610,7 @@ export default function GitActionsControl({
         >
           <CloudUploadIcon />
           <MenuItemLabel>Publish repository...</MenuItemLabel>
+          {shortcutLabel("git.publish")}
         </MenuItem>
       ) : null}
       {isDetachedHead && (
@@ -1554,7 +1630,20 @@ export default function GitActionsControl({
 
   return (
     <>
-      {!showActions ? null : !isRepo ? (
+      {renderMode === "menu-items" ? (
+        // Fork: flat items for Forma's compact header actions menu.
+        !isRepo ? (
+          <MenuItem disabled={initAction.isPending} onClick={initializeGit}>
+            <GitBranchPlusIcon aria-hidden />
+            <MenuItemLabel>
+              {initAction.isPending ? "Initializing..." : "Initialize Git"}
+            </MenuItemLabel>
+            {shortcutLabel("git.init")}
+          </MenuItem>
+        ) : (
+          gitItems
+        )
+      ) : !showActions ? null : !isRepo ? (
         <ThreadDetailsControl
           size="xs"
           variant="ghost"

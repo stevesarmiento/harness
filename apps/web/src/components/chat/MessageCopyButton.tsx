@@ -1,5 +1,5 @@
-import { memo, useRef } from "react";
-import { CheckIcon, CopyIcon, type LucideIcon } from "lucide-react";
+import { memo, useRef, type ComponentType } from "react";
+import { IconCheckmark as CheckIcon } from "symbols-react";
 import { Button } from "../ui/button";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import {
@@ -7,11 +7,12 @@ import {
   showAnchoredCopyErrorToast,
 } from "../ui/anchoredCopyToast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { MessageCopyIcon } from "../icons/custom";
 
 export const MessageCopyButton = memo(function MessageCopyButton({
   text,
   label = "Copy message",
-  icon: Icon = CopyIcon,
+  icon: Icon = MessageCopyIcon,
   extraFlavors,
   size = "xs",
   variant = "outline",
@@ -19,10 +20,11 @@ export const MessageCopyButton = memo(function MessageCopyButton({
 }: {
   text: string;
   label?: string;
-  icon?: LucideIcon;
+  icon?: ComponentType<{ className?: string }>;
   extraFlavors?: Readonly<Record<string, string>>;
   size?: "xs" | "icon-xs";
-  variant?: "outline" | "ghost";
+  /** "subtle" is Forma's quiet outline for message actions. */
+  variant?: "outline" | "ghost" | "subtle";
   className?: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -43,12 +45,22 @@ export const MessageCopyButton = memo(function MessageCopyButton({
             ref={ref}
             type="button"
             size={size}
-            variant={variant === "ghost" ? "ghost-muted" : variant}
+            variant={
+              variant === "ghost"
+                ? "ghost-muted"
+                : variant === "subtle"
+                  ? "subtle-outline"
+                  : variant
+            }
             className={className}
           />
         }
       >
-        {isCopied ? <CheckIcon className="size-3 text-primary" /> : <Icon className="size-3" />}
+        {isCopied ? (
+          <CheckIcon className="size-3 fill-success text-success" />
+        ) : (
+          <Icon className="size-3 fill-current" />
+        )}
       </TooltipTrigger>
       <TooltipPopup>
         <p>{label}</p>

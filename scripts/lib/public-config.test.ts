@@ -4,7 +4,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { loadRepoEnv } from "./public-config.ts";
+import {
+  assertCompleteT3ConnectPublicConfig,
+  loadRepoEnv,
+  resolvePublicConfig,
+  resolveT3ConnectPublicConfigState,
+} from "./public-config.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -50,6 +55,39 @@ describe("loadRepoEnv", () => {
       T3CODE_RELAY_URL: "https://ci.example.test",
       VITE_T3CODE_RELAY_URL: "https://ci.example.test",
     });
+  });
+});
+
+describe("T3 Connect release public configuration", () => {
+  const completeConfig = resolvePublicConfig({
+    T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_example",
+    T3CODE_CLERK_JWT_TEMPLATE: "t3-relay",
+    T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauthapp_example",
+    T3CODE_RELAY_URL: "https://relay.example.test",
+  });
+
+  it("accepts all four release values", () => {
+    expect(resolveT3ConnectPublicConfigState(completeConfig)).toEqual({
+      configured: true,
+      missingKeys: [],
+    });
+    expect(() => assertCompleteT3ConnectPublicConfig(completeConfig)).not.toThrow();
+  });
+
+  it("rejects a CLI-only three-value configuration without the JWT template", () => {
+    const config = resolvePublicConfig({
+      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_example",
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauthapp_example",
+      T3CODE_RELAY_URL: "https://relay.example.test",
+    });
+
+    expect(resolveT3ConnectPublicConfigState(config)).toEqual({
+      configured: false,
+      missingKeys: ["T3CODE_CLERK_JWT_TEMPLATE"],
+    });
+    expect(() => assertCompleteT3ConnectPublicConfig(config)).toThrowError(
+      /T3CODE_CLERK_JWT_TEMPLATE/u,
+    );
   });
 });
 

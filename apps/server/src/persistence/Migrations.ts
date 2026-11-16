@@ -104,6 +104,15 @@ import Migration0093 from "./Migrations/093_ProviderTurnAttemptIndex.ts";
 import Migration0094 from "./Migrations/094_TurnItemMessageOrdinalIndex.ts";
 import Migration0095 from "./Migrations/095_TurnItemInlineWorkOutput.ts";
 import Migration0096 from "./Migrations/096_RepairStaleTitleRegeneration.ts";
+// Fork: fork-only migrations live in the reserved 9xx id block (935+) so
+// upstream can keep shipping 057, 058, ... without ever colliding with us.
+import Migration0935 from "./Migrations/935_ProjectionProjectComponentPreviewConfig.ts";
+import Migration0936 from "./Migrations/936_ProjectionProjectComponentPreviewWorkspaceRecords.ts";
+import Migration0937 from "./Migrations/937_ResetProjectComponentPreviewState.ts";
+import Migration0938 from "./Migrations/938_ReconcileLegacyForkMigrationHistory.ts";
+import Migration0939 from "./Migrations/939_ThreadExtensionQueue.ts";
+import Migration0940 from "./Migrations/940_ProjectionThreadsForkLineage.ts";
+import Migration0941 from "./Migrations/941_ReconcileLegacyForkUpstreamOverlap.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -203,6 +212,17 @@ const migrationEntries = [
   [94, "TurnItemMessageOrdinalIndex", Migration0094],
   [95, "TurnItemInlineWorkOutput", Migration0095],
   [96, "RepairStaleTitleRegeneration", Migration0096],
+  // Fork: 935-941 is the reserved fork block; lower ids belong to upstream.
+  // 935-937 and 939-940 back V1-era features V2 dropped but stay registered
+  // because existing Forma databases recorded them. Never migrate ~/.t3 with
+  // this fork: it may carry these names under ids 35-40.
+  [935, "ProjectionProjectComponentPreviewConfig", Migration0935],
+  [936, "ProjectionProjectComponentPreviewWorkspaceRecords", Migration0936],
+  [937, "ResetProjectComponentPreviewState", Migration0937],
+  [938, "ReconcileLegacyForkMigrationHistory", Migration0938],
+  [939, "ThreadExtensionQueue", Migration0939],
+  [940, "ProjectionThreadsForkLineage", Migration0940],
+  [941, "ReconcileLegacyForkUpstreamOverlap", Migration0941],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -232,7 +252,11 @@ export function skippedV2Migrations(
     )
       return [];
     const recordedName = recordedNames.get(id);
-    return recordedName === name ? [] : [`${id}_${name} (recorded: ${recordedName ?? "nothing"})`];
+    // Fork: a Forma ledger's high-water mark is the 9xx block, so upstream ids
+    // below it are routinely unrecorded; backfillSkippedMigrations applies them
+    // after the standard run. Only an id recorded under another name is a clash.
+    if (recordedName === name || recordedName === undefined) return [];
+    return [`${id}_${name} (recorded: ${recordedName})`];
   });
 }
 
@@ -261,23 +285,22 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   });
 });
 
-const latestMigrationId = Math.max(...migrationEntries.map(([id]) => id));
-
-// Mirrors the Migrator, which runs only ids above the highest recorded, plus the V2-preview reconciliation.
+// Fork: any unrecorded manifest id counts, not only ids above the highest recorded one,
+// because a Forma ledger's 9xx block hides pending upstream ids that the backfill applies.
 export const hasPendingMigrations = Effect.fn("hasPendingMigrations")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const tables = yield* sql`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
   `;
   if (tables.length === 0) return true;
-  const rows = yield* sql<{ readonly latestId: number | null; readonly previewRows: number }>`
-    SELECT
-      MAX(migration_id) AS latestId,
-      SUM(name = 'OrchestrationV2' AND migration_id IN (53, 54)) AS previewRows
-    FROM effect_sql_migrations
+  const rows = yield* sql<{ readonly migration_id: number; readonly name: string }>`
+    SELECT migration_id, name FROM effect_sql_migrations
   `;
-  const row = rows[0];
-  return (row?.latestId ?? 0) < latestMigrationId || (row?.previewRows ?? 0) > 0;
+  const recorded = new Set(rows.map((row) => row.migration_id));
+  const previewRows = rows.filter(
+    (row) => row.name === "OrchestrationV2" && (row.migration_id === 53 || row.migration_id === 54),
+  ).length;
+  return migrationManifest.some(([id]) => !recorded.has(id)) || previewRows > 0;
 });
 
 const run = Migrator.make({});
@@ -286,6 +309,46 @@ export interface RunMigrationsOptions {
   readonly toMigrationInclusive?: number | undefined;
 }
 
+// Fork: the Migrator only applies ids above the highest recorded one, and a
+// fork ledger tops out in the 9xx block, so upstream ids arriving via merges
+// would be skipped. This pass applies registered ids absent from the ledger in
+// ascending order; 9xx migrations may therefore run before newer upstream ones.
+const backfillSkippedMigrations = Effect.fn("backfillSkippedMigrations")(function* (
+  throughId?: number,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = (yield* sql`SELECT migration_id FROM effect_sql_migrations`
+    .withoutTransform) as ReadonlyArray<{ migration_id: number }>;
+  const applied = new Set(rows.map((row) => Number(row.migration_id)));
+  const executed: Array<readonly [id: number, name: string]> = [];
+  for (const [id, name, migration] of migrationEntries) {
+    if ((throughId !== undefined && id > throughId) || applied.has(id)) {
+      continue;
+    }
+    yield* sql
+      .withTransaction(
+        Effect.gen(function* () {
+          yield* sql`INSERT INTO effect_sql_migrations ${sql.insert([{ migration_id: id, name }])}`
+            .withoutTransform;
+          yield* Effect.catch(migration, (error) =>
+            Effect.die(
+              new Migrator.MigrationError({
+                cause: error,
+                kind: "Failed",
+                message: `Backfilled migration "${id}_${name}" failed`,
+              }),
+            ),
+          );
+        }),
+      )
+      .pipe(Effect.withSpan(`Migrator backfill ${id}_${name}`));
+    executed.push([id, name] as const);
+  }
+  return executed;
+});
+
+// Runs pending migrations above the latest recorded id, then the fork-aware
+// backfill for upstream ids below the 9xx block (see backfillSkippedMigrations).
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
@@ -326,6 +389,7 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     }
     executedMigrations.push(...(yield* run({ loader: makeMigrationLoader(id) })));
   }
+  executedMigrations.push(...(yield* backfillSkippedMigrations(toMigrationInclusive)));
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")

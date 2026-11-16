@@ -21,8 +21,9 @@ export function resolveWebAppStageLabel(input: {
   readonly hostedAppChannel: string | null | undefined;
   readonly development: boolean;
 }): string {
+  // Fork: Forma stays in Alpha; upstream renamed its stage to Beta.
   return (
-    resolveHostedAppChannelLabel(input.hostedAppChannel) ?? (input.development ? "Dev" : "Beta")
+    resolveHostedAppChannelLabel(input.hostedAppChannel) ?? (input.development ? "Dev" : "Alpha")
   );
 }
 

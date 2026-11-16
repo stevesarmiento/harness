@@ -39,7 +39,9 @@ export type SettingsPath =
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
-  | "/settings/archived";
+  | "/settings/archived"
+  // Fork: protected paths and the event stream have no upstream page.
+  | "/settings/safety";
 
 export type SettingsSearchScope =
   | "environment"
@@ -116,6 +118,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/about": msg("About"),
   "/settings/voice": msg("Voice"),
   "/settings/archived": msg("Archive"),
+  "/settings/safety": msg("Safety"),
 };
 
 /** Sidebar order. A group with a hidden heading is set apart on screen by space alone. */
@@ -145,6 +148,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/browser",
       "/settings/devices",
       "/settings/scheduled-tasks",
+      "/settings/safety",
     ],
   },
   {
@@ -316,10 +320,17 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "theme",
-    title: "Themes",
+    title: "Theme",
     to: "/settings/appearance",
-    searchTerms: ["appearance colors palette custom import"],
-    targetId: "appearance",
+    // Fork: Forma builds its theme from mode, hue, and saturation.
+    searchTerms: ["appearance colors palette hue saturation tint high contrast"],
+  },
+  {
+    // Fork: Forma app icons.
+    id: "app-icon",
+    title: "App icon",
+    to: "/settings/appearance",
+    searchTerms: ["dock window browser favicon artwork"],
   },
   {
     // Prefixed because the slider control already owns the `appearance-contrast` id.
@@ -901,12 +912,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["onboarding setup first run getting started agents import projects"],
   },
   {
-    id: "privacy-policy",
-    title: "Privacy policy",
-    to: "/settings/about",
-    searchTerms: ["telemetry analytics usage data tracking legal opt out"],
-  },
-  {
     id: "telemetry-export",
     title: "OpenTelemetry export",
     to: "/settings/diagnostics",
@@ -1369,6 +1374,25 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  // Fork: rows that only exist in Forma.
+  {
+    id: "thread-cleanup-window",
+    title: "Thread cleanup window",
+    to: "/settings/threads",
+    searchTerms: ["archive inactive old threads days automatic"],
+  },
+  {
+    id: "protected-paths",
+    title: "Protected paths",
+    to: "/settings/safety",
+    searchTerms: ["filesystem safety deny write guard directories"],
+  },
+  {
+    id: "event-stream",
+    title: "Event stream",
+    to: "/settings/safety",
+    searchTerms: ["diagnostics url copy orchestration events"],
+  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
@@ -1399,12 +1423,18 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/labs": null,
   "/settings/about": null,
   "/settings/archived": "project-defaults",
+  // Fork: Safety edits primary-environment settings.
+  "/settings/safety": null,
 };
 
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
   "/settings/integrations": "/settings/browser",
   "/settings/storage": "/settings/maintenance",
   "/settings/beta": "/settings/labs",
+  // Fork: Forma's pre-modal settings pages.
+  "/settings/interface": "/settings/appearance",
+  "/settings/notifications": "/settings/general",
+  "/settings/advanced": "/settings/about",
 };
 const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
   "/settings/general",
@@ -1416,6 +1446,8 @@ const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
 // Section anchors that moved but are not search results themselves.
 const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
   "authorized-clients": "/settings/access",
+  // Fork: the old legacy-sidebar row's successor is the boring sidebar in Labs.
+  "legacy-sidebar": "/settings/labs",
   "text-generation": "/settings/threads",
   about: "/settings/about",
 };

@@ -31,7 +31,7 @@ function Checkbox({
         className={indicatorClassName}
         data-slot="checkbox-indicator"
         render={(props, state) => (
-          <span {...props}>
+          <span {...props} className="flex size-full items-center justify-center">
             {state.indeterminate ? (
               <svg
                 className="size-3.5 text-current sm:size-3"

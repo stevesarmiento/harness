@@ -221,7 +221,8 @@ export const OpenInPicker = memo(function OpenInPicker({
   availableEditors: ReadonlyArray<EditorId>;
   openInCwd: string | null;
   openInCwdIsFile?: boolean;
-  presentation?: "toolbar" | "menu";
+  /** "items" renders the bare editor list for a host menu (Forma header actions). */
+  presentation?: "toolbar" | "menu" | "items";
   compact?: boolean;
   enableShortcut?: boolean;
   displayMode?: "toolbar" | "panel";
@@ -313,7 +314,8 @@ export const OpenInPicker = memo(function OpenInPicker({
               disabled={!openInCwd || !canOpenEditor}
               key={value}
               onClick={() => {
-                if (presentation === "menu") {
+                // Fork: the Forma header menu's "items" list opens directly too.
+                if (presentation === "menu" || presentation === "items") {
                   void openInEditor(value);
                 } else {
                   setPreferredEditor(value);
@@ -336,6 +338,9 @@ export const OpenInPicker = memo(function OpenInPicker({
       )}
     </>
   );
+  if (presentation === "items") {
+    return editorItems;
+  }
   if (presentation === "menu") {
     return (
       <>
@@ -462,3 +467,13 @@ export const OpenInPicker = memo(function OpenInPicker({
     </ActionGroup>
   );
 });
+
+/** Flat editor list for the Forma chat header actions menu. */
+export function OpenInMenuItems(props: {
+  environmentId: EnvironmentId;
+  keybindings: ResolvedKeybindingsConfig;
+  availableEditors: ReadonlyArray<EditorId>;
+  openInCwd: string | null;
+}) {
+  return <OpenInPicker {...props} presentation="items" />;
+}

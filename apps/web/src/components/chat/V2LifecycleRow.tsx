@@ -43,12 +43,12 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   BotIcon,
   ChevronRightIcon,
-  CircleStopIcon,
   ArrowRightLeftIcon,
   ArrowRightIcon,
   EraserIcon,
   GitForkIcon,
   MessageSquareIcon,
+  XIcon,
 } from "lucide-react";
 
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
@@ -67,7 +67,7 @@ import { cn } from "~/lib/utils";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
 import { subagentResumedSince } from "./V2LifecycleRow.logic";
 import { Button, InlineButton } from "../ui/button";
-import { T3Wordmark } from "../T3Wordmark";
+import { LogomarkForma } from "../LogomarkForma";
 
 export type { HandoffTimelineRun } from "@t3tools/client-runtime/handoff";
 
@@ -84,7 +84,8 @@ export function V2LifecycleRow(props: {
       <TimelineSystemDivider
         label="Run interrupted"
         detail={item.message}
-        icon={CircleStopIcon}
+        tone="danger"
+        icon={XIcon}
         wrapDetail
       />
     );
@@ -136,7 +137,8 @@ export function V2LifecycleRow(props: {
     return (
       <WorkLogRow
         data-v2-item-type={item.type}
-        icon={<T3Wordmark className="size-4 text-icon-muted" aria-hidden />}
+        // Fork: Forma mark for app-created threads.
+        icon={<LogomarkForma className="size-4 text-icon-muted" aria-hidden />}
         label={<>Created thread{item.title ? ` · ${item.title}` : ""}</>}
         trailing={
           <InlineButton

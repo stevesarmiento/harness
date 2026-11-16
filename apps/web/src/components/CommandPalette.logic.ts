@@ -37,8 +37,9 @@ import { type Project, type SidebarThreadSummary, type Thread } from "../types";
 
 export const RECENT_THREAD_LIMIT = 12;
 const NO_THREAD_KEYS: ReadonlySet<string> = new Set();
-export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
-export const ADDON_ICON_CLASS = "size-4";
+// Fork: Forma glyph icons paint with fill, not stroke.
+export const ITEM_ICON_CLASS = "size-4 fill-muted-foreground/80";
+export const ADDON_ICON_CLASS = "size-4 fill-current";
 
 export function buildLinkedThreadActionItems(
   input: CommandPaletteLinkedThreads & {

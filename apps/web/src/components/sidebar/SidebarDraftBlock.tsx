@@ -1,7 +1,9 @@
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
-import { SquarePenIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
+// Fork: Forma's unsent-work pen, matching the new-thread button.
+import { NewThreadIcon } from "../icons/custom";
 import {
   memo,
   useState,
@@ -101,7 +103,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
       >
         <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
           <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <SquarePenIcon aria-hidden className={draftPenClassName} />
+            <NewThreadIcon aria-hidden className={draftPenClassName} />
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}

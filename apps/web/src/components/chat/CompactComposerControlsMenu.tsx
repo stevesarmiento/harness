@@ -1,8 +1,9 @@
 import type { RuntimeMode } from "@t3tools/contracts";
 import { memo, useRef } from "react";
-import { EllipsisIcon } from "lucide-react";
+import { IconEllipsis as EllipsisIcon } from "symbols-react";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
-import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
+import { cn } from "~/lib/utils";
+import { ComposerControl } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
 import { ComposerPermissionsSection, type RuntimeModeOption } from "./ComposerFooterControls";
@@ -38,7 +39,12 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
           />
         }
       >
-        <ComposerControlIcon icon={EllipsisIcon} size={size} />
+        {/* Fork: symbols-react icons don't fit ComposerControlIcon's SVGProps type. */}
+        <EllipsisIcon
+          aria-hidden="true"
+          className={cn("shrink-0 fill-current", size === "xs" ? "size-3" : "size-4")}
+          data-composer-control-icon
+        />
       </MenuTrigger>
       <MenuPopup align="start" {...composerFloatingLayerProps}>
         {props.showPermissions ? (

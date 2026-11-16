@@ -159,6 +159,36 @@ describe("FileSaveCoordinator", () => {
     expect(onPendingChange).not.toHaveBeenCalledWith(false);
   });
 
+  // Fork: conflict pause/resume coverage.
+  it("pauses after a conflict and resumes only when requested", async () => {
+    vi.useFakeTimers();
+    const persist = vi
+      .fn<(contents: string) => Promise<AtomCommandResult<void, Error>>>()
+      .mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("conflict"))))
+      .mockResolvedValueOnce(AsyncResult.success(undefined));
+    const coordinator = new FileSaveCoordinator({
+      debounceMs: 500,
+      persist,
+      onPendingChange: vi.fn(),
+      onConfirmed: vi.fn(),
+      onFailed: () => ({ pause: true }),
+    });
+
+    coordinator.change("local draft");
+    await vi.advanceTimersByTimeAsync(500);
+    await Promise.resolve();
+    coordinator.change("newer local draft");
+    await vi.advanceTimersByTimeAsync(1_000);
+    coordinator.flush();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(persist).toHaveBeenCalledOnce();
+
+    coordinator.resume();
+    await vi.runAllTimersAsync();
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist).toHaveBeenLastCalledWith("newer local draft");
+  });
+
   it("ignores editor changes emitted after disposal", async () => {
     vi.useFakeTimers();
     const persist = vi

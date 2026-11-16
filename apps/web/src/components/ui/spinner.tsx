@@ -1,4 +1,4 @@
-import { LoaderCircleIcon } from "lucide-react";
+import { IconProgressIndicator as LoaderCircleIcon } from "symbols-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";
 import { cn } from "~/lib/utils";

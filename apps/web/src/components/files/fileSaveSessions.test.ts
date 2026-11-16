@@ -1,4 +1,8 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectFileVersionConflictError,
+  type ProjectFileVersion,
+} from "@t3tools/contracts";
 import { Cause } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -257,5 +261,68 @@ describe("file save sessions", () => {
     expect(h.state.onWritable).toEqual([]);
     await vi.runAllTimersAsync();
     expect(h.persist).not.toHaveBeenCalled();
+  });
+});
+
+// Fork: versioned writes pause on an on-disk change until the user reloads or overwrites.
+describe("versioned file saves", () => {
+  const loaded = "a".repeat(64) as ProjectFileVersion;
+  const saved = "b".repeat(64) as ProjectFileVersion;
+  const conflict = new ProjectFileVersionConflictError({
+    relativePath: "file.txt",
+    expectedVersion: loaded,
+    actualVersion: saved,
+    message: "file.txt changed on disk.",
+  });
+
+  it("checks each write against the last confirmed version", async () => {
+    using h = setup();
+    h.persist.mockResolvedValueOnce(AsyncResult.success({ version: saved }));
+    h.sessions.acquire(target, h.onPendingChange);
+    h.sessions.setLoadedVersion(target, loaded);
+    h.sessions.change(target, "first");
+    await vi.advanceTimersByTimeAsync(500);
+    h.sessions.change(target, "second");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(h.persist.mock.calls.map(([, contents, version]) => [contents, version])).toEqual([
+      ["first", loaded],
+      ["second", saved],
+    ]);
+    expect(h.confirm).toHaveBeenCalledWith(target, "first", saved);
+  });
+
+  it("pauses on a conflict, then overwrites without a version check", async () => {
+    using h = setup();
+    h.persist.mockResolvedValueOnce(AsyncResult.failure(Cause.fail(conflict)));
+    h.sessions.acquire(target, h.onPendingChange);
+    h.sessions.setLoadedVersion(target, loaded);
+    h.sessions.change(target, "draft");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(h.sessions.conflictFor(target)).toBe(conflict);
+
+    h.sessions.change(target, "newer draft");
+    h.sessions.setLoadedVersion(target, saved);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(h.persist).toHaveBeenCalledOnce();
+
+    h.sessions.overwrite(target);
+    await vi.runAllTimersAsync();
+    expect(h.persist).toHaveBeenLastCalledWith(target, "newer draft", undefined);
+    expect(h.sessions.conflictFor(target)).toBeNull();
+  });
+
+  it("drops the paused draft on reload", async () => {
+    using h = setup();
+    h.persist.mockResolvedValueOnce(AsyncResult.failure(Cause.fail(conflict)));
+    h.sessions.acquire(target, h.onPendingChange);
+    h.sessions.setLoadedVersion(target, loaded);
+    h.sessions.change(target, "draft");
+    await vi.advanceTimersByTimeAsync(500);
+
+    h.sessions.reload(target);
+    await vi.runAllTimersAsync();
+    expect(h.sessions.conflictFor(target)).toBeNull();
+    expect(h.onPendingChange).toHaveBeenLastCalledWith("file.txt", false);
+    expect(h.persist).toHaveBeenCalledOnce();
   });
 });
