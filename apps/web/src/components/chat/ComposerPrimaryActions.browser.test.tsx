@@ -8,11 +8,6 @@ vi.mock("~/hooks/useSettings", () => ({
   useEnvironmentIdentificationMode: () => "none",
   useClientSettings: () => false,
 }));
-vi.mock("../SidebarStageBackdrop", () => ({
-  StageBackdropButtonArt: () => null,
-  useSidebarStageBackdropVariant: () => null,
-}));
-
 import { CollapsedComposerStopAction, ComposerPrimaryActions } from "./ComposerPrimaryActions";
 
 function setup() {

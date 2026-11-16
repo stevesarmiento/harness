@@ -59,7 +59,10 @@ box included: upstream's redesign and its later composer rework contribute
 behaviour and structure, never looks. Re-apply Forma's visual language on top
 of upstream rewrites (composer surface, footer led by the add-actions menu and
 mode pill, meta row with runtime mode and context meter, user-message card,
-Forma panel controls and pill pickers, Forma status glyphs). The sidebar
+Forma panel controls and pill pickers, Forma status glyphs). The send button
+always carries the Forma theme accent (`--message-action`); upstream's Dev and
+Nightly stage artwork never paints over it, so a dev build looks like the
+installed app there. The sidebar
 (`Sidebar.tsx`, `sidebar/*`, `ui/sidebar.tsx`) keeps Forma's look and
 behaviour. The one exception, chosen on 2026-10-27, is Settings and Usage:
 they are upstream's modals (#24847) with Forma-only pages (Safety, app icons,

@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, LogInIcon, SmartphoneIcon, UserRoundIcon } from "lucide-react";
 import { useRef, type ComponentType } from "react";
 
-import { resolveCloudPublicConfigState } from "../../cloud/publicConfig";
+import { hasCloudPublicConfig, resolveCloudPublicConfigState } from "../../cloud/publicConfig";
 import { useCloudLinkController } from "../../cloud/useCloudLinkController";
 import { usePrimaryEnvironment, usePrimaryEnvironmentId } from "../../state/environments";
 import { cn } from "../../lib/utils";
@@ -102,6 +102,23 @@ export function SidebarAccountControl({ variant }: { readonly variant: SidebarAc
       <SidebarAccountRow
         account={null}
         connect={{ disabled: true, hint: diagnostic, label: "Unavailable", tone: "muted" }}
+        onSignIn={null}
+        variant={variant}
+      />
+    );
+  }
+  // main.tsx mounts the Clerk shell only when hasCloudPublicConfig() holds (a production key
+  // does not serve a browser on localhost), and Clerk's hooks throw outside that shell.
+  if (!hasCloudPublicConfig()) {
+    return (
+      <SidebarAccountRow
+        account={null}
+        connect={{
+          disabled: true,
+          hint: CLERK_UNAVAILABLE_HINT,
+          label: "Unavailable",
+          tone: "muted",
+        }}
         onSignIn={null}
         variant={variant}
       />
